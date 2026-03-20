@@ -1386,7 +1386,7 @@ export default function StudioPage() {
                   className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
                 >
                   <p className="text-sm font-semibold text-zinc-100">
-                    {suggestion.contentType ?? "notes"}
+                    {String(suggestion.contentType ?? "notes")}
                   </p>
                   <pre className="mt-2 whitespace-pre-wrap">
                     {formatJson(suggestion.suggestions)}
