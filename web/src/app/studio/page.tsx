@@ -49,6 +49,57 @@ const downloadText = (filename: string, content: string, mime = "text/plain") =>
 const formatJson = (value: unknown) =>
   value ? JSON.stringify(value, null, 2) : "";
 
+const titleize = (value: string) =>
+  value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const formatReadable = (value: unknown, depth = 0): string => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "object" && item !== null) {
+          return `${"  ".repeat(depth)}-\n${formatReadable(item, depth + 1)}`;
+        }
+        return `${"  ".repeat(depth)}- ${String(item)}`;
+      })
+      .join("\n");
+  }
+
+  if (typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([key, val]) => {
+        const heading = `${"  ".repeat(depth)}${titleize(key)}:`;
+        if (typeof val === "object" && val !== null) {
+          return `${heading}\n${formatReadable(val, depth + 1)}`;
+        }
+        return `${heading} ${String(val)}`;
+      })
+      .join("\n");
+  }
+
+  return String(value);
+};
+
+const Collapsible = ({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) => (
+  <details className="mt-3 rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
+    <summary className="cursor-pointer text-xs font-semibold text-zinc-300">
+      {label}
+    </summary>
+    <div className="mt-3">{children}</div>
+  </details>
+);
+
 const normalizeStringArray = (value: unknown): string[] => {
   if (Array.isArray(value)) {
     return value.map((item) => String(item));
@@ -1139,19 +1190,20 @@ function StudioContent() {
                 <button
                   onClick={() =>
                     downloadText(
-                      `${title || "story"}_story_details.json`,
-                      formatJson(storyDetails),
-                      "application/json"
+                      `${title || "story"}_story_details.txt`,
+                      formatReadable(storyDetails)
                     )
                   }
                   className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
                 >
-                  Download JSON
+                  Download TXT
                 </button>
               </div>
-              <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-                {formatJson(storyDetails)}
-              </pre>
+              <Collapsible label="Story details">
+                <pre className="whitespace-pre-wrap text-xs text-zinc-200">
+                  {formatReadable(storyDetails)}
+                </pre>
+              </Collapsible>
             </div>
           )}
         </section>
@@ -1171,14 +1223,13 @@ function StudioContent() {
               <button
                 onClick={() =>
                   downloadText(
-                    `${title || "story"}_premises_endings.json`,
-                    formatJson(premisesAndEndings),
-                    "application/json"
+                    `${title || "story"}_premises_endings.txt`,
+                    formatReadable(premisesAndEndings)
                   )
                 }
                 className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
               >
-                Download JSON
+                Download TXT
               </button>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200">
@@ -1195,9 +1246,11 @@ function StudioContent() {
                   {premisesAndEndings.chosen_ending}
                 </p>
               </div>
-                <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-                  {formatJson(premisesAndEndings)}
-                </pre>
+                <Collapsible label="Premises & endings">
+                  <pre className="whitespace-pre-wrap text-xs text-zinc-200">
+                    {formatReadable(premisesAndEndings)}
+                  </pre>
+                </Collapsible>
               </div>
             </div>
           )}
@@ -1225,9 +1278,11 @@ function StudioContent() {
               >
                 Download TXT
               </button>
-              <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-                {novelSynopsis}
-              </pre>
+              <Collapsible label="Synopsis">
+                <pre className="whitespace-pre-wrap text-xs text-zinc-200">
+                  {novelSynopsis}
+                </pre>
+              </Collapsible>
             </div>
           )}
         </section>
@@ -1256,9 +1311,11 @@ function StudioContent() {
               >
                 Download TXT
               </button>
-              <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-                {characterProfiles}
-              </pre>
+              <Collapsible label="Character profiles">
+                <pre className="whitespace-pre-wrap text-xs text-zinc-200">
+                  {characterProfiles}
+                </pre>
+              </Collapsible>
             </div>
           )}
         </section>
@@ -1313,25 +1370,26 @@ function StudioContent() {
               <button
                 onClick={() =>
                   downloadText(
-                    `${title || "story"}_keywords.json`,
-                    formatJson(novelKeywords),
-                    "application/json"
+                    `${title || "story"}_keywords.txt`,
+                    formatReadable(novelKeywords)
                   )
                 }
                 className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
               >
-                Download JSON
+                Download TXT
               </button>
-              <div className="flex flex-wrap gap-2">
-                {novelKeywords.map((keyword) => (
-                  <span
-                    key={keyword}
-                    className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
-                  >
-                    {keyword}
-                  </span>
-                ))}
-              </div>
+              <Collapsible label="Keywords">
+                <div className="flex flex-wrap gap-2">
+                  {novelKeywords.map((keyword) => (
+                    <span
+                      key={keyword}
+                      className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                    >
+                      {keyword}
+                    </span>
+                  ))}
+                </div>
+              </Collapsible>
             </div>
           )}
         </section>
@@ -1349,20 +1407,21 @@ function StudioContent() {
               <button
                 onClick={() =>
                   downloadText(
-                    `${title || "story"}_bisac.json`,
-                    formatJson(novelBisac),
-                    "application/json"
+                    `${title || "story"}_bisac.txt`,
+                    formatReadable(novelBisac)
                   )
                 }
                 className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
               >
-                Download JSON
+                Download TXT
               </button>
-              <div className="flex flex-col gap-2 text-sm text-zinc-200">
-                {novelBisac.map((category) => (
-                  <span key={category}>• {category}</span>
-                ))}
-              </div>
+              <Collapsible label="BISAC categories">
+                <div className="flex flex-col gap-2 text-sm text-zinc-200">
+                  {novelBisac.map((category) => (
+                    <span key={category}>• {category}</span>
+                  ))}
+                </div>
+              </Collapsible>
             </div>
           )}
         </section>
@@ -1386,9 +1445,11 @@ function StudioContent() {
               >
                 Download TXT
               </button>
-              <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-                {novelPlan}
-              </pre>
+              <Collapsible label="Novel plan">
+                <pre className="whitespace-pre-wrap text-xs text-zinc-200">
+                  {novelPlan}
+                </pre>
+              </Collapsible>
             </div>
           )}
         </section>
@@ -1409,18 +1470,19 @@ function StudioContent() {
               <button
                 onClick={() =>
                   downloadText(
-                    `${title || "story"}_chapter_outline.json`,
-                    formatJson(chapterOutline),
-                    "application/json"
+                    `${title || "story"}_chapter_outline.txt`,
+                    formatReadable(chapterOutline)
                   )
                 }
                 className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
               >
-                Download JSON
+                Download TXT
               </button>
-              <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-                {formatJson(chapterOutline)}
-              </pre>
+              <Collapsible label="Chapter outline">
+                <pre className="whitespace-pre-wrap text-xs text-zinc-200">
+                  {formatReadable(chapterOutline)}
+                </pre>
+              </Collapsible>
             </div>
           )}
         </section>
@@ -1439,18 +1501,19 @@ function StudioContent() {
               <button
                 onClick={() =>
                   downloadText(
-                    `${title || "story"}_chapter_guide.json`,
-                    formatJson(chapterGuide),
-                    "application/json"
+                    `${title || "story"}_chapter_guide.txt`,
+                    formatReadable(chapterGuide)
                   )
                 }
                 className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
               >
-                Download JSON
+                Download TXT
               </button>
-              <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-                {formatJson(chapterGuide)}
-              </pre>
+              <Collapsible label="Chapter guide">
+                <pre className="whitespace-pre-wrap text-xs text-zinc-200">
+                  {formatReadable(chapterGuide)}
+                </pre>
+              </Collapsible>
             </div>
           )}
         </section>
@@ -1469,18 +1532,19 @@ function StudioContent() {
               <button
                 onClick={() =>
                   downloadText(
-                    `${title || "story"}_chapter_beats.json`,
-                    formatJson(chapterBeats),
-                    "application/json"
+                    `${title || "story"}_chapter_beats.txt`,
+                    formatReadable(chapterBeats)
                   )
                 }
                 className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
               >
-                Download JSON
+                Download TXT
               </button>
-              <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-                {formatJson(chapterBeats)}
-              </pre>
+              <Collapsible label="Chapter beats">
+                <pre className="whitespace-pre-wrap text-xs text-zinc-200">
+                  {formatReadable(chapterBeats)}
+                </pre>
+              </Collapsible>
             </div>
           )}
         </section>
@@ -1499,28 +1563,31 @@ function StudioContent() {
               <button
                 onClick={() =>
                   downloadText(
-                    `${title || "story"}_scenes.json`,
-                    formatJson(allScenes),
-                    "application/json"
+                    `${title || "story"}_scenes.txt`,
+                    formatReadable(allScenes)
                   )
                 }
                 className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
               >
-                Download JSON
+                Download TXT
               </button>
-              {Object.entries(allScenes).map(([chapter, scenes]) => (
-                <div
-                  key={chapter}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
-                >
-                  <p className="text-sm font-semibold text-zinc-100">{chapter}</p>
-                  {scenes.map((scene, index) => (
-                    <pre key={index} className="mt-2 whitespace-pre-wrap">
-                      {scene}
-                    </pre>
-                  ))}
-                </div>
-              ))}
+              <Collapsible label="Scenes">
+                {Object.entries(allScenes).map(([chapter, scenes]) => (
+                  <div
+                    key={chapter}
+                    className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
+                  >
+                    <p className="text-sm font-semibold text-zinc-100">
+                      {chapter}
+                    </p>
+                    {scenes.map((scene, index) => (
+                      <pre key={index} className="mt-2 whitespace-pre-wrap">
+                        {scene}
+                      </pre>
+                    ))}
+                  </div>
+                ))}
+              </Collapsible>
             </div>
           )}
         </section>
@@ -1578,9 +1645,11 @@ function StudioContent() {
               >
                 Download TXT
               </button>
-              <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-                {coverPrompt}
-              </pre>
+              <Collapsible label="Cover prompt">
+                <pre className="whitespace-pre-wrap text-xs text-zinc-200">
+                  {coverPrompt}
+                </pre>
+              </Collapsible>
             </div>
           )}
         </section>
@@ -1599,20 +1668,21 @@ function StudioContent() {
               <button
                 onClick={() =>
                   downloadText(
-                    `${title || "story"}_quotes.json`,
-                    formatJson(novelQuotes),
-                    "application/json"
+                    `${title || "story"}_quotes.txt`,
+                    formatReadable(novelQuotes)
                   )
                 }
                 className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
               >
-                Download JSON
+                Download TXT
               </button>
-              <ul className="space-y-2 text-sm text-zinc-200">
-                {novelQuotes.map((quote, index) => (
-                  <li key={index}>“{quote}”</li>
-                ))}
-              </ul>
+              <Collapsible label="Quote snippets">
+                <ul className="space-y-2 text-sm text-zinc-200">
+                  {novelQuotes.map((quote, index) => (
+                    <li key={index}>“{quote}”</li>
+                  ))}
+                </ul>
+              </Collapsible>
             </div>
           )}
         </section>
@@ -1637,28 +1707,29 @@ function StudioContent() {
               <button
                 onClick={() =>
                   downloadText(
-                    `${title || "story"}_editing_feedback.json`,
-                    formatJson(editingSuggestions),
-                    "application/json"
+                    `${title || "story"}_editing_feedback.txt`,
+                    formatReadable(editingSuggestions)
                   )
                 }
                 className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
               >
-                Download JSON
+                Download TXT
               </button>
-              {editingSuggestions.map((suggestion, index) => (
-                <div
-                  key={index}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
-                >
-                  <p className="text-sm font-semibold text-zinc-100">
-                    {String(suggestion.contentType ?? "notes")}
-                  </p>
-                  <pre className="mt-2 whitespace-pre-wrap">
-                    {formatJson(suggestion.suggestions)}
-                  </pre>
-                </div>
-              ))}
+              <Collapsible label="Editing feedback">
+                {editingSuggestions.map((suggestion, index) => (
+                  <div
+                    key={index}
+                    className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
+                  >
+                    <p className="text-sm font-semibold text-zinc-100">
+                      {String(suggestion.contentType ?? "notes")}
+                    </p>
+                    <pre className="mt-2 whitespace-pre-wrap">
+                      {formatReadable(suggestion.suggestions)}
+                    </pre>
+                  </div>
+                ))}
+              </Collapsible>
             </div>
           )}
         </section>
