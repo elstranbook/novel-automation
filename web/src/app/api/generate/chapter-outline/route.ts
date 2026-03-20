@@ -107,8 +107,12 @@ This is for a software application that needs this exact format to function prop
 
     let parsed: unknown = raw;
     try {
-      const match = typeof raw === "string" ? raw.match(/\[\s*{.*}\s*\]/s) : null;
-      parsed = match ? JSON.parse(match[0]) : JSON.parse(raw);
+      if (typeof raw === "string") {
+        const match = raw.match(/\[\s*{[\s\S]*}\s*\]/);
+        parsed = match ? JSON.parse(match[0]) : JSON.parse(raw);
+      } else {
+        parsed = raw;
+      }
     } catch {
       parsed = raw;
     }
