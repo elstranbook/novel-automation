@@ -49,6 +49,26 @@ const downloadText = (filename: string, content: string, mime = "text/plain") =>
 const formatJson = (value: unknown) =>
   value ? JSON.stringify(value, null, 2) : "";
 
+const normalizeStringArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item));
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => String(item));
+      }
+    } catch {
+      return [value];
+    }
+    return [value];
+  }
+
+  return [];
+};
+
 export default function StudioPage() {
   return (
     <Suspense
@@ -315,7 +335,9 @@ function StudioContent() {
       .select("keywords")
       .eq("novel_id", novelIdValue)
       .maybeSingle();
-    if (keywords?.keywords) setNovelKeywords(keywords.keywords);
+    if (keywords?.keywords !== undefined) {
+      setNovelKeywords(normalizeStringArray(keywords.keywords));
+    }
 
     const { data: bisac } = await supabase
       .from("novel_bisac")
@@ -599,10 +621,11 @@ function StudioContent() {
       });
       if (!response.ok) throw new Error("Failed to generate keywords");
       const data = await response.json();
-      setNovelKeywords(data.keywords ?? []);
+      const normalizedKeywords = normalizeStringArray(data.keywords ?? []);
+      setNovelKeywords(normalizedKeywords);
       await saveSingleRow(
         "novel_keywords",
-        { keywords: data.keywords ?? [] },
+        { keywords: normalizedKeywords },
         novelIdValue,
         user.id
       );
