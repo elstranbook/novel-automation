@@ -3,7 +3,8 @@ import { runChatCompletion } from "@/lib/openaiClient";
 
 export async function POST(request: Request) {
   try {
-    const { chapterOutline, chapterGuide, model } = await request.json();
+    const { chapterOutline, chapterGuide, synopsis, characterProfiles, novelPlan, model } =
+      await request.json();
 
     if (!chapterOutline || !chapterGuide) {
       return NextResponse.json(
@@ -12,49 +13,76 @@ export async function POST(request: Request) {
       );
     }
 
-    const prompt = `
-Using the chapter outline and chapter guide below, create action beats for every chapter.
-
-For each chapter, provide 5-8 beats with:
-- beat_number
-- action
-- emotional_impact
-- tension_hook
-
-Chapter Outline:
-${JSON.stringify(chapterOutline, null, 2)}
-
-Chapter Guide:
-${JSON.stringify(chapterGuide, null, 2)}
-
-Return JSON with chapter numbers as keys and arrays of beats as values.
-`;
-
-    const system =
-      "You are a professional YA novelist. Provide action beats that drive momentum and emotional tension.";
-
-    const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
-      system,
-      prompt,
-      jsonResponse: true,
-    });
-
     const outlineArray = Array.isArray(chapterOutline)
       ? chapterOutline
       : (chapterOutline?.chapters as Array<Record<string, unknown>>) ?? [];
 
-    const beats: Record<string, Array<Record<string, unknown>>> =
-      response && typeof response === "object"
-        ? { ...(response as Record<string, Array<Record<string, unknown>>>) }
-        : {};
+    const beats: Record<string, Array<Record<string, unknown>>> = {};
 
-    outlineArray.forEach((chapter, index) => {
-      const number = String(
-        (chapter as Record<string, unknown>).number ?? index + 1
-      );
-      if (!beats[number]) {
-        beats[number] = [
+    for (const chapter of outlineArray) {
+      const chapterRecord = chapter as Record<string, unknown>;
+      const chapterNum = String(chapterRecord.number ?? outlineArray.indexOf(chapter) + 1);
+      const chapterTitle = chapterRecord.title ?? "Untitled Chapter";
+      const chapterSummary = chapterRecord.summary ?? "No summary available";
+      const guideDetails = (chapterGuide as Record<string, unknown>)[chapterNum] ?? {};
+
+      const prompt = `
+Take the following chapter summary and generate a list of 5 highly detailed action beats for a prose draft. Use the additional story information provided to fully flesh out the chapter's structure and momentum.
+
+Chapter: ${chapterNum}: ${chapterTitle}
+Chapter Outline: ${JSON.stringify(chapterRecord, null, 2)}
+Chapter Summary: ${chapterSummary}
+Additional Story Information:
+- Synopsis: ${synopsis ?? ""}
+- Character Profiles: ${characterProfiles ?? ""}
+- Novel Plan: ${novelPlan ?? ""}
+- Chapter Guide: ${JSON.stringify(guideDetails, null, 2)}
+
+Guidelines:
+– Always use proper nouns (character names, locations, etc.)—avoid vague pronouns.
+– Each beat should reflect clear action, emotional shifts, or key decisions that push the story forward.
+– Beats should show what happens, who does it, and why it matters—emotionally or narratively.
+– Think in terms of cinematic or dramatic moments, whether you're outlining for a screenplay, novel, or graphic narrative.
+– These beats should serve as a scene-by-scene guide to write the full chapter with clarity and purpose.
+
+For each beat, also include:
+* Emotional impact or shift: (How does the character feel before/after this beat?)
+* Beat-ending tension or hook: (What question is left hanging?)
+
+Format your response as a JSON array where each item is an object with these fields:
+- "beat_number": (integer)
+- "action": (string describing what happens)
+- "emotional_impact": (string describing the emotional shift)
+- "tension_hook": (string describing the question left hanging)
+`;
+
+      const system = `You are a professional novelist and writing coach creating detailed action beats for a chapter.
+Provide rich, specific guidance for each beat that aligns with the overall narrative and themes.
+Your beats should be concrete and actionable, helping to create a cohesive and engaging story.
+Format your response as a proper JSON array with all the required fields.`;
+
+      const response = await runChatCompletion({
+        model: model || "gpt-4.1-mini",
+        system,
+        prompt,
+        jsonResponse: false,
+        maxTokens: 4000,
+      });
+
+      let parsed: unknown = response;
+      try {
+        if (typeof response === "string") {
+          const match = response.match(/\[\s*{[\s\S]*}\s*\]/);
+          parsed = match ? JSON.parse(match[0]) : JSON.parse(response);
+        }
+      } catch {
+        parsed = null;
+      }
+
+      if (Array.isArray(parsed)) {
+        beats[chapterNum] = parsed as Array<Record<string, unknown>>;
+      } else {
+        beats[chapterNum] = [
           {
             beat_number: 1,
             action: "Introduce the scene goal.",
@@ -63,7 +91,7 @@ Return JSON with chapter numbers as keys and arrays of beats as values.
           },
         ];
       }
-    });
+    }
 
     return NextResponse.json({ beats });
   } catch (error) {

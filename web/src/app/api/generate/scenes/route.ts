@@ -113,12 +113,14 @@ For each beat, create a detailed scene using this prompt:
 
 Begin writing Chapter ${chapterNumber}: ${chapterTitle}, Scene [beat number] of "${storyDetails.title ?? ""}" using the detailed scene summary provided.
 
+The writing should naturally reflect the scene's genre, tone, point of view, setting, and key characters—all of which can be inferred from the scene summary provided.
+
 Writing Guidelines:
 – Focus on a slow, deliberate buildup, allowing the emotional tone and character stakes to deepen gradually.
 – Use intimate, vivid moments to show the emotional toll of the scene and allow readers to connect with the characters.
 – Let dialogue reveal dynamics, tension, or internal struggles. Keep it natural, grounded, and full of subtext.
 – Emphasize "show, don't tell" storytelling. Let physical actions, choices, and setting carry emotional and thematic weight.
-– Use strong verbs, sensory-rich description, and a deep POV to fully immerse the reader.
+– Use strong verbs, sensory-rich description, and a deep POV (if applicable) to fully immerse the reader.
 – Allow the scene to naturally lead toward its conclusion and, if appropriate, transition smoothly into the next.
 
 Narrative Style:
@@ -126,6 +128,8 @@ Narrative Style:
 * Tense: Past
 
 Write up to ${maxSceneLength} words of character-driven, emotionally layered prose.
+Let the scene summary guide your tone, structure, pacing, and character focus.
+
 Write only the prose for the scene, without any formatting, headers, or scene numbers.
 
 Format your response as a JSON array of scene strings, one scene per beat. Return just the array of scene strings.
@@ -134,6 +138,9 @@ Format your response as a JSON array of scene strings, one scene per beat. Retur
   const system = `You are a professional young adult novelist writing Chapter ${chapterNumber} of '${storyDetails.title ?? ""}' in first-person past tense.
 Create vivid, emotionally resonant scenes from the main character's perspective.
 Include sensory details, realistic dialogue, and deep point-of-view narration.
+Focus on a slow, deliberate buildup, allowing the emotional tone and character stakes to deepen gradually.
+Use intimate, vivid moments to show the emotional toll of the scene and let readers connect with characters.
+Write only the prose for each scene, without any formatting, headers, or scene numbers.
 Return your scenes ONLY as a JSON array of strings.`;
 
   return runChatCompletion({
