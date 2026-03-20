@@ -61,9 +61,27 @@ const normalizeStringArray = (value: unknown): string[] => {
         return parsed.map((item) => String(item));
       }
     } catch {
+      if (value.includes(",")) {
+        return value.split(",").map((item) => item.trim()).filter(Boolean);
+      }
       return [value];
     }
     return [value];
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const nested =
+      record.keywords ?? record.categories ?? record.items ?? record.list;
+    if (Array.isArray(nested)) {
+      return nested.map((item) => String(item));
+    }
+    if (typeof nested === "string") {
+      return normalizeStringArray(nested);
+    }
+    if (typeof record.raw === "string") {
+      return normalizeStringArray(record.raw);
+    }
   }
 
   return [];
@@ -344,7 +362,9 @@ function StudioContent() {
       .select("categories")
       .eq("novel_id", novelIdValue)
       .maybeSingle();
-    if (bisac?.categories) setNovelBisac(bisac.categories);
+    if (bisac?.categories !== undefined) {
+      setNovelBisac(normalizeStringArray(bisac.categories));
+    }
 
     const { data: descriptions } = await supabase
       .from("book_descriptions")
@@ -649,10 +669,11 @@ function StudioContent() {
       });
       if (!response.ok) throw new Error("Failed to generate BISAC");
       const data = await response.json();
-      setNovelBisac(data.categories ?? []);
+      const normalizedBisac = normalizeStringArray(data.categories ?? []);
+      setNovelBisac(normalizedBisac);
       await saveSingleRow(
         "novel_bisac",
-        { categories: data.categories ?? [] },
+        { categories: normalizedBisac },
         novelIdValue,
         user.id
       );
