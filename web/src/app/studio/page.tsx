@@ -532,7 +532,7 @@ function StudioContent() {
       const response = await fetch("/api/generate/synopsis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ storyDetails, model }),
+        body: JSON.stringify({ storyDetails, premisesAndEndings, model }),
       });
       if (!response.ok) throw new Error("Failed to generate synopsis");
       const data = await response.json();
@@ -559,7 +559,7 @@ function StudioContent() {
       const response = await fetch("/api/generate/character-profiles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ storyDetails, model }),
+        body: JSON.stringify({ storyDetails, synopsis: novelSynopsis, model }),
       });
       if (!response.ok) throw new Error("Failed to generate profiles");
       const data = await response.json();
@@ -693,7 +693,12 @@ function StudioContent() {
       const response = await fetch("/api/generate/novel-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ storyDetails, model }),
+        body: JSON.stringify({
+          storyDetails,
+          synopsis: novelSynopsis,
+          characterProfiles,
+          model,
+        }),
       });
       if (!response.ok) throw new Error("Failed to generate plan");
       const data = await response.json();
@@ -746,7 +751,13 @@ function StudioContent() {
       const response = await fetch("/api/generate/chapter-guide", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chapterOutline, model }),
+        body: JSON.stringify({
+          chapterOutline,
+          novelSynopsis,
+          characterProfiles,
+          novelPlan,
+          model,
+        }),
       });
       if (!response.ok) throw new Error("Failed to generate guide");
       const data = await response.json();
@@ -773,7 +784,14 @@ function StudioContent() {
       const response = await fetch("/api/generate/chapter-beats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chapterOutline, chapterGuide, model }),
+        body: JSON.stringify({
+          chapterOutline,
+          chapterGuide,
+          synopsis: novelSynopsis,
+          characterProfiles,
+          novelPlan,
+          model,
+        }),
       });
       if (!response.ok) throw new Error("Failed to generate beats");
       const data = await response.json();
