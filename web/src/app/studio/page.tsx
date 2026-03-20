@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
@@ -50,6 +50,16 @@ const formatJson = (value: unknown) =>
   value ? JSON.stringify(value, null, 2) : "";
 
 export default function StudioPage() {
+  return (
+    <Suspense
+      fallback={<div className="min-h-screen bg-zinc-950 text-zinc-100" />}
+    >
+      <StudioContent />
+    </Suspense>
+  );
+}
+
+function StudioContent() {
   const supabase = createSupabaseBrowserClient();
   const searchParams = useSearchParams();
 
