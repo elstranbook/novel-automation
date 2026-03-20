@@ -2,17 +2,17 @@ import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 
 const ensureOutlineShape = (outline: unknown, minCount = 18) => {
-  let response = outline;
-  if (response && typeof response === "object" && !Array.isArray(response)) {
-    if ("chapters" in response && Array.isArray(response.chapters)) {
-      response = response.chapters;
-    } else {
-      response = [response];
-    }
-  }
+  let response: Array<Record<string, unknown>> = [];
 
-  if (!Array.isArray(response)) {
-    response = [];
+  if (Array.isArray(outline)) {
+    response = outline as Array<Record<string, unknown>>;
+  } else if (outline && typeof outline === "object") {
+    const outlineObj = outline as Record<string, unknown>;
+    if ("chapters" in outlineObj && Array.isArray(outlineObj.chapters)) {
+      response = outlineObj.chapters as Array<Record<string, unknown>>;
+    } else {
+      response = [outlineObj];
+    }
   }
 
   if (response.length < minCount) {
