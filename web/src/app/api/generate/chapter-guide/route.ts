@@ -37,7 +37,30 @@ Return a JSON object where each key is the chapter number (as a string) and each
       jsonResponse: true,
     });
 
-    return NextResponse.json({ guide: response });
+    const outlineArray = Array.isArray(chapterOutline)
+      ? chapterOutline
+      : (chapterOutline?.chapters as Array<Record<string, unknown>>) ?? [];
+
+    const guide: Record<string, Record<string, unknown>> =
+      response && typeof response === "object" ? { ...(response as Record<string, Record<string, unknown>>) } : {};
+
+    outlineArray.forEach((chapter, index) => {
+      const number = String(
+        (chapter as Record<string, unknown>).number ?? index + 1
+      );
+      if (!guide[number]) {
+        guide[number] = {
+          scene_goal: "Advance the plot and emotional arc.",
+          key_dialogue: ["Character reveals a goal."],
+          emotional_pacing: "Builds tension and character growth.",
+          sensory_details: ["Atmosphere", "Lighting", "Sound"],
+          foreshadowing: ["A subtle hint of future conflict."],
+          symbolism: ["A recurring motif"],
+        };
+      }
+    });
+
+    return NextResponse.json({ guide });
   } catch (error) {
     console.error(error);
     return NextResponse.json(

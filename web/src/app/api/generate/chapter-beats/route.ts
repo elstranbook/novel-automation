@@ -40,7 +40,32 @@ Return JSON with chapter numbers as keys and arrays of beats as values.
       jsonResponse: true,
     });
 
-    return NextResponse.json({ beats: response });
+    const outlineArray = Array.isArray(chapterOutline)
+      ? chapterOutline
+      : (chapterOutline?.chapters as Array<Record<string, unknown>>) ?? [];
+
+    const beats: Record<string, Array<Record<string, unknown>>> =
+      response && typeof response === "object"
+        ? { ...(response as Record<string, Array<Record<string, unknown>>>) }
+        : {};
+
+    outlineArray.forEach((chapter, index) => {
+      const number = String(
+        (chapter as Record<string, unknown>).number ?? index + 1
+      );
+      if (!beats[number]) {
+        beats[number] = [
+          {
+            beat_number: 1,
+            action: "Introduce the scene goal.",
+            emotional_impact: "Establishes stakes.",
+            tension_hook: "A new complication emerges.",
+          },
+        ];
+      }
+    });
+
+    return NextResponse.json({ beats });
   } catch (error) {
     console.error(error);
     return NextResponse.json(
