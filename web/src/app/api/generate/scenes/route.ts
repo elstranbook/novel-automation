@@ -34,7 +34,8 @@ ${premisesAndEndings.chosen_premise}
 THE ENDING:
 ${premisesAndEndings.chosen_ending}
 `;
-    if (chapter.number >= 15) {
+    const chapterNumberValue = Number(chapter.number ?? 0);
+    if (chapterNumberValue >= 15) {
       premisesEndingInfo += "\nSince this is a later chapter, make sure to build toward the chosen ending.";
     }
   }
