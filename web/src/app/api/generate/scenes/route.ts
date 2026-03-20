@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
 const generateScenesForChapter = async ({
   chapter,
   storyDetails,

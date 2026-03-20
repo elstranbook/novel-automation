@@ -882,6 +882,9 @@ function StudioContent() {
       });
       if (!response.ok) throw new Error("Failed to generate scenes");
       const data = await response.json();
+      if (!data.scenes || Object.keys(data.scenes).length === 0) {
+        throw new Error("Scenes generation returned no output.");
+      }
       setAllScenes(data.scenes ?? {});
 
       await supabase.from("scenes").delete().eq("novel_id", novelIdValue);
