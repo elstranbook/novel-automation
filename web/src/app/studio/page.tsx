@@ -1072,9 +1072,25 @@ function StudioContent() {
             </button>
           </div>
           {storyDetails && (
-            <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-              {formatJson(storyDetails)}
-            </pre>
+            <div className="mt-4 space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() =>
+                    downloadText(
+                      `${title || "story"}_story_details.json`,
+                      formatJson(storyDetails),
+                      "application/json"
+                    )
+                  }
+                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                >
+                  Download JSON
+                </button>
+              </div>
+              <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
+                {formatJson(storyDetails)}
+              </pre>
+            </div>
           )}
         </section>
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
@@ -1089,8 +1105,21 @@ function StudioContent() {
               : "Generate Premises & Endings"}
           </button>
           {premisesAndEndings && (
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200">
+            <div className="mt-4 space-y-3">
+              <button
+                onClick={() =>
+                  downloadText(
+                    `${title || "story"}_premises_endings.json`,
+                    formatJson(premisesAndEndings),
+                    "application/json"
+                  )
+                }
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+              >
+                Download JSON
+              </button>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200">
                 <p className="text-sm font-semibold text-zinc-100">
                   Chosen premise
                 </p>
@@ -1104,9 +1133,10 @@ function StudioContent() {
                   {premisesAndEndings.chosen_ending}
                 </p>
               </div>
-              <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-                {formatJson(premisesAndEndings)}
-              </pre>
+                <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
+                  {formatJson(premisesAndEndings)}
+                </pre>
+              </div>
             </div>
           )}
         </section>
@@ -1121,9 +1151,22 @@ function StudioContent() {
             {loadingStep === "synopsis" ? "Generating..." : "Generate Synopsis"}
           </button>
           {novelSynopsis && (
-            <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-              {novelSynopsis}
-            </pre>
+            <div className="mt-4 space-y-3">
+              <button
+                onClick={() =>
+                  downloadText(
+                    `${title || "story"}_synopsis.txt`,
+                    novelSynopsis
+                  )
+                }
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+              >
+                Download TXT
+              </button>
+              <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
+                {novelSynopsis}
+              </pre>
+            </div>
           )}
         </section>
 
@@ -1139,9 +1182,22 @@ function StudioContent() {
               : "Generate Character Profiles"}
           </button>
           {characterProfiles && (
-            <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-              {characterProfiles}
-            </pre>
+            <div className="mt-4 space-y-3">
+              <button
+                onClick={() =>
+                  downloadText(
+                    `${title || "story"}_character_profiles.txt`,
+                    characterProfiles
+                  )
+                }
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+              >
+                Download TXT
+              </button>
+              <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
+                {characterProfiles}
+              </pre>
+            </div>
           )}
         </section>
 
@@ -1163,7 +1219,17 @@ function StudioContent() {
                   key={key}
                   className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
                 >
-                  <p className="text-sm font-semibold text-zinc-100">{key}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-zinc-100">{key}</p>
+                    <button
+                      onClick={() =>
+                        downloadText(`${title || "story"}_${key}.txt`, value)
+                      }
+                      className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                    >
+                      Download
+                    </button>
+                  </div>
                   <pre className="mt-2 whitespace-pre-wrap text-xs">{value}</pre>
                 </div>
               ))}
@@ -1181,15 +1247,29 @@ function StudioContent() {
             {loadingStep === "keywords" ? "Generating..." : "Generate Keywords"}
           </button>
           {novelKeywords && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {novelKeywords.map((keyword) => (
-                <span
-                  key={keyword}
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
-                >
-                  {keyword}
-                </span>
-              ))}
+            <div className="mt-4 space-y-3">
+              <button
+                onClick={() =>
+                  downloadText(
+                    `${title || "story"}_keywords.json`,
+                    formatJson(novelKeywords),
+                    "application/json"
+                  )
+                }
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+              >
+                Download JSON
+              </button>
+              <div className="flex flex-wrap gap-2">
+                {novelKeywords.map((keyword) => (
+                  <span
+                    key={keyword}
+                    className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                  >
+                    {keyword}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
         </section>
@@ -1203,10 +1283,24 @@ function StudioContent() {
             {loadingStep === "bisac" ? "Generating..." : "Generate BISAC"}
           </button>
           {novelBisac && (
-            <div className="mt-4 flex flex-col gap-2 text-sm text-zinc-200">
-              {novelBisac.map((category) => (
-                <span key={category}>• {category}</span>
-              ))}
+            <div className="mt-4 space-y-3">
+              <button
+                onClick={() =>
+                  downloadText(
+                    `${title || "story"}_bisac.json`,
+                    formatJson(novelBisac),
+                    "application/json"
+                  )
+                }
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+              >
+                Download JSON
+              </button>
+              <div className="flex flex-col gap-2 text-sm text-zinc-200">
+                {novelBisac.map((category) => (
+                  <span key={category}>• {category}</span>
+                ))}
+              </div>
             </div>
           )}
         </section>
@@ -1221,9 +1315,19 @@ function StudioContent() {
             {loadingStep === "plan" ? "Generating..." : "Generate Novel Plan"}
           </button>
           {novelPlan && (
-            <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-              {novelPlan}
-            </pre>
+            <div className="mt-4 space-y-3">
+              <button
+                onClick={() =>
+                  downloadText(`${title || "story"}_novel_plan.txt`, novelPlan)
+                }
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+              >
+                Download TXT
+              </button>
+              <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
+                {novelPlan}
+              </pre>
+            </div>
           )}
         </section>
 
@@ -1239,9 +1343,23 @@ function StudioContent() {
               : "Generate Chapter Outline"}
           </button>
           {chapterOutline && (
-            <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-              {formatJson(chapterOutline)}
-            </pre>
+            <div className="mt-4 space-y-3">
+              <button
+                onClick={() =>
+                  downloadText(
+                    `${title || "story"}_chapter_outline.json`,
+                    formatJson(chapterOutline),
+                    "application/json"
+                  )
+                }
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+              >
+                Download JSON
+              </button>
+              <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
+                {formatJson(chapterOutline)}
+              </pre>
+            </div>
           )}
         </section>
 
@@ -1255,9 +1373,23 @@ function StudioContent() {
             {loadingStep === "guide" ? "Generating..." : "Generate Chapter Guide"}
           </button>
           {chapterGuide && (
-            <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-              {formatJson(chapterGuide)}
-            </pre>
+            <div className="mt-4 space-y-3">
+              <button
+                onClick={() =>
+                  downloadText(
+                    `${title || "story"}_chapter_guide.json`,
+                    formatJson(chapterGuide),
+                    "application/json"
+                  )
+                }
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+              >
+                Download JSON
+              </button>
+              <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
+                {formatJson(chapterGuide)}
+              </pre>
+            </div>
           )}
         </section>
 
@@ -1271,9 +1403,23 @@ function StudioContent() {
             {loadingStep === "beats" ? "Generating..." : "Generate Chapter Beats"}
           </button>
           {chapterBeats && (
-            <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-              {formatJson(chapterBeats)}
-            </pre>
+            <div className="mt-4 space-y-3">
+              <button
+                onClick={() =>
+                  downloadText(
+                    `${title || "story"}_chapter_beats.json`,
+                    formatJson(chapterBeats),
+                    "application/json"
+                  )
+                }
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+              >
+                Download JSON
+              </button>
+              <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
+                {formatJson(chapterBeats)}
+              </pre>
+            </div>
           )}
         </section>
 
@@ -1288,6 +1434,18 @@ function StudioContent() {
           </button>
           {allScenes && (
             <div className="mt-4 space-y-4">
+              <button
+                onClick={() =>
+                  downloadText(
+                    `${title || "story"}_scenes.json`,
+                    formatJson(allScenes),
+                    "application/json"
+                  )
+                }
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+              >
+                Download JSON
+              </button>
               {Object.entries(allScenes).map(([chapter, scenes]) => (
                 <div
                   key={chapter}
@@ -1349,9 +1507,19 @@ function StudioContent() {
             {loadingStep === "cover" ? "Generating..." : "Generate Cover Prompt"}
           </button>
           {coverPrompt && (
-            <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-              {coverPrompt}
-            </pre>
+            <div className="mt-4 space-y-3">
+              <button
+                onClick={() =>
+                  downloadText(`${title || "story"}_cover_prompt.txt`, coverPrompt)
+                }
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+              >
+                Download TXT
+              </button>
+              <pre className="whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
+                {coverPrompt}
+              </pre>
+            </div>
           )}
         </section>
 
@@ -1365,11 +1533,25 @@ function StudioContent() {
             {loadingStep === "quotes" ? "Generating..." : "Generate Quotes"}
           </button>
           {novelQuotes && (
-            <ul className="mt-4 space-y-2 text-sm text-zinc-200">
-              {novelQuotes.map((quote, index) => (
-                <li key={index}>“{quote}”</li>
-              ))}
-            </ul>
+            <div className="mt-4 space-y-3">
+              <button
+                onClick={() =>
+                  downloadText(
+                    `${title || "story"}_quotes.json`,
+                    formatJson(novelQuotes),
+                    "application/json"
+                  )
+                }
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+              >
+                Download JSON
+              </button>
+              <ul className="space-y-2 text-sm text-zinc-200">
+                {novelQuotes.map((quote, index) => (
+                  <li key={index}>“{quote}”</li>
+                ))}
+              </ul>
+            </div>
           )}
         </section>
 
@@ -1390,6 +1572,18 @@ function StudioContent() {
           </button>
           {editingSuggestions.length > 0 && (
             <div className="mt-4 space-y-3">
+              <button
+                onClick={() =>
+                  downloadText(
+                    `${title || "story"}_editing_feedback.json`,
+                    formatJson(editingSuggestions),
+                    "application/json"
+                  )
+                }
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+              >
+                Download JSON
+              </button>
               {editingSuggestions.map((suggestion, index) => (
                 <div
                   key={index}
