@@ -1319,15 +1319,24 @@ function StudioContent() {
         </section>
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <h2 className="text-xl font-semibold">2. Premises & endings</h2>
-          <button
-            onClick={generatePremises}
-            disabled={!storyDetails || loadingStep === "premises"}
-            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
-          >
-            {loadingStep === "premises"
-              ? "Generating..."
-              : "Generate Premises & Endings"}
-          </button>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              onClick={generatePremises}
+              disabled={!storyDetails || loadingStep === "premises"}
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+            >
+              {loadingStep === "premises"
+                ? "Generating..."
+                : "Generate Premises & Endings"}
+            </button>
+            <button
+              onClick={generatePremises}
+              disabled={!storyDetails}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              ♻️ Regenerate Premises & Endings
+            </button>
+          </div>
           {premisesAndEndings && (
             <div className="mt-4 space-y-3">
               <button
@@ -1468,13 +1477,22 @@ function StudioContent() {
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <h2 className="text-xl font-semibold">4b. Novel keywords</h2>
-          <button
-            onClick={generateKeywords}
-            disabled={!storyDetails || loadingStep === "keywords"}
-            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
-          >
-            {loadingStep === "keywords" ? "Generating..." : "Generate Keywords"}
-          </button>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              onClick={generateKeywords}
+              disabled={!storyDetails || loadingStep === "keywords"}
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+            >
+              {loadingStep === "keywords" ? "Generating..." : "Generate Keywords"}
+            </button>
+            <button
+              onClick={generateKeywords}
+              disabled={!storyDetails}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              ♻️ Regenerate Keywords
+            </button>
+          </div>
           {novelKeywords && (
             <div className="mt-4 space-y-3">
               <button
@@ -1505,13 +1523,22 @@ function StudioContent() {
         </section>
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <h2 className="text-xl font-semibold">4c. BISAC categories</h2>
-          <button
-            onClick={generateBisac}
-            disabled={!storyDetails || loadingStep === "bisac"}
-            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
-          >
-            {loadingStep === "bisac" ? "Generating..." : "Generate BISAC"}
-          </button>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              onClick={generateBisac}
+              disabled={!storyDetails || loadingStep === "bisac"}
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+            >
+              {loadingStep === "bisac" ? "Generating..." : "Generate BISAC"}
+            </button>
+            <button
+              onClick={generateBisac}
+              disabled={!storyDetails}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              ♻️ Regenerate BISAC Categories
+            </button>
+          </div>
           {novelBisac && (
             <div className="mt-4 space-y-3">
               <button
@@ -1566,15 +1593,24 @@ function StudioContent() {
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <h2 className="text-xl font-semibold">6. Chapter outline</h2>
-          <button
-            onClick={generateChapterOutline}
-            disabled={!novelPlan || loadingStep === "outline"}
-            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
-          >
-            {loadingStep === "outline"
-              ? "Generating..."
-              : "Generate Chapter Outline"}
-          </button>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              onClick={generateChapterOutline}
+              disabled={!novelPlan || loadingStep === "outline"}
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+            >
+              {loadingStep === "outline"
+                ? "Generating..."
+                : "Generate Chapter Outline"}
+            </button>
+            <button
+              onClick={generateChapterOutline}
+              disabled={!novelPlan}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              ♻️ Regenerate Chapter Outline
+            </button>
+          </div>
           {chapterOutline && (
             <div className="mt-4 space-y-3">
               <button
@@ -1599,13 +1635,22 @@ function StudioContent() {
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <h2 className="text-xl font-semibold">7. Chapter guide</h2>
-          <button
-            onClick={generateChapterGuide}
-            disabled={!chapterOutline || loadingStep === "guide"}
-            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
-          >
-            {loadingStep === "guide" ? "Generating..." : "Generate Chapter Guide"}
-          </button>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              onClick={generateChapterGuide}
+              disabled={!chapterOutline || loadingStep === "guide"}
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+            >
+              {loadingStep === "guide" ? "Generating..." : "Generate Chapter Guide"}
+            </button>
+            <button
+              onClick={generateChapterGuide}
+              disabled={!chapterOutline}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              ♻️ Regenerate Chapter Guide
+            </button>
+          </div>
           {chapterGuide && (
             <div className="mt-4 space-y-3">
               <button
@@ -1630,13 +1675,22 @@ function StudioContent() {
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <h2 className="text-xl font-semibold">8. Chapter beats</h2>
-          <button
-            onClick={generateChapterBeats}
-            disabled={!chapterGuide || loadingStep === "beats"}
-            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
-          >
-            {loadingStep === "beats" ? "Generating..." : "Generate Chapter Beats"}
-          </button>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              onClick={generateChapterBeats}
+              disabled={!chapterGuide || loadingStep === "beats"}
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+            >
+              {loadingStep === "beats" ? "Generating..." : "Generate Chapter Beats"}
+            </button>
+            <button
+              onClick={generateChapterBeats}
+              disabled={!chapterGuide}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              ♻️ Regenerate Chapter Beats
+            </button>
+          </div>
           {chapterBeats && (
             <div className="mt-4 space-y-3">
               <button
@@ -1661,13 +1715,22 @@ function StudioContent() {
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <h2 className="text-xl font-semibold">9. Scenes</h2>
-          <button
-            onClick={generateScenes}
-            disabled={!chapterBeats || loadingStep === "scenes"}
-            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
-          >
-            {loadingStep === "scenes" ? "Generating..." : "Generate Scenes"}
-          </button>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              onClick={generateScenes}
+              disabled={!chapterBeats || loadingStep === "scenes"}
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+            >
+              {loadingStep === "scenes" ? "Generating..." : "Generate Scenes"}
+            </button>
+            <button
+              onClick={generateScenes}
+              disabled={!chapterBeats}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              ♻️ Regenerate All Scenes
+            </button>
+          </div>
           {allScenes && (
             <div className="mt-4 space-y-4">
               <button
@@ -1740,13 +1803,22 @@ function StudioContent() {
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <h2 className="text-xl font-semibold">11. Generate Prose</h2>
-          <button
-            onClick={generateProse}
-            disabled={!allScenes || loadingStep === "prose"}
-            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
-          >
-            {loadingStep === "prose" ? "Generating..." : "Generate Prose"}
-          </button>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              onClick={generateProse}
+              disabled={!allScenes || loadingStep === "prose"}
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+            >
+              {loadingStep === "prose" ? "Generating..." : "Generate Prose"}
+            </button>
+            <button
+              onClick={generateProse}
+              disabled={!allScenes}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              ♻️ Regenerate Prose
+            </button>
+          </div>
           {proseScenes && (
             <div className="mt-4 space-y-4">
               <button
@@ -1783,13 +1855,22 @@ function StudioContent() {
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <h2 className="text-xl font-semibold">Bonus: Cover prompt</h2>
-          <button
-            onClick={generateCoverPrompt}
-            disabled={!storyDetails || loadingStep === "cover"}
-            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
-          >
-            {loadingStep === "cover" ? "Generating..." : "Generate Cover Prompt"}
-          </button>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              onClick={generateCoverPrompt}
+              disabled={!storyDetails || loadingStep === "cover"}
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+            >
+              {loadingStep === "cover" ? "Generating..." : "Generate Cover Prompt"}
+            </button>
+            <button
+              onClick={generateCoverPrompt}
+              disabled={!storyDetails}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              ♻️ Regenerate Cover Prompt
+            </button>
+          </div>
           {coverPrompt && (
             <div className="mt-4 space-y-3">
               <button
@@ -1811,13 +1892,22 @@ function StudioContent() {
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <h2 className="text-xl font-semibold">Bonus: Quote snippets</h2>
-          <button
-            onClick={generateQuotes}
-            disabled={!storyDetails || loadingStep === "quotes"}
-            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
-          >
-            {loadingStep === "quotes" ? "Generating..." : "Generate Quotes"}
-          </button>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              onClick={generateQuotes}
+              disabled={!storyDetails || loadingStep === "quotes"}
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+            >
+              {loadingStep === "quotes" ? "Generating..." : "Generate Quotes"}
+            </button>
+            <button
+              onClick={generateQuotes}
+              disabled={!storyDetails}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              ♻️ Regenerate Novel Quotes
+            </button>
+          </div>
           {novelQuotes && (
             <div className="mt-4 space-y-3">
               <button
