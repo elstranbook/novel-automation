@@ -23,6 +23,7 @@ export default function SeriesPage() {
   const [model, setModel] = useState(modelOptions[0]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authEmail, setAuthEmail] = useState<string | null>(null);
   const [arc, setArc] = useState<Record<string, unknown> | null>(null);
   const [seriesBible, setSeriesBible] = useState<Record<string, unknown> | null>(null);
   const [seriesMap, setSeriesMap] = useState<Record<string, unknown>[] | null>(null);
@@ -58,7 +59,10 @@ export default function SeriesPage() {
 
       if (user) {
         setUserId(user.id);
+        setAuthEmail(user.email ?? null);
         await loadSeries(user.id);
+      } else {
+        window.location.href = "/login";
       }
     };
 
@@ -109,9 +113,25 @@ export default function SeriesPage() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-12">
         <header className="flex flex-col gap-3">
-          <Link href="/" className="text-sm text-zinc-400">
-            ← Back to home
-          </Link>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Link href="/" className="text-sm text-zinc-400">
+              ← Back to home
+            </Link>
+            {authEmail && (
+              <div className="flex items-center gap-3 text-xs text-zinc-400">
+                <span>{authEmail}</span>
+                <button
+                  onClick={async () => {
+                    await supabase.auth.signOut();
+                    window.location.href = "/login";
+                  }}
+                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
           <h1 className="text-3xl font-semibold">Series Mode</h1>
           <p className="text-zinc-300">
             Create series arcs and jump directly into book generation.

@@ -369,6 +369,7 @@ function StudioContent() {
 
   const [loadingStep, setLoadingStep] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [authEmail, setAuthEmail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const stepsCompleted = useMemo(() => {
@@ -410,6 +411,7 @@ function StudioContent() {
     if (!user) {
       throw new Error("Please sign in to save outputs.");
     }
+    setAuthEmail(user.email ?? null);
     return user;
   };
 
@@ -711,12 +713,15 @@ function StudioContent() {
 
       if (user) {
         setUserId(user.id);
+        setAuthEmail(user.email ?? null);
         await loadNovels(user.id);
         const loadedLatest = await loadLatestNovel(user.id);
         if (!loadedLatest && prefillTitle) {
           setTitle(prefillTitle);
           setNovelAbout(prefillAbout);
         }
+      } else {
+        window.location.href = "/login";
       }
     };
 
@@ -1585,20 +1590,36 @@ function StudioContent() {
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2">
-          {studioTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveStudioTab(tab.id)}
-              className={`rounded-full border px-4 py-2 text-sm transition ${
-                activeStudioTab === tab.id
-                  ? "border-white text-white"
-                  : "border-zinc-700 text-zinc-400"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-2">
+            {studioTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveStudioTab(tab.id)}
+                className={`rounded-full border px-4 py-2 text-sm transition ${
+                  activeStudioTab === tab.id
+                    ? "border-white text-white"
+                    : "border-zinc-700 text-zinc-400"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          {authEmail && (
+            <div className="flex items-center gap-3 text-xs text-zinc-400">
+              <span>{authEmail}</span>
+              <button
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  window.location.href = "/login";
+                }}
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
         </div>
 
         {activeStudioTab === "pipeline" && (
