@@ -24,6 +24,19 @@ export default function SeriesPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [arc, setArc] = useState<Record<string, unknown> | null>(null);
+  const [seriesBible, setSeriesBible] = useState<Record<string, unknown> | null>(null);
+  const [seriesMap, setSeriesMap] = useState<Record<string, unknown>[] | null>(null);
+  const [characterEvolution, setCharacterEvolution] = useState<Record<string, unknown> | null>(null);
+  const [bookBlueprint, setBookBlueprint] = useState<Record<string, unknown> | null>(null);
+  const [loadingStep, setLoadingStep] = useState<string | null>(null);
+  const [suiteTone, setSuiteTone] = useState("Emotional, dramatic, hopeful");
+  const [suiteSetting, setSuiteSetting] = useState("Contemporary");
+  const [suiteCharacters, setSuiteCharacters] = useState("");
+  const [suiteThemes, setSuiteThemes] = useState(
+    "Coming of age, identity, relationships"
+  );
+  const [suiteCoreConflict, setSuiteCoreConflict] = useState("");
+  const [suiteBookNumber, setSuiteBookNumber] = useState(1);
 
   const loadSeries = async (userIdValue: string) => {
     const { data } = await supabase
@@ -78,6 +91,10 @@ export default function SeriesPage() {
 
       const data = await response.json();
       setArc(data.arc ?? null);
+      setSeriesBible(null);
+      setSeriesMap(null);
+      setCharacterEvolution(null);
+      setBookBlueprint(null);
       setTitle("");
       setDescription("");
       await loadSeries(user.id);
@@ -165,6 +182,9 @@ export default function SeriesPage() {
             >
               {loading ? "Creating..." : "Create series & arc"}
             </button>
+            <p className="text-xs text-zinc-500">
+              The series suite uses the most recent series in your list.
+            </p>
           </div>
         </section>
 
@@ -176,6 +196,234 @@ export default function SeriesPage() {
             </pre>
           </section>
         )}
+
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+          <h2 className="text-xl font-semibold">Series suite</h2>
+          <p className="text-sm text-zinc-400">
+            Generate the series bible, map, character evolution, and book blueprint.
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <label className="text-xs text-zinc-300">
+              Tone / Vibe
+              <input
+                value={suiteTone}
+                onChange={(event) => setSuiteTone(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                placeholder="Emotional, dramatic, hopeful"
+              />
+            </label>
+            <label className="text-xs text-zinc-300">
+              Setting
+              <input
+                value={suiteSetting}
+                onChange={(event) => setSuiteSetting(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                placeholder="Contemporary"
+              />
+            </label>
+            <label className="text-xs text-zinc-300 md:col-span-2">
+              Main Characters (comma-separated)
+              <input
+                value={suiteCharacters}
+                onChange={(event) => setSuiteCharacters(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                placeholder="Character 1, Character 2"
+              />
+            </label>
+            <label className="text-xs text-zinc-300 md:col-span-2">
+              Core Conflict
+              <input
+                value={suiteCoreConflict}
+                onChange={(event) => setSuiteCoreConflict(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                placeholder="A secret threatens to unravel everything"
+              />
+            </label>
+            <label className="text-xs text-zinc-300 md:col-span-2">
+              Themes
+              <input
+                value={suiteThemes}
+                onChange={(event) => setSuiteThemes(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                placeholder="Coming of age, identity, relationships"
+              />
+            </label>
+            <label className="text-xs text-zinc-300">
+              Blueprint Book #
+              <input
+                type="number"
+                min={1}
+                value={suiteBookNumber}
+                onChange={(event) =>
+                  setSuiteBookNumber(Number(event.target.value) || 1)
+                }
+                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+              />
+            </label>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <button
+              onClick={async () => {
+                setLoadingStep("bible");
+                setError(null);
+                try {
+                  if (!seriesList[0]) throw new Error("Create a series first");
+                  const response = await fetch("/api/generate/series/bible", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      seriesId: seriesList[0].id,
+                      title: seriesList[0].title,
+                      genre: "Young Adult Fiction",
+                      targetAge: "13-18",
+                      tone: suiteTone,
+                      setting: suiteSetting || description || "Contemporary",
+                      mainCharacters: suiteCharacters,
+                      coreConflict: suiteCoreConflict || description || "",
+                      themes: suiteThemes,
+                      numBooks: seriesList[0].num_books,
+                      model,
+                    }),
+                  });
+                  if (!response.ok) throw new Error("Failed to generate series bible");
+                  const data = await response.json();
+                  setSeriesBible(data.bible ?? null);
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Unknown error");
+                } finally {
+                  setLoadingStep(null);
+                }
+              }}
+              className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+            >
+              {loadingStep === "bible" ? "Generating..." : "Generate Series Bible"}
+            </button>
+            <button
+              onClick={async () => {
+                setLoadingStep("map");
+                setError(null);
+                try {
+                  if (!seriesList[0]) throw new Error("Create a series first");
+                  const response = await fetch("/api/generate/series/map", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      seriesId: seriesList[0].id,
+                      title: seriesList[0].title,
+                      numBooks: seriesList[0].num_books,
+                      model,
+                    }),
+                  });
+                  if (!response.ok) throw new Error("Failed to generate series map");
+                  const data = await response.json();
+                  setSeriesMap(data.maps ?? null);
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Unknown error");
+                } finally {
+                  setLoadingStep(null);
+                }
+              }}
+              className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+            >
+              {loadingStep === "map" ? "Generating..." : "Generate Series Map"}
+            </button>
+            <button
+              onClick={async () => {
+                setLoadingStep("evolution");
+                setError(null);
+                try {
+                  if (!seriesList[0]) throw new Error("Create a series first");
+                  const response = await fetch("/api/generate/series/evolution", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      seriesId: seriesList[0].id,
+                      numBooks: seriesList[0].num_books,
+                      characters: suiteCharacters
+                        ? suiteCharacters.split(",").map((name) => name.trim())
+                        : ["Main Character"],
+                      model,
+                    }),
+                  });
+                  if (!response.ok) throw new Error("Failed to generate evolution");
+                  const data = await response.json();
+                  setCharacterEvolution(data.evolution ?? null);
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Unknown error");
+                } finally {
+                  setLoadingStep(null);
+                }
+              }}
+              className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+            >
+              {loadingStep === "evolution" ? "Generating..." : "Generate Character Evolution"}
+            </button>
+            <button
+              onClick={async () => {
+                setLoadingStep("blueprint");
+                setError(null);
+                try {
+                  if (!seriesList[0]) throw new Error("Create a series first");
+                  const response = await fetch("/api/generate/series/blueprint", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      seriesId: seriesList[0].id,
+                      title: seriesList[0].title,
+                      numBooks: seriesList[0].num_books,
+                      bookNumber: 1,
+                      model,
+                    }),
+                  });
+                  if (!response.ok) throw new Error("Failed to generate blueprint");
+                  const data = await response.json();
+                  setBookBlueprint(data.blueprint ?? null);
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Unknown error");
+                } finally {
+                  setLoadingStep(null);
+                }
+              }}
+              className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+            >
+              {loadingStep === "blueprint" ? "Generating..." : "Generate Book Blueprint"}
+            </button>
+          </div>
+          <div className="mt-6 space-y-4">
+            {seriesBible && (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
+                <h3 className="text-sm font-semibold text-zinc-100">Series Bible</h3>
+                <pre className="mt-2 whitespace-pre-wrap text-xs text-zinc-200">
+                  {JSON.stringify(seriesBible, null, 2)}
+                </pre>
+              </div>
+            )}
+            {seriesMap && (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
+                <h3 className="text-sm font-semibold text-zinc-100">Series Map</h3>
+                <pre className="mt-2 whitespace-pre-wrap text-xs text-zinc-200">
+                  {JSON.stringify(seriesMap, null, 2)}
+                </pre>
+              </div>
+            )}
+            {characterEvolution && (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
+                <h3 className="text-sm font-semibold text-zinc-100">Character Evolution</h3>
+                <pre className="mt-2 whitespace-pre-wrap text-xs text-zinc-200">
+                  {JSON.stringify(characterEvolution, null, 2)}
+                </pre>
+              </div>
+            )}
+            {bookBlueprint && (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
+                <h3 className="text-sm font-semibold text-zinc-100">Book Blueprint</h3>
+                <pre className="mt-2 whitespace-pre-wrap text-xs text-zinc-200">
+                  {JSON.stringify(bookBlueprint, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <h2 className="text-xl font-semibold">Your series</h2>

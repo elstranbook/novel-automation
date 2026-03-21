@@ -158,6 +158,7 @@ Return your scenes ONLY as a JSON array of strings.`;
 export async function POST(request: Request) {
   try {
     const {
+      mode,
       storyDetails,
       chapterOutline,
       chapterBeats,
@@ -179,6 +180,13 @@ export async function POST(request: Request) {
     const chapters = Array.isArray(chapterOutline)
       ? chapterOutline
       : (outlineValue?.chapters as Array<Record<string, unknown>>) ?? [];
+
+    if (mode && mode !== "all") {
+      return NextResponse.json(
+        { error: "Unsupported scenes mode" },
+        { status: 400 }
+      );
+    }
 
     const allScenes: Record<string, string[]> = {};
 

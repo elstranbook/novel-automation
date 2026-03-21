@@ -1,5 +1,6 @@
 "use client";
 
+import { Document, HeadingLevel, Packer, Paragraph, PageBreak } from "docx";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -46,6 +47,35 @@ const downloadText = (filename: string, content: string, mime = "text/plain") =>
   URL.revokeObjectURL(url);
 };
 
+const copyToClipboard = async (text: string) => {
+  if (!text) return false;
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const blobToBase64 = async (blob: Blob) => {
+  const arrayBuffer = await blob.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer);
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+};
+
+const base64ToBlob = (base64: string, mime: string) => {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mime });
+};
+
 const formatJson = (value: unknown) =>
   value ? JSON.stringify(value, null, 2) : "";
 
@@ -83,6 +113,63 @@ const formatReadable = (value: unknown, depth = 0): string => {
   }
 
   return String(value);
+};
+
+const pageBreakText = "\f";
+const pageBreakMarkdown = "\n\n\\pagebreak\n\n";
+const pageBreakHtml = '<div style="page-break-after: always; break-after: page;"></div>';
+
+const formatProseText = (prose: ScenesMap) =>
+  Object.entries(prose)
+    .map(([chapter, scenes], index) => {
+      const chapterHeader = `Chapter ${index + 1}: ${chapter}`;
+      return `${chapterHeader}\n\n${scenes.join("\n\n")}`;
+    })
+    .join(`\n\n${pageBreakText}\n\n`);
+
+const formatProseMarkdown = (prose: ScenesMap) =>
+  Object.entries(prose)
+    .map(([chapter, scenes], index) => {
+      const chapterHeader = `## Chapter ${index + 1}: ${chapter}`;
+      return `${chapterHeader}\n\n${scenes.join("\n\n")}`;
+    })
+    .join(pageBreakMarkdown);
+
+const formatProseHtml = (prose: ScenesMap) =>
+  `<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\" />\n<title>Novel Export</title>\n</head>\n<body>\n${Object.entries(prose)
+    .map(([chapter, scenes], index) => {
+      const header = `<h2>Chapter ${index + 1}: ${chapter}</h2>`;
+      const body = scenes
+        .map((scene) => `<p>${scene.replace(/\n+/g, "</p><p>")}</p>`)
+        .join("\n");
+      const separator = index < Object.keys(prose).length - 1 ? pageBreakHtml : "";
+      return `${header}\n${body}\n${separator}`;
+    })
+    .join("\n\n")}\n</body>\n</html>`;
+
+const buildDocxDocument = (prose: ScenesMap) => {
+  const children: Paragraph[] = [];
+  Object.entries(prose).forEach(([chapter, scenes], index) => {
+    children.push(
+      new Paragraph({
+        text: `Chapter ${index + 1}: ${chapter}`,
+        heading: HeadingLevel.HEADING_1,
+      })
+    );
+    scenes.forEach((scene) => {
+      scene.split(/\n{2,}/).forEach((paragraph) => {
+        if (paragraph.trim().length > 0) {
+          children.push(new Paragraph(paragraph.trim()));
+        }
+      });
+      children.push(new Paragraph(""));
+    });
+    if (index < Object.keys(prose).length - 1) {
+      children.push(new Paragraph({ children: [new PageBreak()] }));
+    }
+  });
+
+  return new Document({ sections: [{ children }] });
 };
 
 const parseSocialSnippets = (content: string) => {
@@ -244,7 +331,6 @@ function StudioContent() {
   const [chapterGuide, setChapterGuide] = useState<ChapterGuide | null>(null);
   const [chapterBeats, setChapterBeats] = useState<ChapterBeats | null>(null);
   const [allScenes, setAllScenes] = useState<ScenesMap | null>(null);
-  const [novelFormats, setNovelFormats] = useState<NovelFormats | null>(null);
   const [novelQuotes, setNovelQuotes] = useState<string[] | null>(null);
   const [promotionalArticles, setPromotionalArticles] = useState<
     Array<Record<string, unknown>> | null
@@ -257,9 +343,18 @@ function StudioContent() {
   const [promoCtaType, setPromoCtaType] = useState<string>("medium");
   const [promoIncludeLinks, setPromoIncludeLinks] = useState<boolean>(false);
   const [socialSnippets, setSocialSnippets] = useState<string | null>(null);
+  const [novelFormats, setNovelFormats] = useState<Record<string, string>>({});
+  const [savingExport, setSavingExport] = useState<string | null>(null);
   const [socialSnippetsByPlatform, setSocialSnippetsByPlatform] = useState<
     Record<string, string>
   >({});
+  const [editingSocialSnippets, setEditingSocialSnippets] = useState<
+    Record<string, string>
+  >({});
+  const [editingSocialSnippetKeys, setEditingSocialSnippetKeys] = useState<
+    Record<string, boolean>
+  >({});
+  const [copiedSnippetKey, setCopiedSnippetKey] = useState<string | null>(null);
   const [activeStudioTab, setActiveStudioTab] = useState<
     "pipeline" | "promotional"
   >("pipeline");
@@ -284,7 +379,6 @@ function StudioContent() {
       chapterGuide,
       chapterBeats,
       allScenes,
-      novelFormats,
       promotionalArticles,
     ];
     return steps.filter(Boolean).length;
@@ -298,7 +392,6 @@ function StudioContent() {
     chapterGuide,
     chapterBeats,
     allScenes,
-    novelFormats,
     promotionalArticles,
   ]);
 
@@ -473,19 +566,6 @@ function StudioContent() {
       setAllScenes(grouped);
     }
 
-    const { data: formats } = await supabase
-      .from("novel_formats")
-      .select("format_name,content")
-      .eq("novel_id", novelIdValue);
-
-    if (formats) {
-      const formatted: NovelFormats = {};
-      formats.forEach((row) => {
-        formatted[row.format_name] = row.content;
-      });
-      setNovelFormats(formatted);
-    }
-
     const { data: keywords } = await supabase
       .from("novel_keywords")
       .select("keywords")
@@ -554,6 +634,19 @@ function StudioContent() {
       setSocialSnippets(socialSnippetRow.content);
     }
 
+    const { data: formatRows } = await supabase
+      .from("novel_formats")
+      .select("format_name,content")
+      .eq("novel_id", novelIdValue);
+
+    if (formatRows) {
+      const formatted: Record<string, string> = {};
+      formatRows.forEach((row) => {
+        formatted[row.format_name] = row.content;
+      });
+      setNovelFormats(formatted);
+    }
+
     const { data: cover } = await supabase
       .from("cover_design_prompts")
       .select("prompt")
@@ -619,7 +712,6 @@ function StudioContent() {
     setChapterGuide(null);
     setChapterBeats(null);
     setAllScenes(null);
-    setNovelFormats(null);
     setNovelQuotes(null);
     setPromotionalArticles(null);
     setPromoArticleType("theme_analysis");
@@ -629,6 +721,11 @@ function StudioContent() {
     setPromoIncludeLinks(false);
     setSocialSnippets(null);
     setSocialSnippetsByPlatform({});
+    setEditingSocialSnippets({});
+    setEditingSocialSnippetKeys({});
+    setCopiedSnippetKey(null);
+    setNovelFormats({});
+    setSavingExport(null);
     setActiveStudioTab("pipeline");
     setCoverPrompt(null);
     setProseScenes(null);
@@ -762,44 +859,41 @@ function StudioContent() {
     try {
       const user = await requireUser();
       const novelIdValue = await ensureNovel(user.id);
-      const descriptionTypes = [
-        { descriptionType: "marketing", lengthType: "standard" },
-        { descriptionType: "marketing", lengthType: "short" },
-        { descriptionType: "back_cover", lengthType: "standard" },
-        { descriptionType: "pitch", lengthType: "standard" },
-      ];
+
+      const response = await fetch("/api/generate/book-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storyDetails, model, mode: "all" }),
+      });
+
+      if (!response.ok) throw new Error("Failed to generate descriptions");
+      const data = await response.json();
+      const descriptions: BookDescriptions = data.descriptions ?? {};
+      if (!Object.keys(descriptions).length) {
+        throw new Error("No descriptions returned.");
+      }
 
       await supabase
         .from("book_descriptions")
         .delete()
         .eq("novel_id", novelIdValue);
 
-      const results: BookDescriptions = {};
-      for (const config of descriptionTypes) {
-        const response = await fetch("/api/generate/book-description", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            storyDetails,
-            model,
-            descriptionType: config.descriptionType,
-            lengthType: config.lengthType,
-          }),
-        });
-        if (!response.ok) throw new Error("Failed to generate description");
-        const data = await response.json();
-        results[`${config.descriptionType}_${config.lengthType}`] =
-          data.description;
-        await supabase.from("book_descriptions").insert({
+      const rows = Object.entries(descriptions).map(([key, content]) => {
+        const [descriptionType, lengthType] = key.split("_");
+        return {
           novel_id: novelIdValue,
           user_id: user.id,
-          description_type: config.descriptionType,
-          length_type: config.lengthType,
-          content: data.description ?? "",
-        });
+          description_type: descriptionType ?? "marketing",
+          length_type: lengthType ?? "standard",
+          content: String(content ?? ""),
+        };
+      });
+
+      if (rows.length) {
+        await supabase.from("book_descriptions").insert(rows);
       }
 
-      setBookDescriptions(results);
+      setBookDescriptions(descriptions);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -989,63 +1083,59 @@ function StudioContent() {
   };
 
   const generateScenes = async () => {
+    if (!chapterOutline) {
+      setError("Generate chapter outline first.");
+      return;
+    }
+
     setLoadingStep("scenes");
     setError(null);
     try {
       const user = await requireUser();
       const novelIdValue = await ensureNovel(user.id);
-      const outlineValue = chapterOutline as
-        | Array<Record<string, unknown>>
-        | Record<string, unknown>
-        | null;
-      const outlineArray = Array.isArray(outlineValue)
-        ? outlineValue
-        : ((outlineValue?.chapters as Array<Record<string, unknown>>) ?? []);
 
-      const aggregatedScenes: ScenesMap = {};
+      const response = await fetch("/api/generate/scenes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "all",
+          storyDetails,
+          chapterOutline,
+          chapterBeats,
+          model,
+          maxSceneLength,
+          minSceneLength,
+          premisesAndEndings,
+          characterProfiles,
+        }),
+      });
 
-      for (let index = 0; index < outlineArray.length; index += 1) {
-        const chapter = outlineArray[index] as Record<string, unknown>;
-        const chapterNumber = String(chapter.number ?? index + 1);
-        setMessage(
-          `Generating scenes for Chapter ${chapterNumber} (${index + 1}/${outlineArray.length})`
-        );
-        const response = await fetch("/api/generate/scenes/chapter", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chapter,
-            storyDetails,
-            chapterBeats: chapterBeats?.[chapterNumber],
-            model,
-            maxSceneLength,
-            minSceneLength,
-            premisesAndEndings,
-            characterProfiles,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to generate scenes");
-        }
-
-        const data = await response.json();
-        if (!data.scenes || data.scenes.length === 0) {
-          throw new Error("Scenes generation returned no output.");
-        }
-        const normalizedScenes = (data.scenes as Array<unknown>).map((scene) =>
-          typeof scene === "string" ? scene : formatReadable(scene)
-        );
-        aggregatedScenes[data.chapterTitle] = normalizedScenes;
+      if (!response.ok) {
+        throw new Error("Failed to generate scenes");
       }
 
+      const data = await response.json();
+      if (!data.scenes || Object.keys(data.scenes).length === 0) {
+        throw new Error("Scenes generation returned no output.");
+      }
+
+      const normalizedScenes: ScenesMap = {};
+      Object.entries(data.scenes as Record<string, unknown>).forEach(
+        ([chapterTitle, scenes]) => {
+          const scenesArray = Array.isArray(scenes) ? scenes : [scenes];
+          normalizedScenes[chapterTitle] = scenesArray.map((scene) =>
+            typeof scene === "string" ? scene : formatReadable(scene)
+          );
+        }
+      );
+
       setMessage(null);
-      setAllScenes(aggregatedScenes);
+      setAllScenes(normalizedScenes);
       setProseScenes(null);
 
       await supabase.from("scenes").delete().eq("novel_id", novelIdValue);
       const rows: Array<Record<string, unknown>> = [];
-      Object.entries(aggregatedScenes).forEach(([chapterTitle, scenes]) => {
+      Object.entries(normalizedScenes).forEach(([chapterTitle, scenes]) => {
         (scenes as string[]).forEach((scene, index) => {
           rows.push({
             novel_id: novelIdValue,
@@ -1058,37 +1148,6 @@ function StudioContent() {
       });
       if (rows.length) {
         await supabase.from("scenes").insert(rows);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-    } finally {
-      setLoadingStep(null);
-    }
-  };
-
-  const generateFormats = async () => {
-    setLoadingStep("formats");
-    setError(null);
-    try {
-      const user = await requireUser();
-      const novelIdValue = await ensureNovel(user.id);
-      const response = await fetch("/api/generate/formats", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenes: allScenes }),
-      });
-      if (!response.ok) throw new Error("Failed to generate formats");
-      const data = await response.json();
-      setNovelFormats(data.formats ?? {});
-      await supabase.from("novel_formats").delete().eq("novel_id", novelIdValue);
-      const rows = Object.entries(data.formats ?? {}).map(([format, content]) => ({
-        novel_id: novelIdValue,
-        user_id: user.id,
-        format_name: format,
-        content: String(content),
-      }));
-      if (rows.length) {
-        await supabase.from("novel_formats").insert(rows);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
@@ -1319,6 +1378,15 @@ function StudioContent() {
           ...prev,
           [platform]: content,
         }));
+        setEditingSocialSnippetKeys((prev) => ({
+          ...prev,
+          [platform]: false,
+        }));
+        setEditingSocialSnippets((prev) => {
+          const next = { ...prev };
+          delete next[platform];
+          return next;
+        });
       } else {
         setSocialSnippets(content);
         await supabase.from("social_snippets").insert({
@@ -1342,8 +1410,56 @@ function StudioContent() {
       await supabase.from("social_snippets").delete().eq("novel_id", novelIdValue);
       setSocialSnippets(null);
       setSocialSnippetsByPlatform({});
+      setEditingSocialSnippets({});
+      setEditingSocialSnippetKeys({});
+      setCopiedSnippetKey(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
+    }
+  };
+
+  const saveNovelFormat = async (
+    format: string,
+    content: string,
+    mime: string
+  ) => {
+    setSavingExport(format);
+    setError(null);
+    try {
+      const user = await requireUser();
+      const novelIdValue = await ensureNovel(user.id);
+      await supabase
+        .from("novel_formats")
+        .delete()
+        .eq("novel_id", novelIdValue)
+        .eq("format_name", format);
+      await supabase.from("novel_formats").insert({
+        novel_id: novelIdValue,
+        user_id: user.id,
+        format_name: format,
+        content,
+      });
+      setNovelFormats((prev) => ({ ...prev, [format]: content }));
+      setMessage("Export saved to your library.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setSavingExport(null);
+    }
+  };
+
+  const saveDocxExport = async () => {
+    if (!proseScenes) return;
+    setSavingExport("docx");
+    setError(null);
+    try {
+      const doc = buildDocxDocument(proseScenes);
+      const blob = await Packer.toBlob(doc);
+      const base64 = await blobToBase64(blob);
+      await saveNovelFormat("docx", base64, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+      setSavingExport(null);
     }
   };
 
@@ -2038,40 +2154,6 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">10. Formats & exports</h2>
-          <button
-            onClick={generateFormats}
-            disabled={!allScenes || loadingStep === "formats"}
-            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
-          >
-            {loadingStep === "formats" ? "Generating..." : "Generate Formats"}
-          </button>
-          {novelFormats && (
-            <div className="mt-4 grid gap-4 md:grid-cols-3">
-              {Object.entries(novelFormats).map(([format, content]) => (
-                <div
-                  key={format}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
-                >
-                  <p className="text-sm font-semibold text-zinc-100">{format}</p>
-                  <button
-                    onClick={() =>
-                      downloadText(`novel.${format}`, content as string)
-                    }
-                    className="mt-2 rounded-full border border-zinc-700 px-3 py-1 text-xs"
-                  >
-                    Download
-                  </button>
-                  <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap">
-                    {content}
-                  </pre>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <h2 className="text-xl font-semibold">11. Generate Prose</h2>
           <div className="mt-4 flex flex-wrap gap-3">
             <button
@@ -2091,17 +2173,43 @@ function StudioContent() {
           </div>
           {proseScenes && (
             <div className="mt-4 space-y-4">
-              <button
-                onClick={() =>
-                  downloadText(
-                    `${title || "story"}_prose.txt`,
-                    formatReadable(proseScenes)
-                  )
-                }
-                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
-              >
-                Download TXT
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() =>
+                    downloadText(
+                      `${title || "story"}_novel.txt`,
+                      formatProseText(proseScenes)
+                    )
+                  }
+                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                >
+                  Download TXT
+                </button>
+                <button
+                  onClick={() =>
+                    downloadText(
+                      `${title || "story"}_novel.md`,
+                      formatProseMarkdown(proseScenes),
+                      "text/markdown"
+                    )
+                  }
+                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                >
+                  Download Markdown
+                </button>
+                <button
+                  onClick={() =>
+                    downloadText(
+                      `${title || "story"}_novel.html`,
+                      formatProseHtml(proseScenes),
+                      "text/html"
+                    )
+                  }
+                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                >
+                  Download HTML
+                </button>
+              </div>
               <Collapsible label="Generated prose">
                 {Object.entries(proseScenes).map(([chapter, scenes]) => (
                   <div
@@ -2121,6 +2229,136 @@ function StudioContent() {
               </Collapsible>
             </div>
           )}
+        </section>
+
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+          <h2 className="text-xl font-semibold">12. Formats & exports</h2>
+          <p className="mt-2 text-sm text-zinc-400">
+            Export the full novel prose (all scenes stitched together).
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              onClick={() =>
+                proseScenes &&
+                saveNovelFormat("txt", formatProseText(proseScenes), "text/plain")
+              }
+              disabled={!proseScenes || savingExport === "txt"}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              {savingExport === "txt" ? "Saving..." : "Save TXT"}
+            </button>
+            <button
+              onClick={() =>
+                proseScenes &&
+                saveNovelFormat(
+                  "md",
+                  formatProseMarkdown(proseScenes),
+                  "text/markdown"
+                )
+              }
+              disabled={!proseScenes || savingExport === "md"}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              {savingExport === "md" ? "Saving..." : "Save Markdown"}
+            </button>
+            <button
+              onClick={() =>
+                proseScenes &&
+                saveNovelFormat("html", formatProseHtml(proseScenes), "text/html")
+              }
+              disabled={!proseScenes || savingExport === "html"}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              {savingExport === "html" ? "Saving..." : "Save HTML"}
+            </button>
+            <button
+              onClick={saveDocxExport}
+              disabled={!proseScenes || savingExport === "docx"}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              {savingExport === "docx" ? "Saving..." : "Save DOCX"}
+            </button>
+          </div>
+          <div className="mt-4 rounded-lg border border-dashed border-zinc-800 p-4 text-xs text-zinc-400">
+            {novelFormats.txt && (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>TXT saved</span>
+                <button
+                  onClick={() =>
+                    downloadText(
+                      `${title || "story"}_novel.txt`,
+                      novelFormats.txt
+                    )
+                  }
+                  className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                >
+                  Download TXT
+                </button>
+              </div>
+            )}
+            {novelFormats.md && (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>Markdown saved</span>
+                <button
+                  onClick={() =>
+                    downloadText(
+                      `${title || "story"}_novel.md`,
+                      novelFormats.md,
+                      "text/markdown"
+                    )
+                  }
+                  className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                >
+                  Download Markdown
+                </button>
+              </div>
+            )}
+            {novelFormats.html && (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>HTML saved</span>
+                <button
+                  onClick={() =>
+                    downloadText(
+                      `${title || "story"}_novel.html`,
+                      novelFormats.html,
+                      "text/html"
+                    )
+                  }
+                  className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                >
+                  Download HTML
+                </button>
+              </div>
+            )}
+            {novelFormats.docx && (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>DOCX saved</span>
+                <button
+                  onClick={() => {
+                    const blob = base64ToBlob(
+                      novelFormats.docx,
+                      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    );
+                    const url = URL.createObjectURL(blob);
+                    const anchor = document.createElement("a");
+                    anchor.href = url;
+                    anchor.download = `${title || "story"}_novel.docx`;
+                    anchor.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                >
+                  Download DOCX
+                </button>
+              </div>
+            )}
+            {!novelFormats.txt &&
+              !novelFormats.md &&
+              !novelFormats.html &&
+              !novelFormats.docx && (
+                <p>No saved exports yet. Save a format to store it.</p>
+              )}
+          </div>
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
@@ -2453,7 +2691,7 @@ function StudioContent() {
                       <p className="text-sm font-semibold text-zinc-100">
                         {section.title}
                       </p>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         {section.key !== "general" && (
                           <button
                             onClick={() =>
@@ -2477,10 +2715,51 @@ function StudioContent() {
                           </button>
                         )}
                         <button
+                          onClick={async () => {
+                            const text =
+                              socialSnippetsByPlatform[section.key] ?? section.body;
+                            const copied = await copyToClipboard(text);
+                            if (copied) {
+                              setCopiedSnippetKey(section.key);
+                              setTimeout(() => setCopiedSnippetKey(null), 1500);
+                            }
+                          }}
+                          className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                        >
+                          {copiedSnippetKey === section.key ? "Copied" : "Copy"}
+                        </button>
+                        <button
+                          onClick={() =>
+                            setEditingSocialSnippetKeys((prev) => ({
+                              ...prev,
+                              [section.key]: !prev[section.key],
+                            }))
+                          }
+                          className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                        >
+                          {editingSocialSnippetKeys[section.key] ? "Cancel" : "Edit"}
+                        </button>
+                        {editingSocialSnippetKeys[section.key] && (
+                          <button
+                            onClick={() =>
+                              setSocialSnippetsByPlatform((prev) => ({
+                                ...prev,
+                                [section.key]:
+                                  editingSocialSnippets[section.key] ??
+                                  socialSnippetsByPlatform[section.key] ??
+                                  section.body,
+                              }))
+                            }
+                            className="rounded-full border border-emerald-500/60 px-3 py-1 text-[10px] text-emerald-200"
+                          >
+                            Save
+                          </button>
+                        )}
+                        <button
                           onClick={() =>
                             downloadText(
                               `${title || "story"}_${section.title.replace(/\s+/g, "_")}.txt`,
-                              section.body
+                              socialSnippetsByPlatform[section.key] ?? section.body
                             )
                           }
                           className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
@@ -2489,9 +2768,26 @@ function StudioContent() {
                         </button>
                       </div>
                     </div>
-                    <pre className="mt-3 whitespace-pre-wrap text-xs">
-                      {socialSnippetsByPlatform[section.key] ?? section.body}
-                    </pre>
+                    {editingSocialSnippetKeys[section.key] ? (
+                      <textarea
+                        value={
+                          editingSocialSnippets[section.key] ??
+                          socialSnippetsByPlatform[section.key] ??
+                          section.body
+                        }
+                        onChange={(event) =>
+                          setEditingSocialSnippets((prev) => ({
+                            ...prev,
+                            [section.key]: event.target.value,
+                          }))
+                        }
+                        className="mt-3 min-h-[140px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                      />
+                    ) : (
+                      <pre className="mt-3 whitespace-pre-wrap text-xs">
+                        {socialSnippetsByPlatform[section.key] ?? section.body}
+                      </pre>
+                    )}
                   </div>
                 ))
               ) : (

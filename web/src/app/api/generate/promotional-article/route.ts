@@ -289,12 +289,16 @@ TITLE: [Your article title here]
 
 ARTICLE:
 [Your full article content here]
+
+Make the tone emotionally engaging, fast-paced, and tailored to teen readers.
+Use hooks, curiosity, and relatable language. Avoid generic phrasing.
 `;
 
     const system = `You are a bestselling YA book marketing expert and content strategist who creates viral, shareable content.
 Your articles have helped numerous YA novels become bestsellers.
 Write in a ${tone} tone that resonates with ${targetAge} year old readers and their parents/educators.
-Create content that is both emotionally compelling and strategically effective for book marketing.`;
+Create content that is both emotionally compelling and strategically effective for book marketing.
+Write with an emotionally engaging, fast-paced tone tailored to teen readers, using hooks, curiosity, and relatable language while avoiding generic phrasing.`;
 
     const maxTokensMap: Record<string, number> = {
       short: 1200,

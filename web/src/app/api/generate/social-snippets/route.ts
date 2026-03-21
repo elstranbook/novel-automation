@@ -62,10 +62,13 @@ Generate the following:
 ${platform ? platformPrompts[platform] ?? "" : "1. TWITTER/X POSTS (3 variations, max 280 characters each):\n- One emotional hook\n- One question to engage readers\n- One quote-style post\n\n2. INSTAGRAM CAPTIONS (2 variations, 100-150 words each):\n- One storytelling style\n- One behind-the-scenes style\n\n3. TIKTOK SCRIPT (1, 30-60 seconds speaking time):\n- Hook, story, call to action format\n\n4. FACEBOOK POST (1, 200-300 words):\n- Engaging, shareable, community-focused\n\n5. NEWSLETTER TEASER (1, 50-75 words):\n- Email-friendly, curiosity-building"}
 
 Format each section clearly with headers.
+
+Make the tone emotionally engaging, fast-paced, and tailored to teen readers.
+Use hooks, curiosity, and relatable language. Avoid generic phrasing.
 `;
 
     const system =
-      "You are a social media marketing expert specializing in YA book promotion. Create engaging, platform-appropriate content that drives book discovery and purchases.";
+      "You are a social media marketing expert specializing in YA book promotion. Create engaging, platform-appropriate content that drives book discovery and purchases. Write with an emotionally engaging, fast-paced tone tailored to teen readers, using hooks, curiosity, and relatable language while avoiding generic phrasing.";
 
     const response = await runChatCompletion({
       model: model || "gpt-4.1-mini",
