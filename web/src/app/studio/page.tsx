@@ -866,30 +866,50 @@ function StudioContent() {
     try {
       const user = await requireUser();
       const novelIdValue = await ensureNovel(user.id);
-      const response = await fetch("/api/generate/scenes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          storyDetails,
-          chapterOutline,
-          chapterBeats,
-          model,
-          maxSceneLength,
-          minSceneLength,
-          premisesAndEndings,
-          characterProfiles,
-        }),
-      });
-      if (!response.ok) throw new Error("Failed to generate scenes");
-      const data = await response.json();
-      if (!data.scenes || Object.keys(data.scenes).length === 0) {
-        throw new Error("Scenes generation returned no output.");
+      const outlineArray = Array.isArray(chapterOutline)
+        ? chapterOutline
+        : (chapterOutline?.chapters as Array<Record<string, unknown>>) ?? [];
+
+      const aggregatedScenes: ScenesMap = {};
+
+      for (let index = 0; index < outlineArray.length; index += 1) {
+        const chapter = outlineArray[index] as Record<string, unknown>;
+        const chapterNumber = String(chapter.number ?? index + 1);
+        setMessage(
+          `Generating scenes for Chapter ${chapterNumber} (${index + 1}/${outlineArray.length})`
+        );
+        const response = await fetch("/api/generate/scenes/chapter", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chapter,
+            storyDetails,
+            chapterBeats: chapterBeats?.[chapterNumber],
+            model,
+            maxSceneLength,
+            minSceneLength,
+            premisesAndEndings,
+            characterProfiles,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to generate scenes");
+        }
+
+        const data = await response.json();
+        if (!data.scenes || data.scenes.length === 0) {
+          throw new Error("Scenes generation returned no output.");
+        }
+        aggregatedScenes[data.chapterTitle] = data.scenes as string[];
       }
-      setAllScenes(data.scenes ?? {});
+
+      setMessage(null);
+      setAllScenes(aggregatedScenes);
 
       await supabase.from("scenes").delete().eq("novel_id", novelIdValue);
       const rows: Array<Record<string, unknown>> = [];
-      Object.entries(data.scenes ?? {}).forEach(([chapterTitle, scenes]) => {
+      Object.entries(aggregatedScenes).forEach(([chapterTitle, scenes]) => {
         (scenes as string[]).forEach((scene, index) => {
           rows.push({
             novel_id: novelIdValue,
