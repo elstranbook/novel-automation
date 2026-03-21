@@ -183,6 +183,14 @@ create table if not exists public.promotional_articles (
   created_at timestamptz default now()
 );
 
+create table if not exists public.social_snippets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  novel_id uuid references public.novels(id) on delete cascade,
+  content text not null,
+  created_at timestamptz default now()
+);
+
 -- Enable RLS
 alter table public.series enable row level security;
 alter table public.series_arcs enable row level security;
@@ -203,6 +211,7 @@ alter table public.novel_bisac enable row level security;
 alter table public.book_descriptions enable row level security;
 alter table public.novel_quotes enable row level security;
 alter table public.promotional_articles enable row level security;
+alter table public.social_snippets enable row level security;
 
 -- Policies: users can manage their own rows
 create policy "series owner" on public.series for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
@@ -224,3 +233,4 @@ create policy "bisac owner" on public.novel_bisac for all using (auth.uid() = us
 create policy "descriptions owner" on public.book_descriptions for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "quotes owner" on public.novel_quotes for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "promotional articles owner" on public.promotional_articles for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "social snippets owner" on public.social_snippets for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

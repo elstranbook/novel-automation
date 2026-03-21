@@ -198,6 +198,7 @@ function StudioContent() {
   const [promoTone, setPromoTone] = useState<string>("formal");
   const [promoCtaType, setPromoCtaType] = useState<string>("medium");
   const [promoIncludeLinks, setPromoIncludeLinks] = useState<boolean>(false);
+  const [socialSnippets, setSocialSnippets] = useState<string | null>(null);
   const [activeStudioTab, setActiveStudioTab] = useState<
     "pipeline" | "promotional"
   >("pipeline");
@@ -480,6 +481,18 @@ function StudioContent() {
       );
     }
 
+    const { data: socialSnippetRow } = await supabase
+      .from("social_snippets")
+      .select("content")
+      .eq("novel_id", novelIdValue)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (socialSnippetRow?.content) {
+      setSocialSnippets(socialSnippetRow.content);
+    }
+
     const { data: cover } = await supabase
       .from("cover_design_prompts")
       .select("prompt")
@@ -553,6 +566,7 @@ function StudioContent() {
     setPromoTone("formal");
     setPromoCtaType("medium");
     setPromoIncludeLinks(false);
+    setSocialSnippets(null);
     setActiveStudioTab("pipeline");
     setCoverPrompt(null);
     setProseScenes(null);
@@ -1208,6 +1222,53 @@ function StudioContent() {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setLoadingStep(null);
+    }
+  };
+
+  const generateSocialSnippets = async (articleContent?: string) => {
+    setLoadingStep("social");
+    setError(null);
+    try {
+      const user = await requireUser();
+      const novelIdValue = await ensureNovel(user.id);
+      const response = await fetch("/api/generate/social-snippets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storyDetails,
+          model,
+          articleContent,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate social snippets");
+      }
+
+      const data = await response.json();
+      const content = String(data.content ?? "");
+      setSocialSnippets(content);
+      await supabase.from("social_snippets").insert({
+        novel_id: novelIdValue,
+        user_id: user.id,
+        content,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setLoadingStep(null);
+    }
+  };
+
+  const clearSocialSnippets = async () => {
+    setError(null);
+    try {
+      const user = await requireUser();
+      const novelIdValue = await ensureNovel(user.id);
+      await supabase.from("social_snippets").delete().eq("novel_id", novelIdValue);
+      setSocialSnippets(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
     }
   };
 
@@ -2251,6 +2312,71 @@ function StudioContent() {
           Generate marketing-ready articles like theme deep-dives, author letters,
           and SEO-friendly reviews. Each click adds a new variant.
         </p>
+
+        <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-zinc-100">
+                Social media snippets
+              </h3>
+              <p className="text-xs text-zinc-400">
+                Generate multi-platform social posts (X, Instagram, TikTok, Facebook, newsletter).
+              </p>
+            </div>
+            <button
+              onClick={() => generateSocialSnippets()}
+              disabled={!storyDetails || loadingStep === "social"}
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+            >
+              {loadingStep === "social" ? "Generating..." : "Generate Snippets"}
+            </button>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              onClick={() =>
+                generateSocialSnippets(
+                  typeof promotionalArticles?.[0]?.content === "string"
+                    ? promotionalArticles?.[0]?.content
+                    : undefined
+                )
+              }
+              disabled={!storyDetails || loadingStep === "social"}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              Use Latest Article
+            </button>
+            <button
+              onClick={clearSocialSnippets}
+              disabled={!socialSnippets}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              Clear Snippets
+            </button>
+            {socialSnippets && (
+              <button
+                onClick={() =>
+                  downloadText(
+                    `${title || "story"}_social_snippets.txt`,
+                    socialSnippets
+                  )
+                }
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+              >
+                Download TXT
+              </button>
+            )}
+          </div>
+          {socialSnippets ? (
+            <pre className="mt-4 whitespace-pre-wrap text-xs text-zinc-200">
+              {socialSnippets}
+            </pre>
+          ) : (
+            <p className="mt-4 text-xs text-zinc-500">
+              No snippets yet. Generate to see ready-to-post social content.
+            </p>
+          )}
+        </div>
+
         {promotionalArticles && promotionalArticles.length > 0 ? (
           <div className="mt-6 space-y-4">
             {promotionalArticles.map((article, index) => {
