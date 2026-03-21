@@ -905,7 +905,10 @@ function StudioContent() {
         if (!data.scenes || data.scenes.length === 0) {
           throw new Error("Scenes generation returned no output.");
         }
-        aggregatedScenes[data.chapterTitle] = data.scenes as string[];
+        const normalizedScenes = (data.scenes as Array<unknown>).map((scene) =>
+          typeof scene === "string" ? scene : formatReadable(scene)
+        );
+        aggregatedScenes[data.chapterTitle] = normalizedScenes;
       }
 
       setMessage(null);
@@ -1609,7 +1612,9 @@ function StudioContent() {
                     </p>
                     {scenes.map((scene, index) => (
                       <pre key={index} className="mt-2 whitespace-pre-wrap">
-                        {scene}
+                        {typeof scene === "string"
+                          ? scene
+                          : formatReadable(scene)}
                       </pre>
                     ))}
                   </div>
