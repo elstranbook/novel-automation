@@ -191,6 +191,16 @@ function StudioContent() {
   const [promotionalArticles, setPromotionalArticles] = useState<
     Array<Record<string, unknown>> | null
   >(null);
+  const [promoArticleType, setPromoArticleType] =
+    useState<string>("theme_analysis");
+  const [promoLengthType, setPromoLengthType] =
+    useState<string>("medium");
+  const [promoTone, setPromoTone] = useState<string>("formal");
+  const [promoCtaType, setPromoCtaType] = useState<string>("medium");
+  const [promoIncludeLinks, setPromoIncludeLinks] = useState<boolean>(false);
+  const [activeStudioTab, setActiveStudioTab] = useState<
+    "pipeline" | "promotional"
+  >("pipeline");
   const [coverPrompt, setCoverPrompt] = useState<string | null>(null);
   const [proseScenes, setProseScenes] = useState<ScenesMap | null>(null);
 
@@ -229,6 +239,11 @@ function StudioContent() {
     novelFormats,
     promotionalArticles,
   ]);
+
+  const studioTabs = [
+    { id: "pipeline" as const, label: "Pipeline" },
+    { id: "promotional" as const, label: "Promotional Articles" },
+  ];
 
   const requireUser = async () => {
     const {
@@ -533,6 +548,12 @@ function StudioContent() {
     setNovelFormats(null);
     setNovelQuotes(null);
     setPromotionalArticles(null);
+    setPromoArticleType("theme_analysis");
+    setPromoLengthType("medium");
+    setPromoTone("formal");
+    setPromoCtaType("medium");
+    setPromoIncludeLinks(false);
+    setActiveStudioTab("pipeline");
     setCoverPrompt(null);
     setProseScenes(null);
   };
@@ -1270,7 +1291,25 @@ function StudioContent() {
           </div>
         )}
 
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+        <div className="flex flex-wrap gap-2">
+          {studioTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveStudioTab(tab.id)}
+              className={`rounded-full border px-4 py-2 text-sm transition ${
+                activeStudioTab === tab.id
+                  ? "border-white text-white"
+                  : "border-zinc-700 text-zinc-400"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeStudioTab === "pipeline" && (
+          <>
+            <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <div className="grid gap-4 md:grid-cols-2">
             <label className="flex flex-col gap-2 text-sm">
               Novel title
@@ -1949,110 +1988,6 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">Bonus: Promotional articles</h2>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button
-              onClick={() => generatePromotionalArticle()}
-              disabled={!storyDetails || loadingStep === "promo"}
-              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
-            >
-              {loadingStep === "promo" ? "Generating..." : "Generate Article"}
-            </button>
-            <button
-              onClick={() =>
-                generatePromotionalArticle({
-                  articleType: "character_spotlight",
-                  lengthType: "short",
-                  tone: "warm",
-                  ctaType: "soft",
-                })
-              }
-              disabled={!storyDetails || loadingStep === "promo"}
-              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
-            >
-              Quick Character Spotlight
-            </button>
-            <button
-              onClick={() =>
-                generatePromotionalArticle({
-                  articleType: "seo_review",
-                  lengthType: "long",
-                  tone: "formal",
-                  ctaType: "strong",
-                  includeLinks: true,
-                })
-              }
-              disabled={!storyDetails || loadingStep === "promo"}
-              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
-            >
-              SEO Review Article
-            </button>
-            <button
-              onClick={clearPromotionalArticles}
-              disabled={!promotionalArticles || promotionalArticles.length === 0}
-              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
-            >
-              Clear Articles
-            </button>
-          </div>
-          <p className="mt-3 text-xs text-zinc-400">
-            Generate marketing-ready articles like theme deep-dives, author letters,
-            and SEO-friendly reviews. Each click adds a new variant.
-          </p>
-          {promotionalArticles && promotionalArticles.length > 0 && (
-            <div className="mt-4 space-y-4">
-              {promotionalArticles.map((article, index) => {
-                const articleType =
-                  typeof article.article_type === "string"
-                    ? article.article_type
-                    : "promotional";
-                const lengthType =
-                  typeof article.length_type === "string"
-                    ? article.length_type
-                    : "medium";
-                const articleTitle =
-                  typeof article.title === "string"
-                    ? article.title
-                    : "Promotional Article";
-                const content =
-                  typeof article.content === "string" ? article.content : "";
-                const label = `${titleize(articleType)} (${lengthType})`;
-
-                return (
-                  <div
-                    key={`${articleTitle}-${index}`}
-                    className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-zinc-100">
-                          {articleTitle}
-                        </p>
-                        <p className="text-xs text-zinc-400">{label}</p>
-                      </div>
-                      <button
-                        onClick={() =>
-                          downloadText(
-                            `${title || "story"}_promo_${articleType}.txt`,
-                            `# ${articleTitle}\n\n${content}`
-                          )
-                        }
-                        className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
-                      >
-                        Download
-                      </button>
-                    </div>
-                    <pre className="mt-3 whitespace-pre-wrap text-xs">
-                      {content}
-                    </pre>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <h2 className="text-xl font-semibold">Bonus: Cover prompt</h2>
           <div className="mt-4 flex flex-wrap gap-3">
             <button
@@ -2177,7 +2112,203 @@ function StudioContent() {
             </div>
           )}
         </section>
-      </div>
-    </div>
-  );
+      </>
+    )}
+
+    {activeStudioTab === "promotional" && (
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold">Promotional articles</h2>
+            <p className="text-sm text-zinc-400">
+              Generate marketing-ready articles, author letters, and SEO-friendly reviews.
+            </p>
+          </div>
+          <button
+            onClick={clearPromotionalArticles}
+            disabled={!promotionalArticles || promotionalArticles.length === 0}
+            className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+          >
+            Clear Articles
+          </button>
+        </div>
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <label className="text-xs text-zinc-300">
+            Article Type
+            <select
+              value={promoArticleType}
+              onChange={(event) => setPromoArticleType(event.target.value)}
+              className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100"
+            >
+              <option value="theme_analysis">Theme analysis</option>
+              <option value="character_spotlight">Character spotlight</option>
+              <option value="author_journey">Author journey</option>
+              <option value="world_building">World building</option>
+              <option value="quote_spotlight">Quote spotlight</option>
+              <option value="lessons_learned">Lessons teens can learn</option>
+              <option value="comparison_article">Comparison article</option>
+              <option value="symbolism_article">Hidden symbolism</option>
+              <option value="emotional_hook">Emotional hook</option>
+              <option value="author_letter">Author letter</option>
+              <option value="problem_solution">Problem-solution</option>
+              <option value="seo_review">SEO review</option>
+            </select>
+          </label>
+          <label className="text-xs text-zinc-300">
+            Article Length
+            <select
+              value={promoLengthType}
+              onChange={(event) => setPromoLengthType(event.target.value)}
+              className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100"
+            >
+              <option value="short">Short (300-600 words)</option>
+              <option value="medium">Medium (800-1200 words)</option>
+              <option value="long">Long (1500-2000 words)</option>
+            </select>
+          </label>
+          <label className="text-xs text-zinc-300">
+            Tone Preference
+            <select
+              value={promoTone}
+              onChange={(event) => setPromoTone(event.target.value)}
+              className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100"
+            >
+              <option value="formal">Formal</option>
+              <option value="warm">Warm</option>
+              <option value="casual">Casual</option>
+              <option value="emotional">Emotional</option>
+            </select>
+          </label>
+          <label className="text-xs text-zinc-300">
+            Call-to-Action Style
+            <select
+              value={promoCtaType}
+              onChange={(event) => setPromoCtaType(event.target.value)}
+              className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100"
+            >
+              <option value="soft">Soft sell</option>
+              <option value="medium">Medium sell</option>
+              <option value="strong">Strong sell</option>
+            </select>
+          </label>
+        </div>
+        <label className="mt-3 flex items-center gap-2 text-xs text-zinc-400">
+          <input
+            type="checkbox"
+            checked={promoIncludeLinks}
+            onChange={(event) => setPromoIncludeLinks(event.target.checked)}
+            className="h-4 w-4 rounded border-zinc-700 bg-zinc-950"
+          />
+          Include placeholder links [BOOK_LINK]
+        </label>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            onClick={() =>
+              generatePromotionalArticle({
+                articleType: promoArticleType,
+                lengthType: promoLengthType,
+                tone: promoTone,
+                ctaType: promoCtaType,
+                includeLinks: promoIncludeLinks,
+              })
+            }
+            disabled={!storyDetails || loadingStep === "promo"}
+            className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+          >
+            {loadingStep === "promo" ? "Generating..." : "Generate Article"}
+          </button>
+          <button
+            onClick={() =>
+              generatePromotionalArticle({
+                articleType: "character_spotlight",
+                lengthType: "short",
+                tone: "warm",
+                ctaType: "soft",
+              })
+            }
+            disabled={!storyDetails || loadingStep === "promo"}
+            className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+          >
+            Quick Character Spotlight
+          </button>
+          <button
+            onClick={() =>
+              generatePromotionalArticle({
+                articleType: "seo_review",
+                lengthType: "long",
+                tone: "formal",
+                ctaType: "strong",
+                includeLinks: true,
+              })
+            }
+            disabled={!storyDetails || loadingStep === "promo"}
+            className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+          >
+            SEO Review Article
+          </button>
+        </div>
+        <p className="mt-3 text-xs text-zinc-400">
+          Generate marketing-ready articles like theme deep-dives, author letters,
+          and SEO-friendly reviews. Each click adds a new variant.
+        </p>
+        {promotionalArticles && promotionalArticles.length > 0 ? (
+          <div className="mt-6 space-y-4">
+            {promotionalArticles.map((article, index) => {
+              const articleType =
+                typeof article.article_type === "string"
+                  ? article.article_type
+                  : "promotional";
+              const lengthType =
+                typeof article.length_type === "string"
+                  ? article.length_type
+                  : "medium";
+              const articleTitle =
+                typeof article.title === "string"
+                  ? article.title
+                  : "Promotional Article";
+              const content =
+                typeof article.content === "string" ? article.content : "";
+              const label = `${titleize(articleType)} (${lengthType})`;
+
+              return (
+                <div
+                  key={`${articleTitle}-${index}`}
+                  className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-zinc-100">
+                        {articleTitle}
+                      </p>
+                      <p className="text-xs text-zinc-400">{label}</p>
+                    </div>
+                    <button
+                      onClick={() =>
+                        downloadText(
+                          `${title || "story"}_promo_${articleType}.txt`,
+                          `# ${articleTitle}\n\n${content}`
+                        )
+                      }
+                      className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                    >
+                      Download
+                    </button>
+                  </div>
+                  <pre className="mt-3 whitespace-pre-wrap text-xs">
+                    {content}
+                  </pre>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-6 rounded-xl border border-dashed border-zinc-800 p-6 text-sm text-zinc-400">
+            No promotional articles yet. Generate one to see it here.
+          </div>
+        )}
+      </section>
+    )}
+  </div>
+</div>
+);
 }
