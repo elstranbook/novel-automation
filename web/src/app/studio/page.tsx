@@ -189,6 +189,7 @@ function StudioContent() {
   const [novelFormats, setNovelFormats] = useState<NovelFormats | null>(null);
   const [novelQuotes, setNovelQuotes] = useState<string[] | null>(null);
   const [coverPrompt, setCoverPrompt] = useState<string | null>(null);
+  const [proseScenes, setProseScenes] = useState<ScenesMap | null>(null);
 
   const [editingText, setEditingText] = useState("");
   const [editingSuggestions, setEditingSuggestions] = useState<Array<Record<string, unknown>>>([]);
@@ -508,6 +509,7 @@ function StudioContent() {
     setNovelFormats(null);
     setNovelQuotes(null);
     setCoverPrompt(null);
+    setProseScenes(null);
   };
 
   const generateStoryDetails = async () => {
@@ -917,6 +919,7 @@ function StudioContent() {
 
       setMessage(null);
       setAllScenes(aggregatedScenes);
+      setProseScenes(null);
 
       await supabase.from("scenes").delete().eq("novel_id", novelIdValue);
       const rows: Array<Record<string, unknown>> = [];
@@ -964,6 +967,79 @@ function StudioContent() {
       }));
       if (rows.length) {
         await supabase.from("novel_formats").insert(rows);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setLoadingStep(null);
+    }
+  };
+
+  const generateProse = async () => {
+    if (!allScenes) {
+      setError("Generate scenes first.");
+      return;
+    }
+
+    setLoadingStep("prose");
+    setError(null);
+    try {
+      const user = await requireUser();
+      const novelIdValue = await ensureNovel(user.id);
+      const prose: ScenesMap = {};
+
+      const entries = Object.entries(allScenes);
+      for (let index = 0; index < entries.length; index += 1) {
+        const [chapterTitle, scenes] = entries[index];
+        const chapterProse: string[] = [];
+
+        for (let sceneIndex = 0; sceneIndex < scenes.length; sceneIndex += 1) {
+          const scene = scenes[sceneIndex];
+          setMessage(
+            `Generating prose for ${chapterTitle} scene ${sceneIndex + 1}/${scenes.length}`
+          );
+
+          const response = await fetch("/api/generate/prose/chapter", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              scene,
+              chapterTitle,
+              sceneNumber: sceneIndex + 1,
+              model,
+              maxSceneLength,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to generate prose");
+          }
+
+          const data = await response.json();
+          chapterProse.push(String(data.prose));
+        }
+
+        prose[chapterTitle] = chapterProse;
+      }
+
+      setMessage(null);
+      setProseScenes(prose);
+
+      await supabase.from("prose_scenes").delete().eq("novel_id", novelIdValue);
+      const rows: Array<Record<string, unknown>> = [];
+      Object.entries(prose).forEach(([chapterTitle, scenes]) => {
+        (scenes as string[]).forEach((scene, sceneOrder) => {
+          rows.push({
+            novel_id: novelIdValue,
+            user_id: user.id,
+            chapter_title: chapterTitle,
+            scene_content: scene,
+            scene_order: sceneOrder,
+          });
+        });
+      });
+      if (rows.length) {
+        await supabase.from("prose_scenes").insert(rows);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
@@ -1658,6 +1734,49 @@ function StudioContent() {
                   </pre>
                 </div>
               ))}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+          <h2 className="text-xl font-semibold">11. Generate Prose</h2>
+          <button
+            onClick={generateProse}
+            disabled={!allScenes || loadingStep === "prose"}
+            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+          >
+            {loadingStep === "prose" ? "Generating..." : "Generate Prose"}
+          </button>
+          {proseScenes && (
+            <div className="mt-4 space-y-4">
+              <button
+                onClick={() =>
+                  downloadText(
+                    `${title || "story"}_prose.txt`,
+                    formatReadable(proseScenes)
+                  )
+                }
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+              >
+                Download TXT
+              </button>
+              <Collapsible label="Generated prose">
+                {Object.entries(proseScenes).map(([chapter, scenes]) => (
+                  <div
+                    key={chapter}
+                    className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
+                  >
+                    <p className="text-sm font-semibold text-zinc-100">
+                      {chapter}
+                    </p>
+                    {scenes.map((scene, index) => (
+                      <pre key={index} className="mt-2 whitespace-pre-wrap">
+                        {scene}
+                      </pre>
+                    ))}
+                  </div>
+                ))}
+              </Collapsible>
             </div>
           )}
         </section>
