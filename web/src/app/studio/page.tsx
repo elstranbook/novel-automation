@@ -188,6 +188,9 @@ function StudioContent() {
   const [allScenes, setAllScenes] = useState<ScenesMap | null>(null);
   const [novelFormats, setNovelFormats] = useState<NovelFormats | null>(null);
   const [novelQuotes, setNovelQuotes] = useState<string[] | null>(null);
+  const [promotionalArticles, setPromotionalArticles] = useState<
+    Array<Record<string, unknown>> | null
+  >(null);
   const [coverPrompt, setCoverPrompt] = useState<string | null>(null);
   const [proseScenes, setProseScenes] = useState<ScenesMap | null>(null);
 
@@ -210,6 +213,7 @@ function StudioContent() {
       chapterBeats,
       allScenes,
       novelFormats,
+      promotionalArticles,
     ];
     return steps.filter(Boolean).length;
   }, [
@@ -223,6 +227,7 @@ function StudioContent() {
     chapterBeats,
     allScenes,
     novelFormats,
+    promotionalArticles,
   ]);
 
   const requireUser = async () => {
@@ -441,6 +446,25 @@ function StudioContent() {
       .maybeSingle();
     if (quotes?.quotes) setNovelQuotes(quotes.quotes);
 
+    const { data: promotionalArticlesRows } = await supabase
+      .from("promotional_articles")
+      .select("article_type,length_type,tone,cta_type,title,content")
+      .eq("novel_id", novelIdValue)
+      .order("created_at", { ascending: false });
+
+    if (promotionalArticlesRows) {
+      setPromotionalArticles(
+        promotionalArticlesRows.map((row) => ({
+          article_type: row.article_type,
+          length_type: row.length_type,
+          tone: row.tone,
+          cta_type: row.cta_type,
+          title: row.title,
+          content: row.content,
+        }))
+      );
+    }
+
     const { data: cover } = await supabase
       .from("cover_design_prompts")
       .select("prompt")
@@ -508,6 +532,7 @@ function StudioContent() {
     setAllScenes(null);
     setNovelFormats(null);
     setNovelQuotes(null);
+    setPromotionalArticles(null);
     setCoverPrompt(null);
     setProseScenes(null);
   };
@@ -1104,6 +1129,76 @@ function StudioContent() {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setLoadingStep(null);
+    }
+  };
+
+  const generatePromotionalArticle = async (options?: {
+    articleType?: string;
+    lengthType?: string;
+    tone?: string;
+    ctaType?: string;
+    includeLinks?: boolean;
+  }) => {
+    setLoadingStep("promo");
+    setError(null);
+    try {
+      const user = await requireUser();
+      const novelIdValue = await ensureNovel(user.id);
+      const response = await fetch("/api/generate/promotional-article", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storyDetails,
+          model,
+          articleType: options?.articleType ?? "theme_analysis",
+          lengthType: options?.lengthType ?? "medium",
+          tone: options?.tone ?? "formal",
+          ctaType: options?.ctaType ?? "medium",
+          includeLinks: options?.includeLinks ?? false,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate promotional article");
+      }
+
+      const data = await response.json();
+      const newArticle = {
+        article_type: data.articleType ?? options?.articleType ?? "theme_analysis",
+        length_type: data.lengthType ?? options?.lengthType ?? "medium",
+        tone: data.tone ?? options?.tone ?? "formal",
+        cta_type: data.ctaType ?? options?.ctaType ?? "medium",
+        title: data.title ?? "Promotional Article",
+        content: data.content ?? "",
+      };
+
+      setPromotionalArticles((prev) => [newArticle, ...(prev ?? [])]);
+      await supabase.from("promotional_articles").insert({
+        novel_id: novelIdValue,
+        user_id: user.id,
+        article_type: newArticle.article_type,
+        length_type: newArticle.length_type,
+        tone: newArticle.tone,
+        cta_type: newArticle.cta_type,
+        title: newArticle.title,
+        content: newArticle.content,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setLoadingStep(null);
+    }
+  };
+
+  const clearPromotionalArticles = async () => {
+    setError(null);
+    try {
+      const user = await requireUser();
+      const novelIdValue = await ensureNovel(user.id);
+      await supabase.from("promotional_articles").delete().eq("novel_id", novelIdValue);
+      setPromotionalArticles(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
     }
   };
 
@@ -1849,6 +1944,110 @@ function StudioContent() {
                   </div>
                 ))}
               </Collapsible>
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+          <h2 className="text-xl font-semibold">Bonus: Promotional articles</h2>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              onClick={() => generatePromotionalArticle()}
+              disabled={!storyDetails || loadingStep === "promo"}
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+            >
+              {loadingStep === "promo" ? "Generating..." : "Generate Article"}
+            </button>
+            <button
+              onClick={() =>
+                generatePromotionalArticle({
+                  articleType: "character_spotlight",
+                  lengthType: "short",
+                  tone: "warm",
+                  ctaType: "soft",
+                })
+              }
+              disabled={!storyDetails || loadingStep === "promo"}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              Quick Character Spotlight
+            </button>
+            <button
+              onClick={() =>
+                generatePromotionalArticle({
+                  articleType: "seo_review",
+                  lengthType: "long",
+                  tone: "formal",
+                  ctaType: "strong",
+                  includeLinks: true,
+                })
+              }
+              disabled={!storyDetails || loadingStep === "promo"}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              SEO Review Article
+            </button>
+            <button
+              onClick={clearPromotionalArticles}
+              disabled={!promotionalArticles || promotionalArticles.length === 0}
+              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+            >
+              Clear Articles
+            </button>
+          </div>
+          <p className="mt-3 text-xs text-zinc-400">
+            Generate marketing-ready articles like theme deep-dives, author letters,
+            and SEO-friendly reviews. Each click adds a new variant.
+          </p>
+          {promotionalArticles && promotionalArticles.length > 0 && (
+            <div className="mt-4 space-y-4">
+              {promotionalArticles.map((article, index) => {
+                const articleType =
+                  typeof article.article_type === "string"
+                    ? article.article_type
+                    : "promotional";
+                const lengthType =
+                  typeof article.length_type === "string"
+                    ? article.length_type
+                    : "medium";
+                const articleTitle =
+                  typeof article.title === "string"
+                    ? article.title
+                    : "Promotional Article";
+                const content =
+                  typeof article.content === "string" ? article.content : "";
+                const label = `${titleize(articleType)} (${lengthType})`;
+
+                return (
+                  <div
+                    key={`${articleTitle}-${index}`}
+                    className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-100">
+                          {articleTitle}
+                        </p>
+                        <p className="text-xs text-zinc-400">{label}</p>
+                      </div>
+                      <button
+                        onClick={() =>
+                          downloadText(
+                            `${title || "story"}_promo_${articleType}.txt`,
+                            `# ${articleTitle}\n\n${content}`
+                          )
+                        }
+                        className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                      >
+                        Download
+                      </button>
+                    </div>
+                    <pre className="mt-3 whitespace-pre-wrap text-xs">
+                      {content}
+                    </pre>
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>

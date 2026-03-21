@@ -1,0 +1,299 @@
+⭐ 1. MASTER PROMPT (Add This to Your Tool)
+
+Use this primary prompt to generate any promotional article:
+
+
+---
+
+MASTER ARTICLE GENERATION PROMPT (Copy/Paste)
+
+You are an expert YA fiction marketer, author brand strategist, and SEO-focused content writer.
+Write an engaging, emotionally appealing, and persuasive article designed to promote the YA novel described below.
+
+INPUT YOU WILL RECEIVE:
+
+Book Title:
+
+Author Brand:
+
+Book Summary:
+
+Target Audience:
+
+Themes:
+
+Tone Preference:
+
+Call-to-Action Type: (soft sell / medium sell / strong sell)
+
+Article Length: (300, 600, 900, 1500, 2000 words)
+
+Article Style: (character spotlight, theme analysis, author journey, world-building, lessons, quotes article, comparison list, etc.)
+
+
+YOUR TASK:
+
+Produce a fully polished, publication-ready article.
+
+Use SEO best practices WITHOUT keyword stuffing.
+
+Use a strong hook in the introduction.
+
+Include emotional resonance, suspense, and curiosity where appropriate.
+
+Maintain the selected tone throughout.
+
+End with the selected call-to-action.
+
+
+KEY REQUIREMENTS:
+
+The article must subtly but powerfully encourage readers to buy the book.
+
+Avoid sounding salesy; show value first, then invite action.
+
+Use elegant, formal language with warmth (user prefers formal tone).
+
+Make it shareable on social media.
+
+Use smooth transitions and strong structure.
+
+
+
+---
+
+⭐ 2. ARTICLE TYPES THE TOOL SHOULD SUPPORT
+
+Your tool can generate any of these 12 article formats:
+
+1. Deep-Dive Theme Article
+
+Why the themes matter + emotional connection to readers.
+
+2. Meet the Characters
+
+Character backstories, motivations, internal conflicts.
+
+3. Behind the Scenes / Author Journey
+
+Your writing process, inspiration, challenges.
+
+4. World-Building Feature
+
+Town, school, environment, cultural details.
+
+5. Quote Spotlight
+
+10–20 emotional quotes from the novel + commentary.
+
+6. Lessons Teens Can Learn
+
+Moral lessons + educational value.
+
+7. Fans of X Will Love Y
+
+A comparison list where your book appears naturally.
+
+8. The Hidden Symbolism Article
+
+Explain symbols, motifs, foreshadowing.
+
+9. Emotional Hook Article
+
+Short, moving piece that gets shared easily.
+
+10. Author Letter to Readers
+
+A heartfelt message from you to the audience.
+
+11. Problem-Solution Article
+
+Identify teen struggles → show how your book helps.
+
+12. SEO-Optimized Review-Style Article
+
+Long form, keyword-rich, but still elegant.
+
+
+---
+
+⭐ 3. ARTICLE LENGTH PRESETS
+
+Your tool should let you select:
+
+Short (300–600 words) → for social + email
+
+Medium (800–1,200 words) → for your website
+
+Long (1,500–2,200 words) → SEO powerhouse blog posts
+
+
+
+---
+
+⭐ 4. READY-MADE TEMPLATES
+
+A. LONG SEO ARTICLE TEMPLATE (1,500–2,000 words)
+
+Title:
+A benefit-driven title like:
+“Why [Book Title] Is the YA Novel Every Teen Should Read This Year”
+
+Structure:
+
+1. Hook Introduction (100–150 words)
+
+
+2. The Heart of the Story (200–300 words)
+
+
+3. Meet the Protagonist(s) (200–300 words)
+
+
+4. Key Themes & Why They Matter (300 words)
+
+
+5. Emotional Core of the Novel (200–300 words)
+
+
+6. Why This Book Connects With Today’s Teens (200–300 words)
+
+
+7. Behind the Scenes / Inspiration (optional) (150–200 words)
+
+
+8. What Readers Will Take Away (150–200 words)
+
+
+9. Call to Action (Soft/Medium/Strong)
+
+
+
+
+---
+
+B. MEDIUM ARTICLE TEMPLATE (800–1,200 words)
+
+1. Strong opening hook
+
+
+2. Summary of the book
+
+
+3. Focus on theme or character
+
+
+4. Why readers will love it
+
+
+5. CTA
+
+
+
+
+---
+
+C. SHORT ARTICLE TEMPLATE (300–600 words)
+
+1. Emotional hook
+
+
+2. Highlight one theme or character
+
+
+3. Short CTA
+
+
+
+
+---
+
+⭐ 5. CTA FORMULAS (Choose One)
+
+Soft CTA (story-driven readers)
+
+“If [Book Title] speaks to your heart, I invite you to experience the journey for yourself.”
+
+Medium CTA
+
+“Discover [Book Title] today and step into a world of emotion, resilience, and unforgettable characters.”
+
+Strong CTA
+
+“Get your copy of [Book Title] now and start reading the YA novel readers can’t stop talking about.”
+
+
+---
+
+⭐ 6. REPURPOSING PACK
+
+Your tool can generate:
+
+→ Social snippets (20–80 words)
+
+Quotes, hooks, insights.
+
+→ Newsletter version (400–600 words)
+
+Short, warm, author-to-reader style.
+
+→ Micro content
+
+Instagram captions, tweets, TikTok scripts.
+
+
+---
+
+⭐ 7. EXAMPLE INPUT FOR YOUR TOOL
+
+Book Title:
+The Lie Between Us
+
+Author Brand:
+Elstran Books
+
+Summary:
+[A short summary of the book]
+
+Target Audience:
+YA readers aged 13–21, fans of emotional romance and contemporary drama
+
+Themes:
+Betrayal, forgiveness, truth, emotional resilience
+
+Tone Preference:
+Formal, warm, emotional
+
+Call to Action Type:
+Medium sell
+
+Article Length:
+1500 words
+
+Article Style:
+Theme analysis
+
+
+
+
+When generating an article, the tool should get the information below for what has been generated already.
+
+1. What is the novel title?
+
+
+2. What themes should be highlighted?
+
+
+3. Choose length: short / medium / long
+
+
+4. Choose article type
+
+
+5. Choose tone
+
+
+6. CTA type
+
+
+7. Add links (yes/no)
