@@ -485,7 +485,7 @@ function StudioContent() {
           ? storyDetails.novel_about
           : "";
       setNovelAbout(aboutValue);
-      await loadPipeline(novel.id, userIdValue);
+      await loadNovelData(novel.id);
       return true;
     }
 
@@ -502,7 +502,12 @@ function StudioContent() {
     if (novel) {
       setNovelId(novel.id);
       setTitle(novel.title ?? "");
-    setNovelAbout((novel.story_details as Record<string, unknown>)?.novel_about ?? "");
+      const storyDetails = novel.story_details as Record<string, unknown> | null;
+      const aboutValue =
+        storyDetails && typeof storyDetails.novel_about === "string"
+          ? storyDetails.novel_about
+          : "";
+      setNovelAbout(aboutValue);
       setModel(novel.model ?? modelOptions[0]);
       setMaxSceneLength(novel.max_scene_length ?? 1000);
       setMinSceneLength(novel.min_scene_length ?? 300);
