@@ -7,6 +7,7 @@ type SocialSnippetsRequest = {
   storyDetails: StoryDetails;
   model?: string;
   articleContent?: string;
+  platform?: "twitter" | "instagram" | "tiktok" | "facebook" | "newsletter";
 };
 
 const getStoryValue = (storyDetails: StoryDetails, key: string, fallback: string) => {
@@ -19,7 +20,7 @@ const getStoryValue = (storyDetails: StoryDetails, key: string, fallback: string
 
 export async function POST(request: Request) {
   try {
-    const { storyDetails, model, articleContent } =
+    const { storyDetails, model, articleContent, platform } =
       (await request.json()) as SocialSnippetsRequest;
 
     if (!storyDetails) {
@@ -38,6 +39,19 @@ export async function POST(request: Request) {
       context += `\n\nArticle excerpt: ${articleContent.slice(0, 500)}...`;
     }
 
+    const platformPrompts: Record<string, string> = {
+      twitter:
+        "TWITTER/X POSTS (3 variations, max 280 characters each):\n- One emotional hook\n- One question to engage readers\n- One quote-style post",
+      instagram:
+        "INSTAGRAM CAPTIONS (2 variations, 100-150 words each):\n- One storytelling style\n- One behind-the-scenes style",
+      tiktok:
+        "TIKTOK SCRIPT (1, 30-60 seconds speaking time):\n- Hook, story, call to action format",
+      facebook:
+        "FACEBOOK POST (1, 200-300 words):\n- Engaging, shareable, community-focused",
+      newsletter:
+        "NEWSLETTER TEASER (1, 50-75 words):\n- Email-friendly, curiosity-building",
+    };
+
     const prompt = `
 Create social media promotional content for the YA novel "${title}".
 
@@ -45,23 +59,7 @@ ${context}
 
 Generate the following:
 
-1. TWITTER/X POSTS (3 variations, max 280 characters each):
-- One emotional hook
-- One question to engage readers
-- One quote-style post
-
-2. INSTAGRAM CAPTIONS (2 variations, 100-150 words each):
-- One storytelling style
-- One behind-the-scenes style
-
-3. TIKTOK SCRIPT (1, 30-60 seconds speaking time):
-- Hook, story, call to action format
-
-4. FACEBOOK POST (1, 200-300 words):
-- Engaging, shareable, community-focused
-
-5. NEWSLETTER TEASER (1, 50-75 words):
-- Email-friendly, curiosity-building
+${platform ? platformPrompts[platform] ?? "" : "1. TWITTER/X POSTS (3 variations, max 280 characters each):\n- One emotional hook\n- One question to engage readers\n- One quote-style post\n\n2. INSTAGRAM CAPTIONS (2 variations, 100-150 words each):\n- One storytelling style\n- One behind-the-scenes style\n\n3. TIKTOK SCRIPT (1, 30-60 seconds speaking time):\n- Hook, story, call to action format\n\n4. FACEBOOK POST (1, 200-300 words):\n- Engaging, shareable, community-focused\n\n5. NEWSLETTER TEASER (1, 50-75 words):\n- Email-friendly, curiosity-building"}
 
 Format each section clearly with headers.
 `;
@@ -80,6 +78,7 @@ Format each section clearly with headers.
     return NextResponse.json({
       content: String(response),
       novelTitle: title,
+      platform: platform ?? null,
     });
   } catch (error) {
     console.error(error);

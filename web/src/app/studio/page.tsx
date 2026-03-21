@@ -85,6 +85,64 @@ const formatReadable = (value: unknown, depth = 0): string => {
   return String(value);
 };
 
+const parseSocialSnippets = (content: string) => {
+  if (!content) return [] as Array<{ title: string; body: string } & { key: string }>;
+
+  const lines = content.split(/\r?\n/);
+  const sections: Array<{ title: string; body: string[]; key: string }> = [];
+  const headerPattern = /^(\d+\.)?\s*([A-Z][A-Z\s/\-&]+)\s*:?$/;
+
+  let current: { title: string; body: string[]; key: string } | null = null;
+
+  const normalizeKey = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_|_$/g, "");
+
+  const matchKey = (raw: string) => {
+    const normalized = normalizeKey(raw);
+    if (normalized.includes("twitter") || normalized.includes("x")) return "twitter";
+    if (normalized.includes("instagram")) return "instagram";
+    if (normalized.includes("tiktok")) return "tiktok";
+    if (normalized.includes("facebook")) return "facebook";
+    if (normalized.includes("newsletter") || normalized.includes("email"))
+      return "newsletter";
+    return normalized || "general";
+  };
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      if (current) current.body.push("");
+      return;
+    }
+
+    const match = trimmed.match(headerPattern);
+    if (match) {
+      if (current) sections.push(current);
+      const rawTitle = match[2] ?? trimmed;
+      current = { title: rawTitle, body: [], key: matchKey(rawTitle) };
+      return;
+    }
+
+    if (!current) {
+      current = { title: "General", body: [], key: "general" };
+    }
+    current.body.push(line);
+  });
+
+  if (current) sections.push(current);
+
+  return sections
+    .map((section) => ({
+      title: titleize(section.title.toLowerCase().replace(/[^a-z0-9]+/g, "_")),
+      body: section.body.join("\n").trim(),
+      key: section.key,
+    }))
+    .filter((section) => section.body.length > 0);
+};
+
 const Collapsible = ({
   label,
   children,
@@ -199,6 +257,9 @@ function StudioContent() {
   const [promoCtaType, setPromoCtaType] = useState<string>("medium");
   const [promoIncludeLinks, setPromoIncludeLinks] = useState<boolean>(false);
   const [socialSnippets, setSocialSnippets] = useState<string | null>(null);
+  const [socialSnippetsByPlatform, setSocialSnippetsByPlatform] = useState<
+    Record<string, string>
+  >({});
   const [activeStudioTab, setActiveStudioTab] = useState<
     "pipeline" | "promotional"
   >("pipeline");
@@ -567,6 +628,7 @@ function StudioContent() {
     setPromoCtaType("medium");
     setPromoIncludeLinks(false);
     setSocialSnippets(null);
+    setSocialSnippetsByPlatform({});
     setActiveStudioTab("pipeline");
     setCoverPrompt(null);
     setProseScenes(null);
@@ -1225,7 +1287,10 @@ function StudioContent() {
     }
   };
 
-  const generateSocialSnippets = async (articleContent?: string) => {
+  const generateSocialSnippets = async (
+    articleContent?: string,
+    platform?: "twitter" | "instagram" | "tiktok" | "facebook" | "newsletter"
+  ) => {
     setLoadingStep("social");
     setError(null);
     try {
@@ -1238,6 +1303,7 @@ function StudioContent() {
           storyDetails,
           model,
           articleContent,
+          platform,
         }),
       });
 
@@ -1247,12 +1313,20 @@ function StudioContent() {
 
       const data = await response.json();
       const content = String(data.content ?? "");
-      setSocialSnippets(content);
-      await supabase.from("social_snippets").insert({
-        novel_id: novelIdValue,
-        user_id: user.id,
-        content,
-      });
+
+      if (platform) {
+        setSocialSnippetsByPlatform((prev) => ({
+          ...prev,
+          [platform]: content,
+        }));
+      } else {
+        setSocialSnippets(content);
+        await supabase.from("social_snippets").insert({
+          novel_id: novelIdValue,
+          user_id: user.id,
+          content,
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -1267,6 +1341,7 @@ function StudioContent() {
       const novelIdValue = await ensureNovel(user.id);
       await supabase.from("social_snippets").delete().eq("novel_id", novelIdValue);
       setSocialSnippets(null);
+      setSocialSnippetsByPlatform({});
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     }
@@ -2367,9 +2442,64 @@ function StudioContent() {
             )}
           </div>
           {socialSnippets ? (
-            <pre className="mt-4 whitespace-pre-wrap text-xs text-zinc-200">
-              {socialSnippets}
-            </pre>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {parseSocialSnippets(socialSnippets).length > 0 ? (
+                parseSocialSnippets(socialSnippets).map((section) => (
+                  <div
+                    key={section.title}
+                    className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-zinc-100">
+                        {section.title}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        {section.key !== "general" && (
+                          <button
+                            onClick={() =>
+                              generateSocialSnippets(
+                                typeof promotionalArticles?.[0]?.content ===
+                                  "string"
+                                  ? promotionalArticles?.[0]?.content
+                                  : undefined,
+                                section.key as
+                                  | "twitter"
+                                  | "instagram"
+                                  | "tiktok"
+                                  | "facebook"
+                                  | "newsletter"
+                              )
+                            }
+                            disabled={loadingStep === "social"}
+                            className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                          >
+                            Regenerate
+                          </button>
+                        )}
+                        <button
+                          onClick={() =>
+                            downloadText(
+                              `${title || "story"}_${section.title.replace(/\s+/g, "_")}.txt`,
+                              section.body
+                            )
+                          }
+                          className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                        >
+                          Download
+                        </button>
+                      </div>
+                    </div>
+                    <pre className="mt-3 whitespace-pre-wrap text-xs">
+                      {socialSnippetsByPlatform[section.key] ?? section.body}
+                    </pre>
+                  </div>
+                ))
+              ) : (
+                <pre className="whitespace-pre-wrap text-xs text-zinc-200">
+                  {socialSnippets}
+                </pre>
+              )}
+            </div>
           ) : (
             <p className="mt-4 text-xs text-zinc-500">
               No snippets yet. Generate to see ready-to-post social content.
