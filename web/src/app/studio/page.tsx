@@ -479,7 +479,12 @@ function StudioContent() {
     if (novel) {
       setNovelId(novel.id);
       setTitle(novel.title ?? "");
-      setNovelAbout((novel.story_details as Record<string, unknown>)?.novel_about ?? "");
+      const storyDetails = novel.story_details as Record<string, unknown> | null;
+      const aboutValue =
+        storyDetails && typeof storyDetails.novel_about === "string"
+          ? storyDetails.novel_about
+          : "";
+      setNovelAbout(aboutValue);
       await loadPipeline(novel.id, userIdValue);
       return true;
     }
