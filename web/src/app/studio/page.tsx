@@ -866,9 +866,13 @@ function StudioContent() {
     try {
       const user = await requireUser();
       const novelIdValue = await ensureNovel(user.id);
-      const outlineArray = Array.isArray(chapterOutline)
-        ? chapterOutline
-        : (chapterOutline?.chapters as Array<Record<string, unknown>>) ?? [];
+      const outlineValue = chapterOutline as
+        | Array<Record<string, unknown>>
+        | Record<string, unknown>
+        | null;
+      const outlineArray = Array.isArray(outlineValue)
+        ? outlineValue
+        : ((outlineValue?.chapters as Array<Record<string, unknown>>) ?? []);
 
       const aggregatedScenes: ScenesMap = {};
 
