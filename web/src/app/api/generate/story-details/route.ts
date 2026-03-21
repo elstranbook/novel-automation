@@ -7,7 +7,7 @@ const client = new OpenAI({
 
 export async function POST(request: Request) {
   try {
-    const { title, model } = await request.json();
+    const { title, novelAbout, model } = await request.json();
 
     if (!title) {
       return NextResponse.json(
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
 
     const prompt = `
 I am writing a Young Adult Novel titled "${title}".
-
+${novelAbout ? `\nHere is what I want the novel to be about:\n${novelAbout}\n` : ""}
 Give me the following details:
 1. story_theme: The central theme or message of the novel
 2. genre: The specific genre or genres this novel belongs to
@@ -32,6 +32,7 @@ Give me the following details:
 10. supporting_characters: 4-6 key supporting characters with names and brief descriptions
 11. plot_summary: A 2-3 paragraph summary of the overall plot
 12. narrative_style: First person, third person limited, omniscient, etc.
+13. novel_about: Use the author's input as a guiding summary of what the novel is about.
 
 Format the response as a JSON object with exactly these keys.
 `;

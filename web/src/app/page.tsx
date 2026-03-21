@@ -1,4 +1,5 @@
 import Link from "next/link";
+import IntroForm from "./studio/intro-form";
 
 export default function Home() {
   return (
@@ -17,21 +18,9 @@ export default function Home() {
           </p>
         </header>
 
-        <section className="grid gap-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 sm:grid-cols-2">
-          <div className="space-y-3">
-            <h2 className="text-xl font-semibold">Start writing</h2>
-            <p className="text-zinc-300">
-              Create a novel, work through the generation pipeline, and store
-              everything in Supabase for retrieval later.
-            </p>
-            <Link
-              href="/studio"
-              className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3 text-sm font-semibold text-zinc-900"
-            >
-              Open Studio
-            </Link>
-          </div>
-          <div className="space-y-3">
+        <section className="grid gap-6 sm:grid-cols-2">
+          <IntroForm />
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 space-y-3">
             <h2 className="text-xl font-semibold">Series mode</h2>
             <p className="text-zinc-300">
               Build multi-book series with shared arcs, continuity notes, and

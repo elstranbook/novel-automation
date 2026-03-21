@@ -3,7 +3,7 @@ import { runChatCompletion } from "@/lib/openaiClient";
 
 export async function POST(request: Request) {
   try {
-    const { chapterOutline, novelSynopsis, characterProfiles, novelPlan, model } =
+    const { chapterOutline, novelSynopsis, characterProfiles, novelPlan, storyDetails, model } =
       await request.json();
 
     if (!chapterOutline) {
@@ -35,6 +35,7 @@ Novel Context:
 - Synopsis: ${(novelSynopsis ?? "").slice(0, 1000) || "Not provided"}
 - Main Characters: ${(characterProfiles ?? "").slice(0, 1000) || "Not provided"}
 - Novel Plan: ${(novelPlan ?? "").slice(0, 1000) || "Not provided"}
+- Author Intent: ${(storyDetails?.novel_about ?? "").slice(0, 500) || "Not provided"}
 
 Chapter Outline: ${chapterOutlineJson}
 

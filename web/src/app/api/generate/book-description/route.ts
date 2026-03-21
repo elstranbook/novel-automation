@@ -23,6 +23,7 @@ export async function POST(request: Request) {
     const plotSummary =
       storyDetails.plot_summary ?? "A compelling young adult story";
     const targetAge = storyDetails.target_age_range ?? "13-18";
+    const novelAbout = storyDetails.novel_about ?? "";
 
     const resolvePromptConfig = (
       descType: string,
@@ -69,6 +70,7 @@ Create a compelling ${descriptionType} description for the Young Adult novel "${
 - Setting: ${setting}
 - Target Age: ${targetAge}
 - Plot Summary: ${plotSummary}
+${novelAbout ? `- Author Intent: ${novelAbout}` : ""}
 
 **Description Requirements:**
 - Length: ${wordLimit}
@@ -127,6 +129,7 @@ Create a compelling ${descType} description for the Young Adult novel "${title}"
 - Setting: ${setting}
 - Target Age: ${targetAge}
 - Plot Summary: ${plotSummary}
+${novelAbout ? `- Author Intent: ${novelAbout}` : ""}
 
 **Description Requirements:**
 - Length: ${loopWordLimit}

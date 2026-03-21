@@ -73,6 +73,7 @@ As a MIDDLE book (${position} in the series):
 
     const synopsisValue = synopsis ?? "";
     const profilesValue = characterProfiles ?? "";
+    const novelAbout = storyDetails.novel_about ?? "";
 
     const prompt = `
 Following the synopsis below, create a structured plan to guide me in building a compelling, emotionally rich narrative that keeps readers engaged throughout my 120000-word novel. Break the novel down into 3 parts, providing an approximate word count for each section along with key milestones and plot points to hit.
@@ -101,6 +102,9 @@ Indicate key opportunities for foreshadowing early on, ensuring satisfying payof
 
 Synopsis:
 ${synopsisValue}
+
+Author Intent (What the novel is about):
+${novelAbout}
 
 Character Profiles:
 ${profilesValue}

@@ -13,6 +13,7 @@ export async function POST(request: Request) {
     }
 
     const title = storyDetails.title ?? "Untitled";
+    const novelAbout = storyDetails.novel_about ?? "";
     const seriesContext = storyDetails.series_context ?? null;
     let seriesGuidance = "";
     if (seriesContext) {
@@ -28,6 +29,9 @@ Write a comprehensive character profile for all of the characters of the novel "
 
 Synopsis:
 ${synopsis ?? ""}
+
+Author Intent (What the novel is about):
+${novelAbout}
 
 ${seriesGuidance}
 

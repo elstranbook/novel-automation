@@ -3,7 +3,7 @@ import { runChatCompletion } from "@/lib/openaiClient";
 
 export async function POST(request: Request) {
   try {
-    const { chapterOutline, chapterGuide, synopsis, characterProfiles, novelPlan, model } =
+    const { chapterOutline, chapterGuide, synopsis, characterProfiles, novelPlan, storyDetails, model } =
       await request.json();
 
     if (!chapterOutline || !chapterGuide) {
@@ -36,6 +36,7 @@ Additional Story Information:
 - Synopsis: ${synopsis ?? ""}
 - Character Profiles: ${characterProfiles ?? ""}
 - Novel Plan: ${novelPlan ?? ""}
+- Author Intent: ${storyDetails?.novel_about ?? ""}
 - Chapter Guide: ${JSON.stringify(guideDetails, null, 2)}
 
 Guidelines:

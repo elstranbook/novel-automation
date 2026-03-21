@@ -27,6 +27,7 @@ const generateScenesForChapter = async ({
   const chapterTitle = chapter.title ?? "Untitled";
   const chapterInfo = JSON.stringify(chapter, null, 2);
   const storyInfo = JSON.stringify(storyDetails, null, 2);
+  const novelAbout = storyDetails.novel_about ?? "";
 
   let premisesEndingInfo = "";
   if (premisesAndEndings?.chosen_premise && premisesAndEndings?.chosen_ending) {
@@ -52,6 +53,7 @@ Write the complete scenes for Chapter ${chapterNumber}: "${chapterTitle}" in the
 
 STORY DETAILS:
 ${storyInfo}
+${novelAbout ? `\nAUTHOR INTENT (What the novel is about):\n${novelAbout}\n` : ""}
 
 CHAPTER INFORMATION:
 ${chapterInfo}
@@ -110,6 +112,9 @@ Guidelines:
 
 Chapter Summary:
 ${chapter.summary ?? "No summary available"}
+
+Author Intent (What the novel is about):
+${novelAbout}
 
 Chapter Story Beats:
 ${beatsText}

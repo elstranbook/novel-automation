@@ -303,6 +303,7 @@ function StudioContent() {
   const [novelId, setNovelId] = useState<string | null>(null);
 
   const [title, setTitle] = useState("");
+  const [novelAbout, setNovelAbout] = useState("");
   const [model, setModel] = useState(modelOptions[0]);
   const [maxSceneLength, setMaxSceneLength] = useState(1000);
   const [minSceneLength, setMinSceneLength] = useState(300);
@@ -313,6 +314,8 @@ function StudioContent() {
   const [seriesBookNumber] = useState<number>(
     Number(searchParams.get("bookNumber") ?? 1)
   );
+  const [prefillTitle] = useState<string>(searchParams.get("title") ?? "");
+  const [prefillAbout] = useState<string>(searchParams.get("about") ?? "");
   const [seriesContext, setSeriesContext] = useState<Record<string, unknown> | null>(null);
 
   const [storyDetails, setStoryDetails] = useState<StoryDetails | null>(null);
@@ -464,6 +467,26 @@ function StudioContent() {
     }
   };
 
+  const loadLatestNovel = async (userIdValue: string) => {
+    const { data: novel } = await supabase
+      .from("novels")
+      .select("id,title,created_at,series_id,book_number,story_details")
+      .eq("user_id", userIdValue)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (novel) {
+      setNovelId(novel.id);
+      setTitle(novel.title ?? "");
+      setNovelAbout((novel.story_details as Record<string, unknown>)?.novel_about ?? "");
+      await loadPipeline(novel.id, userIdValue);
+      return true;
+    }
+
+    return false;
+  };
+
   const loadNovelData = async (novelIdValue: string) => {
     const { data: novel } = await supabase
       .from("novels")
@@ -474,6 +497,7 @@ function StudioContent() {
     if (novel) {
       setNovelId(novel.id);
       setTitle(novel.title ?? "");
+    setNovelAbout((novel.story_details as Record<string, unknown>)?.novel_about ?? "");
       setModel(novel.model ?? modelOptions[0]);
       setMaxSceneLength(novel.max_scene_length ?? 1000);
       setMinSceneLength(novel.min_scene_length ?? 300);
@@ -678,12 +702,17 @@ function StudioContent() {
       if (user) {
         setUserId(user.id);
         await loadNovels(user.id);
+        const loadedLatest = await loadLatestNovel(user.id);
+        if (!loadedLatest && prefillTitle) {
+          setTitle(prefillTitle);
+          setNovelAbout(prefillAbout);
+        }
       }
     };
 
     bootstrap();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [prefillTitle, prefillAbout]);
 
   useEffect(() => {
     if (selectedNovelId) {
@@ -701,6 +730,7 @@ function StudioContent() {
   // GENERATORS
   const resetPipeline = () => {
     setStoryDetails(null);
+    setNovelAbout("");
     setPremisesAndEndings(null);
     setNovelSynopsis(null);
     setCharacterProfiles(null);
@@ -740,7 +770,7 @@ function StudioContent() {
       const response = await fetch("/api/generate/story-details", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, model, seriesContext }),
+        body: JSON.stringify({ title, novelAbout, model, seriesContext }),
       });
 
       if (!response.ok) {
@@ -1029,6 +1059,7 @@ function StudioContent() {
           novelSynopsis,
           characterProfiles,
           novelPlan,
+          storyDetails,
           model,
         }),
       });
@@ -1063,6 +1094,7 @@ function StudioContent() {
           synopsis: novelSynopsis,
           characterProfiles,
           novelPlan,
+          storyDetails,
           model,
         }),
       });
@@ -1572,6 +1604,15 @@ function StudioContent() {
                 placeholder="The Midnight Inheritors"
               />
             </label>
+            <label className="flex flex-col gap-2 text-sm md:col-span-2">
+              What the novel is about
+              <textarea
+                value={novelAbout}
+                onChange={(event) => setNovelAbout(event.target.value)}
+                className="min-h-[120px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2"
+                placeholder="Describe the premise, themes, or specific idea you want..."
+              />
+            </label>
             <label className="flex flex-col gap-2 text-sm">
               Model
               <select
@@ -1616,7 +1657,7 @@ function StudioContent() {
           <div className="mt-6 flex flex-wrap gap-3">
             <button
               onClick={generateStoryDetails}
-              disabled={!title || loadingStep === "story"}
+              disabled={!title || !novelAbout || loadingStep === "story"}
               className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-zinc-900 disabled:opacity-50"
             >
               {loadingStep === "story"
@@ -1708,7 +1749,7 @@ function StudioContent() {
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generatePremises}
-              disabled={!storyDetails || loadingStep === "premises"}
+              disabled={!storyDetails || !storyDetails?.novel_about || loadingStep === "premises"}
               className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
             >
               {loadingStep === "premises"
@@ -1765,7 +1806,7 @@ function StudioContent() {
           <h2 className="text-xl font-semibold">3. Synopsis</h2>
           <button
             onClick={generateSynopsis}
-            disabled={!premisesAndEndings || loadingStep === "synopsis"}
+            disabled={!premisesAndEndings || !storyDetails?.novel_about || loadingStep === "synopsis"}
             className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
           >
             {loadingStep === "synopsis" ? "Generating..." : "Generate Synopsis"}
@@ -1796,7 +1837,7 @@ function StudioContent() {
           <h2 className="text-xl font-semibold">4. Character profiles</h2>
           <button
             onClick={generateProfiles}
-            disabled={!novelSynopsis || loadingStep === "profiles"}
+            disabled={!novelSynopsis || !storyDetails?.novel_about || loadingStep === "profiles"}
             className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
           >
             {loadingStep === "profiles"
@@ -1829,7 +1870,7 @@ function StudioContent() {
           <h2 className="text-xl font-semibold">4a. Book descriptions</h2>
           <button
             onClick={generateBookDescriptions}
-            disabled={!storyDetails || loadingStep === "descriptions"}
+            disabled={!storyDetails || !storyDetails?.novel_about || loadingStep === "descriptions"}
             className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
           >
             {loadingStep === "descriptions"
@@ -1866,7 +1907,7 @@ function StudioContent() {
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateKeywords}
-              disabled={!storyDetails || loadingStep === "keywords"}
+              disabled={!storyDetails || !storyDetails?.novel_about || loadingStep === "keywords"}
               className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
             >
               {loadingStep === "keywords" ? "Generating..." : "Generate Keywords"}
@@ -1912,7 +1953,7 @@ function StudioContent() {
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateBisac}
-              disabled={!storyDetails || loadingStep === "bisac"}
+              disabled={!storyDetails || !storyDetails?.novel_about || loadingStep === "bisac"}
               className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
             >
               {loadingStep === "bisac" ? "Generating..." : "Generate BISAC"}
@@ -1953,7 +1994,7 @@ function StudioContent() {
           <h2 className="text-xl font-semibold">5. Novel plan</h2>
           <button
             onClick={generateNovelPlan}
-            disabled={!characterProfiles || loadingStep === "plan"}
+            disabled={!characterProfiles || !storyDetails?.novel_about || loadingStep === "plan"}
             className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
           >
             {loadingStep === "plan" ? "Generating..." : "Generate Novel Plan"}
@@ -1982,7 +2023,7 @@ function StudioContent() {
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateChapterOutline}
-              disabled={!novelPlan || loadingStep === "outline"}
+              disabled={!novelPlan || !storyDetails?.novel_about || loadingStep === "outline"}
               className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
             >
               {loadingStep === "outline"
@@ -2024,7 +2065,7 @@ function StudioContent() {
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateChapterGuide}
-              disabled={!chapterOutline || loadingStep === "guide"}
+              disabled={!chapterOutline || !storyDetails?.novel_about || loadingStep === "guide"}
               className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
             >
               {loadingStep === "guide" ? "Generating..." : "Generate Chapter Guide"}
@@ -2064,7 +2105,7 @@ function StudioContent() {
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateChapterBeats}
-              disabled={!chapterGuide || loadingStep === "beats"}
+              disabled={!chapterGuide || !storyDetails?.novel_about || loadingStep === "beats"}
               className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
             >
               {loadingStep === "beats" ? "Generating..." : "Generate Chapter Beats"}
@@ -2104,7 +2145,7 @@ function StudioContent() {
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateScenes}
-              disabled={!chapterBeats || loadingStep === "scenes"}
+              disabled={!chapterBeats || !storyDetails?.novel_about || loadingStep === "scenes"}
               className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
             >
               {loadingStep === "scenes" ? "Generating..." : "Generate Scenes"}
@@ -2158,7 +2199,7 @@ function StudioContent() {
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateProse}
-              disabled={!allScenes || loadingStep === "prose"}
+              disabled={!allScenes || !storyDetails?.novel_about || loadingStep === "prose"}
               className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
             >
               {loadingStep === "prose" ? "Generating..." : "Generate Prose"}

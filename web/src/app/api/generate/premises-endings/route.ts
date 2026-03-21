@@ -15,6 +15,7 @@ export async function POST(request: Request) {
     const theme = storyDetails.story_theme ?? "Growth and self-discovery";
     const genre = storyDetails.genre ?? "Young Adult Fiction";
     const concept = storyDetails.central_concept ?? "A teenager discovering their hidden abilities";
+    const novelAbout = storyDetails.novel_about ?? "";
 
     const seriesContext = storyDetails.series_context ?? null;
     let seriesGuidance = "";
@@ -54,7 +55,7 @@ Give me 10 ideas for the premise of a novel about the following:
 Theme: ${theme}
 Genre: ${genre}
 Concept: ${concept}
-
+${novelAbout ? `Novel About: ${novelAbout}\n` : ""}
 ${seriesGuidance}
 
 Choose the best premise that will catch the attention of YA readers. Use it as "The Premise".

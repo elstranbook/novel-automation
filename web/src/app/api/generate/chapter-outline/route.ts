@@ -61,6 +61,7 @@ export async function POST(request: Request) {
     const title = storyDetails.title ?? "Untitled";
     const theme = storyDetails.story_theme ?? "";
     const structuredPlan = novelPlan ?? "";
+    const novelAbout = storyDetails.novel_about ?? "";
 
     const prompt = `
 Following the structured plan below, please create a detailed chapter outline for "${title}" designed to establish a powerful emotional arc that deeply explores the complexities of ${theme}.
@@ -81,6 +82,9 @@ For each chapter, include:
 
 Structured Plan:
 ${structuredPlan}
+
+Author Intent (What the novel is about):
+${novelAbout}
 
 Format your response as a JSON array of chapter objects with the following fields:
 - "number": The chapter number (integer)

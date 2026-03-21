@@ -371,7 +371,7 @@ export default function SeriesPage() {
                       seriesId: seriesList[0].id,
                       title: seriesList[0].title,
                       numBooks: seriesList[0].num_books,
-                      bookNumber: 1,
+                      bookNumber: suiteBookNumber,
                       model,
                     }),
                   });

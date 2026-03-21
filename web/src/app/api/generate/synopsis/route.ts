@@ -23,7 +23,9 @@ export async function POST(request: Request) {
       storyDetails.genre ?? "Young Adult Fiction"
     }\nCentral Concept: ${
       storyDetails.central_concept ?? "A coming-of-age journey"
-    }\nSetting: ${storyDetails.setting ?? "A world of possibility"}`;
+    }\nSetting: ${storyDetails.setting ?? "A world of possibility"}\nNovel About: ${
+      storyDetails.novel_about ?? ""
+    }`;
 
     const premise = premisesAndEndings?.chosen_premise ?? "";
     const ending = premisesAndEndings?.chosen_ending ?? "";
