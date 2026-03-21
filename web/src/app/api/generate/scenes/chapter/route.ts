@@ -207,8 +207,10 @@ export async function POST(request: Request) {
     }`;
 
     const normalizedScenes = Array.isArray(scenes)
-      ? scenes.map((scene) => String(scene))
-      : [String(scenes)];
+    ? scenes.map((scene) =>
+        typeof scene === "string" ? scene : JSON.stringify(scene)
+      )
+    : [typeof scenes === "string" ? scenes : JSON.stringify(scenes)];
 
     return NextResponse.json({ chapterTitle, scenes: normalizedScenes });
   } catch (error) {

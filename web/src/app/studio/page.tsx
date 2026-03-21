@@ -381,7 +381,11 @@ function StudioContent() {
         if (!grouped[row.chapter_title]) {
           grouped[row.chapter_title] = [];
         }
-        grouped[row.chapter_title].push(row.scene_content);
+        let content = row.scene_content as string;
+        if (content === "[object Object]") {
+          content = "(Scene content missing or invalid.)";
+        }
+        grouped[row.chapter_title].push(content);
       });
       setAllScenes(grouped);
     }
