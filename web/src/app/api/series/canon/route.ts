@@ -15,14 +15,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "seriesId required" }, { status: 400 });
   }
 
-  const [{ data: log }, { data: entries }] = await Promise.all([
-    supabaseAdmin.from("canon_log").select("*").eq("series_id", seriesId).maybeSingle(),
-    supabaseAdmin
-      .from("canon_log_entry")
-      .select("id,category,fact,source,created_at")
-      .eq("canon_log_id", log?.id ?? "")
-      .order("created_at", { ascending: true }),
-  ]);
+  const { data: log } = await supabaseAdmin
+    .from("canon_log")
+    .select("*")
+    .eq("series_id", seriesId)
+    .maybeSingle();
+
+  const { data: entries } = await supabaseAdmin
+    .from("canon_log_entry")
+    .select("id,category,fact,source,created_at")
+    .eq("canon_log_id", log?.id ?? "")
+    .order("created_at", { ascending: true });
 
   return NextResponse.json({ log: log ?? null, entries: entries ?? [] });
 }
