@@ -944,7 +944,7 @@ export default function SeriesPage() {
                     </span>
                     <span className="ml-2">{String(entry.source ?? "")}</span>
                   </p>
-                  {editingCanonId === entry.id ? (
+                  {editingCanonId === String(entry.id ?? "") ? (
                     <div className="mt-2 space-y-2">
                       <select
                         value={editingCanonCategory}
@@ -966,14 +966,14 @@ export default function SeriesPage() {
                     <p className="mt-2 text-xs">{String(entry.fact ?? "")}</p>
                   )}
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {editingCanonId === entry.id ? (
+                    {editingCanonId === String(entry.id ?? "") ? (
                       <button
                         onClick={async () => {
                           await fetch("/api/series/canon/update", {
                             method: "PUT",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
-                              id: entry.id,
+                              id: String(entry.id ?? ""),
                               fact: editingCanonFact,
                               category: editingCanonCategory,
                             }),
@@ -1004,7 +1004,7 @@ export default function SeriesPage() {
                     <button
                       onClick={() =>
                         setPendingDelete({
-                          id: entry.id,
+                          id: String(entry.id ?? ""),
                           endpoint: "/api/series/canon/delete",
                           refresh: async () => {
                             const refreshed = await fetch(
