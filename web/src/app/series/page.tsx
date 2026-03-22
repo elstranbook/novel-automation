@@ -297,7 +297,8 @@ export default function SeriesPage() {
     return seriesMemory.reduce(
       (acc, entry) => {
         const category = String(entry.category ?? "canon").toLowerCase();
-        acc[category] = (acc[category] ?? 0) + 1;
+        const current = typeof acc[category] === "number" ? acc[category] : 0;
+        acc[category] = current + 1;
         return acc;
       },
       {} as Record<string, number>
