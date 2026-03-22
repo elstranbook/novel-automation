@@ -1096,36 +1096,39 @@ export default function SeriesPage() {
                 {Object.keys(groupedCharacters).length === 0 && (
                   <p className="text-sm text-zinc-500">No characters yet.</p>
                 )}
-                {Object.entries(groupedCharacters).map(([role, characters]) => (
-                  <div key={role} className="space-y-2">
-                    <p className="text-xs font-semibold uppercase text-zinc-400">
-                      {role || "Uncategorized"}
-                    </p>
-                    {characters.map((character) => (
-                      <button
-                        key={String(character.id)}
-                        onClick={() => setSelectedCharacterId(String(character.id ?? ""))}
-                        className={`w-full rounded-lg border px-4 py-3 text-left text-xs transition ${
-                          String(character.id) === String(selectedCharacterId)
-                            ? "border-emerald-400/60 bg-emerald-500/10"
-                            : "border-zinc-800 bg-zinc-950/60"
-                        }`}
-                      >
-                        <p className="text-sm font-semibold text-zinc-100">
-                          {String(character.name ?? "Unnamed")}
-                        </p>
-                        <p className="text-xs text-zinc-400">
-                          {String(character.role ?? "Supporting")}
-                        </p>
-                        {character.description && (
-                          <p className="mt-2 text-xs text-zinc-300">
-                            {String(character.description)}
+                {Object.entries(groupedCharacters).map(([role, characters]) => {
+                  const list = Array.isArray(characters) ? characters : [];
+                  return (
+                    <div key={role} className="space-y-2">
+                      <p className="text-xs font-semibold uppercase text-zinc-400">
+                        {role || "Uncategorized"}
+                      </p>
+                      {list.map((character) => (
+                        <button
+                          key={String(character.id)}
+                          onClick={() => setSelectedCharacterId(String(character.id ?? ""))}
+                          className={`w-full rounded-lg border px-4 py-3 text-left text-xs transition ${
+                            String(character.id) === String(selectedCharacterId)
+                              ? "border-emerald-400/60 bg-emerald-500/10"
+                              : "border-zinc-800 bg-zinc-950/60"
+                          }`}
+                        >
+                          <p className="text-sm font-semibold text-zinc-100">
+                            {String(character.name ?? "Unnamed")}
                           </p>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                ))}
+                          <p className="text-xs text-zinc-400">
+                            {String(character.role ?? "Supporting")}
+                          </p>
+                          {character.description && (
+                            <p className="mt-2 text-xs text-zinc-300">
+                              {String(character.description)}
+                            </p>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200">
