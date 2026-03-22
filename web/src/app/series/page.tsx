@@ -1066,11 +1066,12 @@ export default function SeriesPage() {
               ].map((item) => {
                 const count = Object.entries(groupedCharacters).reduce(
                   (acc, [role, list]) => {
+                    const items = Array.isArray(list) ? list : [];
                     if (item.key && role.includes(item.key)) {
-                      return acc + list.length;
+                      return acc + items.length;
                     }
                     if (!item.key && !role.includes("protagonist") && !role.includes("antagonist") && !role.includes("support")) {
-                      return acc + list.length;
+                      return acc + items.length;
                     }
                     return acc;
                   },
