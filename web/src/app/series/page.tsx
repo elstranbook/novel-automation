@@ -1246,7 +1246,7 @@ export default function SeriesPage() {
                   key={`clue-${String(clue.id)}`}
                   className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
                 >
-                  {editingClueId === clue.id ? (
+                  {editingClueId === String(clue.id ?? "") ? (
                     <div className="space-y-2">
                       <textarea
                         value={editingClueDescription}
@@ -1267,14 +1267,14 @@ export default function SeriesPage() {
                     </>
                   )}
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {editingClueId === clue.id ? (
+                    {editingClueId === String(clue.id ?? "") ? (
                       <button
                         onClick={async () => {
                           await fetch("/api/series/mystery/clue", {
                             method: "PUT",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
-                              id: clue.id,
+                              id: String(clue.id ?? ""),
                               description: editingClueDescription,
                               plantedInBook: editingClueBook,
                             }),
@@ -1293,7 +1293,7 @@ export default function SeriesPage() {
                     ) : (
                       <button
                         onClick={() => {
-                          setEditingClueId(clue.id);
+                          setEditingClueId(String(clue.id ?? ""));
                           setEditingClueDescription(String(clue.description ?? ""));
                           setEditingClueBook(Number(clue.planted_in_book ?? 1));
                         }}
@@ -1305,7 +1305,7 @@ export default function SeriesPage() {
                     <button
                       onClick={() =>
                         setPendingDelete({
-                          id: clue.id,
+                          id: String(clue.id ?? ""),
                           endpoint: "/api/series/mystery/clue/delete",
                           refresh: async () => {
                             const refreshed = await fetch(
@@ -1457,7 +1457,7 @@ export default function SeriesPage() {
                   key={String(relationship.id)}
                   className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
                 >
-                  {editingRelationshipId === relationship.id ? (
+                  {editingRelationshipId === String(relationship.id ?? "") ? (
                     <div className="grid gap-2 md:grid-cols-2">
                       <input
                         value={editingRelationshipA}
@@ -1505,7 +1505,7 @@ export default function SeriesPage() {
                     </p>
                   )}
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {editingRelationshipId === relationship.id ? (
+                    {editingRelationshipId === String(relationship.id ?? "") ? (
                       <button
                         onClick={async () => {
                           await fetch("/api/series/relationships/entries", {
@@ -1534,7 +1534,7 @@ export default function SeriesPage() {
                     ) : (
                       <button
                         onClick={() => {
-                          setEditingRelationshipId(relationship.id);
+                          setEditingRelationshipId(String(relationship.id ?? ""));
                           setEditingRelationshipA(String(relationship.character_a_name ?? ""));
                           setEditingRelationshipB(String(relationship.character_b_name ?? ""));
                           setEditingRelationshipType(String(relationship.relationship_type ?? "friends"));
@@ -1548,7 +1548,7 @@ export default function SeriesPage() {
                     <button
                       onClick={() =>
                         setPendingDelete({
-                          id: relationship.id,
+                          id: String(relationship.id ?? ""),
                           endpoint: "/api/series/relationships/entries/delete",
                           refresh: async () => {
                             const refreshed = await fetch(
@@ -1821,7 +1821,7 @@ export default function SeriesPage() {
                   key={String(event.id)}
                   className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
                 >
-                  {editingTimelineId === event.id ? (
+                  {editingTimelineId === String(event.id ?? "") ? (
                     <div className="space-y-2">
                       <input
                         value={editingTimelineTitle}
@@ -1869,14 +1869,14 @@ export default function SeriesPage() {
                     </>
                   )}
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {editingTimelineId === event.id ? (
+                    {editingTimelineId === String(event.id ?? "") ? (
                       <button
                         onClick={async () => {
                           await fetch("/api/series/timeline-events/update", {
                             method: "PUT",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
-                              id: event.id,
+                              id: String(event.id ?? ""),
                               eventName: editingTimelineTitle,
                               description: editingTimelineDescription,
                               eventType: "plot",
@@ -1896,7 +1896,7 @@ export default function SeriesPage() {
                     ) : (
                       <button
                         onClick={() => {
-                          setEditingTimelineId(event.id);
+                          setEditingTimelineId(String(event.id ?? ""));
                           setEditingTimelineTitle(String(event.title ?? ""));
                           setEditingTimelineDescription(String(event.description ?? ""));
                           setEditingTimelineBook(Number(event.book_number ?? 1));
@@ -1910,7 +1910,7 @@ export default function SeriesPage() {
                     <button
                       onClick={() =>
                         setPendingDelete({
-                          id: event.id,
+                          id: String(event.id ?? ""),
                           endpoint: "/api/series/timeline-events/delete",
                           refresh: async () => {
                             const response = await fetch(
