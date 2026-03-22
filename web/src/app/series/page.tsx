@@ -2899,7 +2899,8 @@ export default function SeriesPage() {
                       ))}
                     </div>
                   </div>
-                ))}
+                );
+              })}
             </div>
           </section>
         )}
