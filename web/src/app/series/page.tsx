@@ -198,17 +198,6 @@ export default function SeriesPage() {
     return points;
   }, [seriesBooks, seriesTimeline, plotThreads]);
 
-  const selectedCharacterRelationships = useMemo(() => {
-    if (!selectedCharacter) return [];
-    const name = String(selectedCharacter.name ?? "").toLowerCase();
-    if (!name) return [];
-    return seriesMemory.filter((entry) => {
-      const a = String(entry.character_a_name ?? "").toLowerCase();
-      const b = String(entry.character_b_name ?? "").toLowerCase();
-      return a === name || b === name;
-    });
-  }, [seriesMemory, selectedCharacter]);
-
   const loadingSteps = useMemo(() => {
     if (!loadingStep) return [];
     const stepsByType: Record<string, string[]> = {
@@ -274,7 +263,18 @@ export default function SeriesPage() {
     );
   }, [seriesCharacters, selectedCharacterId]);
 
-  const logTypes = useMemo(() => {
+  const selectedCharacterRelationships = useMemo(() => {
+    if (!selectedCharacter) return [];
+    const name = String(selectedCharacter.name ?? "").toLowerCase();
+    if (!name) return [];
+    return seriesMemory.filter((entry) => {
+      const a = String(entry.character_a_name ?? "").toLowerCase();
+      const b = String(entry.character_b_name ?? "").toLowerCase();
+      return a === name || b === name;
+    });
+  }, [seriesMemory, selectedCharacter]);
+
+  const logTypes = useMemo(() => {"}
     const types = new Set<string>();
     seriesLogs.forEach((log) => {
       const value = String(log.type ?? "");
