@@ -234,13 +234,16 @@ export default function SeriesPage() {
   }, [seriesTimeline, timelineSearch, timelineBookFilter]);
 
   const groupedTimeline = useMemo(() => {
-    return filteredTimeline.reduce((acc, entry) => {
-      const bookNumber = Number(entry.book_number ?? 0) || 0;
-      const key = bookNumber || 0;
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(entry);
-      return acc;
-    }, {} as Record<number, Array<Record<string, unknown>>>);
+    return filteredTimeline.reduce(
+      (acc, entry) => {
+        const bookNumber = Number(entry.book_number ?? 0) || 0;
+        const key = bookNumber || 0;
+        const existing = acc[key] ?? [];
+        acc[key] = [...existing, entry];
+        return acc;
+      },
+      {} as Record<number, Array<Record<string, unknown>>>
+    );
   }, [filteredTimeline]);
 
   const groupedCharacters = useMemo(() => {
