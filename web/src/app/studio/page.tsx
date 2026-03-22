@@ -1645,9 +1645,17 @@ function StudioContent() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-12">
         <header className="flex flex-col gap-3">
-          <Link href="/" className="text-sm text-zinc-400">
-            ← Back to home
-          </Link>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Link href="/" className="text-sm text-zinc-400">
+              ← Back to home
+            </Link>
+            <Link
+              href="/series"
+              className="rounded-full border border-emerald-500/60 px-3 py-1 text-xs text-emerald-200"
+            >
+              Go to Series
+            </Link>
+          </div>
           <h1 className="text-3xl font-semibold">Studio</h1>
           <p className="text-zinc-300">
             Full pipeline studio with Supabase persistence. Use the steps below to

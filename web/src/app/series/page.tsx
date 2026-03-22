@@ -498,20 +498,28 @@ export default function SeriesPage() {
             <Link href="/" className="text-sm text-zinc-400">
               ← Back to home
             </Link>
-            {authEmail && (
-              <div className="flex items-center gap-3 text-xs text-zinc-400">
-                <span>{authEmail}</span>
-                <button
-                  onClick={async () => {
-                    await supabase.auth.signOut();
-                    window.location.href = "/login";
-                  }}
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
-                >
-                  Sign out
-                </button>
-              </div>
-            )}
+            <div className="flex flex-wrap items-center gap-3">
+              <Link
+                href="/studio"
+                className="rounded-full border border-emerald-500/60 px-3 py-1 text-xs text-emerald-200"
+              >
+                Go to Studio
+              </Link>
+              {authEmail && (
+                <div className="flex items-center gap-3 text-xs text-zinc-400">
+                  <span>{authEmail}</span>
+                  <button
+                    onClick={async () => {
+                      await supabase.auth.signOut();
+                      window.location.href = "/login";
+                    }}
+                    className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
           <h1 className="text-3xl font-semibold">Series Mode</h1>
           <p className="text-zinc-300">
