@@ -28,6 +28,15 @@ const generateScenesForChapter = async ({
   const chapterInfo = JSON.stringify(chapter, null, 2);
   const storyInfo = JSON.stringify(storyDetails, null, 2);
   const novelAbout = storyDetails.novel_about ?? "";
+  const seriesContext = storyDetails.series_context as
+    | {
+        canon_entries?: unknown;
+        secrets?: unknown;
+        relationships?: unknown;
+        plot_threads?: unknown;
+        callbacks?: unknown;
+      }
+    | undefined;
 
   let premisesEndingInfo = "";
   if (premisesAndEndings?.chosen_premise && premisesAndEndings?.chosen_ending) {
@@ -117,17 +126,17 @@ Author Intent (What the novel is about):
 ${novelAbout}
 
 Series Context:
-${storyDetails.series_context ? JSON.stringify(storyDetails.series_context).slice(0, 1600) : ""}
+${seriesContext ? JSON.stringify(seriesContext).slice(0, 1600) : ""}
 Canon Facts:
-${storyDetails.series_context?.canon_entries ? JSON.stringify(storyDetails.series_context.canon_entries).slice(0, 800) : ""}
+${seriesContext?.canon_entries ? JSON.stringify(seriesContext.canon_entries).slice(0, 800) : ""}
 Mysteries:
-${storyDetails.series_context?.secrets ? JSON.stringify(storyDetails.series_context.secrets).slice(0, 800) : ""}
+${seriesContext?.secrets ? JSON.stringify(seriesContext.secrets).slice(0, 800) : ""}
 Relationships:
-${storyDetails.series_context?.relationships ? JSON.stringify(storyDetails.series_context.relationships).slice(0, 800) : ""}
+${seriesContext?.relationships ? JSON.stringify(seriesContext.relationships).slice(0, 800) : ""}
 Plot Threads:
-${storyDetails.series_context?.plot_threads ? JSON.stringify(storyDetails.series_context.plot_threads).slice(0, 800) : ""}
+${seriesContext?.plot_threads ? JSON.stringify(seriesContext.plot_threads).slice(0, 800) : ""}
 Callbacks:
-${storyDetails.series_context?.callbacks ? JSON.stringify(storyDetails.series_context.callbacks).slice(0, 800) : ""}
+${seriesContext?.callbacks ? JSON.stringify(seriesContext.callbacks).slice(0, 800) : ""}
 
 Chapter Story Beats:
 ${beatsText}
