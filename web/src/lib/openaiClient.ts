@@ -10,12 +10,18 @@ export const runChatCompletion = async ({
   prompt,
   jsonResponse = false,
   maxTokens,
+  generationMeta,
 }: {
   model: string;
   system?: string;
   prompt: string;
   jsonResponse?: boolean;
   maxTokens?: number;
+  generationMeta?: {
+    seriesId?: string;
+    type?: string;
+    targetId?: string;
+  };
 }) => {
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
 
@@ -25,6 +31,31 @@ export const runChatCompletion = async ({
 
   messages.push({ role: "user", content: prompt });
 
+  let generationLogId: string | null = null;
+
+  if (generationMeta?.seriesId && generationMeta?.type) {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/series/generation-log`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            seriesId: generationMeta.seriesId,
+            type: generationMeta.type,
+            targetId: generationMeta.targetId ?? null,
+            prompt,
+            status: "running",
+          }),
+        }
+      );
+      const data = await response.json();
+      generationLogId = data?.log?.id ?? null;
+    } catch {
+      // ignore logging errors
+    }
+  }
+
   const response = await openaiClient.chat.completions.create({
     model,
     messages,
@@ -33,6 +64,25 @@ export const runChatCompletion = async ({
   });
 
   const content = response.choices[0]?.message?.content ?? "";
+
+  if (generationMeta?.seriesId && generationMeta?.type && generationLogId) {
+    try {
+      await fetch(
+        `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/series/generation-log/update`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: generationLogId,
+            status: "completed",
+            result: content,
+          }),
+        }
+      );
+    } catch {
+      // ignore logging errors
+    }
+  }
 
   if (!jsonResponse) {
     return content;

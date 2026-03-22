@@ -106,6 +106,19 @@ ${synopsisValue}
 Author Intent (What the novel is about):
 ${novelAbout}
 
+Series Context:
+${storyDetails.series_context ? JSON.stringify(storyDetails.series_context).slice(0, 1600) : ""}
+Canon Facts:
+${storyDetails.series_context?.canon_entries ? JSON.stringify(storyDetails.series_context.canon_entries).slice(0, 800) : ""}
+Mystery Log:
+${storyDetails.series_context?.secrets ? JSON.stringify(storyDetails.series_context.secrets).slice(0, 800) : ""}
+Relationships:
+${storyDetails.series_context?.relationships ? JSON.stringify(storyDetails.series_context.relationships).slice(0, 800) : ""}
+Plot Threads:
+${storyDetails.series_context?.plot_threads ? JSON.stringify(storyDetails.series_context.plot_threads).slice(0, 800) : ""}
+Callbacks:
+${storyDetails.series_context?.callbacks ? JSON.stringify(storyDetails.series_context.callbacks).slice(0, 800) : ""}
+
 Character Profiles:
 ${profilesValue}
 `;

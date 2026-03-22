@@ -314,6 +314,9 @@ function StudioContent() {
   const [seriesBookNumber] = useState<number>(
     Number(searchParams.get("bookNumber") ?? 1)
   );
+  const [seriesBookOptions, setSeriesBookOptions] = useState<
+    Array<{ book_number: number; title: string }>
+  >([]);
   const [prefillTitle] = useState<string>(searchParams.get("title") ?? "");
   const [prefillAbout] = useState<string>(searchParams.get("about") ?? "");
   const [seriesContext, setSeriesContext] = useState<Record<string, unknown> | null>(null);
@@ -488,6 +491,58 @@ function StudioContent() {
           : "";
       setNovelAbout(aboutValue);
       await loadNovelData(novel.id);
+      return true;
+    }
+
+    return false;
+  };
+
+  const loadSeriesNovel = async (
+    userIdValue: string,
+    seriesIdValue: string,
+    bookNumber: number
+  ) => {
+    const { data: seriesBook } = await supabase
+      .from("series_books")
+      .select("novel_id,title,summary")
+      .eq("series_id", seriesIdValue)
+      .eq("book_number", bookNumber)
+      .maybeSingle();
+
+    if (seriesBook?.novel_id) {
+      await loadNovelData(seriesBook.novel_id as string);
+      if (seriesBook.title) setTitle(String(seriesBook.title));
+      if (seriesBook.summary) setNovelAbout(String(seriesBook.summary));
+      return true;
+    }
+
+    const { data: novel } = await supabase
+      .from("novels")
+      .select("id,title,story_details")
+      .eq("series_id", seriesIdValue)
+      .eq("book_number", bookNumber)
+      .maybeSingle();
+
+    if (novel) {
+      await loadNovelData(novel.id);
+      return true;
+    }
+
+    const { data: inserted } = await supabase
+      .from("novels")
+      .insert({
+        user_id: userIdValue,
+        title: seriesBook?.title ?? `Book ${bookNumber}`,
+        series_id: seriesIdValue,
+        book_number: bookNumber,
+      })
+      .select("id")
+      .single();
+
+    if (inserted?.id) {
+      await loadNovelData(inserted.id as string);
+      if (seriesBook?.title) setTitle(String(seriesBook.title));
+      if (seriesBook?.summary) setNovelAbout(String(seriesBook.summary));
       return true;
     }
 
@@ -715,7 +770,27 @@ function StudioContent() {
         setUserId(user.id);
         setAuthEmail(user.email ?? null);
         await loadNovels(user.id);
-        const loadedLatest = await loadLatestNovel(user.id);
+        let loadedLatest = false;
+        if (seriesId) {
+          const { data: bookRows } = await supabase
+            .from("series_books")
+            .select("book_number,title")
+            .eq("series_id", seriesId)
+            .order("book_number", { ascending: true });
+          setSeriesBookOptions(
+            (bookRows ?? []).map((row) => ({
+              book_number: Number(row.book_number),
+              title: String(row.title ?? `Book ${row.book_number}`),
+            }))
+          );
+        }
+
+        if (seriesId && seriesBookNumber) {
+          loadedLatest = await loadSeriesNovel(user.id, seriesId, seriesBookNumber);
+        }
+        if (!loadedLatest) {
+          loadedLatest = await loadLatestNovel(user.id);
+        }
         if (!loadedLatest && prefillTitle) {
           setTitle(prefillTitle);
           setNovelAbout(prefillAbout);
@@ -857,13 +932,21 @@ function StudioContent() {
       });
       if (!response.ok) throw new Error("Failed to generate synopsis");
       const data = await response.json();
-      setNovelSynopsis(data.synopsis);
+      const synopsisText = data.synopsis ?? data.summary ?? "";
+      setNovelSynopsis(synopsisText);
       await saveSingleRow(
         "novel_synopsis",
-        { synopsis: data.synopsis ?? "" },
+        { synopsis: synopsisText },
         novelIdValue,
         user.id
       );
+      if (seriesId && seriesBookNumber) {
+        await supabase
+          .from("series_books")
+          .update({ summary: synopsisText })
+          .eq("series_id", seriesId)
+          .eq("book_number", seriesBookNumber);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -1621,6 +1704,48 @@ function StudioContent() {
             </div>
           )}
         </div>
+
+        {seriesId && seriesBookNumber ? (
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 text-xs text-zinc-300">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-zinc-100">
+                  Series Book #{seriesBookNumber}
+                </p>
+                <p className="text-xs text-zinc-400">
+                  Manage this book from your series map.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {seriesBookOptions.length > 0 && (
+                  <select
+                    value={String(seriesBookNumber)}
+                    onChange={(event) => {
+                      const nextBook = event.target.value;
+                      window.location.href = `/studio?seriesId=${seriesId}&bookNumber=${nextBook}`;
+                    }}
+                    className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1 text-xs text-zinc-100"
+                  >
+                    {seriesBookOptions.map((option) => (
+                      <option
+                        key={option.book_number}
+                        value={String(option.book_number)}
+                      >
+                        Book {option.book_number}: {option.title}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <Link
+                  href="/series"
+                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                >
+                  Back to Series
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {activeStudioTab === "pipeline" && (
           <>

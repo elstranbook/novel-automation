@@ -22,11 +22,19 @@ export async function POST(request: Request) {
     if (seriesContext) {
       const bookNumber = seriesContext.book_number ?? 1;
       const totalBooks = seriesContext.total_books ?? 1;
+      const trimContext = (value: unknown, max = 800) =>
+        JSON.stringify(value ?? "").slice(0, max);
+
       seriesGuidance = `
 This novel is Book ${bookNumber} of ${totalBooks} in a series.
 
 Series Title: ${seriesContext.series_title ?? "Untitled Series"}
 Series Arc: ${seriesContext.series_arc ?? "No series arc provided"}
+Canonical Facts: ${trimContext(seriesContext.canon_entries, 1200)}
+Relationships: ${trimContext(seriesContext.relationships, 800)}
+Mysteries: ${trimContext(seriesContext.secrets, 800)}
+World Elements: ${trimContext(seriesContext.world_elements, 800)}
+Foreshadowing: ${trimContext(seriesContext.foreshadowing, 800)}
 
 Book's role in the series arc: `;
 

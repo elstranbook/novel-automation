@@ -36,6 +36,12 @@ Novel Context:
 - Main Characters: ${(characterProfiles ?? "").slice(0, 1000) || "Not provided"}
 - Novel Plan: ${(novelPlan ?? "").slice(0, 1000) || "Not provided"}
 - Author Intent: ${(storyDetails?.novel_about ?? "").slice(0, 500) || "Not provided"}
+- Series Context: ${storyDetails?.series_context ? JSON.stringify(storyDetails.series_context).slice(0, 1600) : "Not provided"}
+- Canon Facts: ${storyDetails?.series_context?.canon_entries ? JSON.stringify(storyDetails.series_context.canon_entries).slice(0, 800) : "Not provided"}
+- Mysteries: ${storyDetails?.series_context?.secrets ? JSON.stringify(storyDetails.series_context.secrets).slice(0, 800) : "Not provided"}
+- Relationships: ${storyDetails?.series_context?.relationships ? JSON.stringify(storyDetails.series_context.relationships).slice(0, 800) : "Not provided"}
+- Plot Threads: ${storyDetails?.series_context?.plot_threads ? JSON.stringify(storyDetails.series_context.plot_threads).slice(0, 800) : "Not provided"}
+- Callbacks: ${storyDetails?.series_context?.callbacks ? JSON.stringify(storyDetails.series_context.callbacks).slice(0, 800) : "Not provided"}
 
 Chapter Outline: ${chapterOutlineJson}
 

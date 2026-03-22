@@ -7,7 +7,7 @@ const client = new OpenAI({
 
 export async function POST(request: Request) {
   try {
-    const { title, novelAbout, model } = await request.json();
+    const { title, novelAbout, model, seriesContext } = await request.json();
 
     if (!title) {
       return NextResponse.json(
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
 
     const prompt = `
 I am writing a Young Adult Novel titled "${title}".
-${novelAbout ? `\nHere is what I want the novel to be about:\n${novelAbout}\n` : ""}
+${novelAbout ? `\nHere is what I want the novel to be about:\n${novelAbout}\n` : ""}${seriesContext ? `\nSeries context to honor:\n${JSON.stringify(seriesContext, null, 2)}\n` : ""}
 Give me the following details:
 1. story_theme: The central theme or message of the novel
 2. genre: The specific genre or genres this novel belongs to
@@ -38,7 +38,7 @@ Format the response as a JSON object with exactly these keys.
 `;
 
     const systemMessage =
-      "You are a professional young adult novelist skilled at creating compelling story outlines. Your task is to create a detailed YA novel structure that appeals to teen readers.";
+      "You are a professional young adult novelist skilled at creating compelling story outlines. Your task is to create a detailed YA novel structure that appeals to teen readers. Respect any provided series context for continuity.";
 
     const completion = await client.chat.completions.create({
       model: model || "gpt-4.1-mini",

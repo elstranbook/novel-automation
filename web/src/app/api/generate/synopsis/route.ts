@@ -19,12 +19,37 @@ export async function POST(request: Request) {
     const mainCharacter = storyDetails.main_character_name ?? "the protagonist";
     const conflict = storyDetails.central_conflict ?? "a significant challenge";
 
+    const trimContext = (value: unknown, max = 1200) =>
+      JSON.stringify(value ?? "").slice(0, max);
+
+    const summarizeContext = (context: Record<string, unknown>) => ({
+      series_title: context.series_title,
+      series_arc: context.series_arc,
+      book_number: context.book_number,
+      total_books: context.total_books,
+      canon_entries: (context.canon_entries as unknown[] | undefined)?.slice(0, 5),
+      secrets: (context.secrets as unknown[] | undefined)?.slice(0, 5),
+      relationships: (context.relationships as unknown[] | undefined)?.slice(0, 5),
+      plot_threads: (context.plot_threads as unknown[] | undefined)?.slice(0, 5),
+      callbacks: (context.callbacks as unknown[] | undefined)?.slice(0, 5),
+    });
+
     const description = `Theme: ${theme}\nGenre: ${
       storyDetails.genre ?? "Young Adult Fiction"
     }\nCentral Concept: ${
       storyDetails.central_concept ?? "A coming-of-age journey"
     }\nSetting: ${storyDetails.setting ?? "A world of possibility"}\nNovel About: ${
       storyDetails.novel_about ?? ""
+    }\nSeries Context: ${
+      storyDetails.series_context
+        ? trimContext(summarizeContext(storyDetails.series_context as Record<string, unknown>), 1200)
+        : ""
+    }\nCanon Facts: ${
+      storyDetails.series_context?.canon_entries ? trimContext(storyDetails.series_context.canon_entries, 800) : ""
+    }\nMystery Log: ${
+      storyDetails.series_context?.secrets ? trimContext(storyDetails.series_context.secrets, 800) : ""
+    }\nRelationships: ${
+      storyDetails.series_context?.relationships ? trimContext(storyDetails.series_context.relationships, 800) : ""
     }`;
 
     const premise = premisesAndEndings?.chosen_premise ?? "";
