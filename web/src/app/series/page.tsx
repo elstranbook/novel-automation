@@ -698,10 +698,12 @@ export default function SeriesPage() {
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <p className="text-sm font-semibold text-zinc-100">
-                            Book {book.book_number ?? "?"}: {book.title ?? "Untitled"}
+                            Book {String(book.book_number ?? "?")}: {String(
+                              book.title ?? "Untitled"
+                            )}
                           </p>
                           <p className="text-xs text-zinc-400">
-                            Status: {book.status ?? "draft"}
+                            Status: {String(book.status ?? "draft")}
                           </p>
                         </div>
                         <Link
