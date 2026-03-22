@@ -1,0 +1,65 @@
+[33m06d3632[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m Better message or fixed version
+[33m8f4f8bf[m Redesign: Home page buttons
+[33mf8cb9bc[m Fix: UI Features 15
+[33m2229a79[m Fix: UI Features 14
+[33mbe17930[m Fix: UI Features 13
+[33meaddf21[m Fix: UI Features 12
+[33mb410fa0[m Fix: UI Features 11
+[33me379c97[m Fix: UI Features 10
+[33m2fb7f8a[m Fix: UI Features 9
+[33m9cca24f[m Fix: UI Features 8
+[33m1630e98[m Fix: UI Features 7
+[33m7b8ec32[m Fix: UI Features 6
+[33m4a9e924[m Fix: UI Features 5
+[33me9b3006[m Fix: UI Features 4
+[33m2479687[m Fix: UI Features 3
+[33m80fdc74[m Fix: UI Features 2
+[33m9d02824[m Fix: UI Features 1
+[33m3cc2a37[m Build: UI Features
+[33m1637dd3[m Fix: Series build error10
+[33m66f424e[m Fix: Series build error9
+[33m670b5df[m Fix: Series build error8
+[33m5672239[m Fix: Series build error7
+[33mdcc1908[m Fix: Series build error6
+[33mdd8b0c3[m Fix: Series build error5
+[33mdd35d33[m Fix: Series build error4
+[33m1e1bc3a[m Fix: Series build error3
+[33m7dd714a[m Fix: Series build error2
+[33m3d0cd83[m Fix: Series build error1
+[33m89b651c[m Fix: Series build error
+[33m218d95d[m Fix: Series build error
+[33m0644495[m Series build 1
+[33mc853eb1[m Protecting from outsiders
+[33mb445bf7[m Error Fix in build 2
+[33m02a8df9[m Error fix in build
+[33mc0eb47c[m More updates for app
+[33m1d4f125[m Fix: Many fixes
+[33mf0421af[m social media
+[33m424435f[m Social Media Snippet
+[33mea1920f[m Expose articles
+[33m5ce957b[m Promotional Articles
+[33m0456bd4[m feat: add regenerate actions
+[33mb5b23e1[m feat: add prose generation
+[33m7a6b1b5[m fix: normalize scene payloads
+[33mfd8c035[m fix: format scene outputs
+[33m900089e[m fix: type guard chapter outline
+[33m6fbdbe8[m fix: generate scenes per chapter
+[33mff8fbcb[m fix: extend scenes generation runtime
+[33m60c7d57[m feat: add collapsible formatted outputs
+[33mdb7f62a[m fix: pass synopsis context
+[33mb0814ec[m fix: restore prompt parity
+[33m400ce32[m fix: backfill missing chapter guide/beats
+[33m99cf318[m fix: normalize bisac keywords
+[33m4fd427f[m fix: normalize keywords data
+[33m3e733d6[m feat: add download buttons for outputs
+[33m63433e2[m fix: wrap studio page in suspense
+[33m94a6653[m fix: cast editing suggestion label
+[33m5bf552c[m fix: guard chapter number in scenes
+[33m5068481[m fix: avoid dotall regex flag
+[33m972e8fc[m fix: type guard chapter outline parsing
+[33m72b33a3[m chore: remove invalid vercel config
+[33m08a0a9a[m chore: remove invalid vercel rootDirectory
+[33mde8ec44[m chore: set vercel root directory
+[33mad4cf0c[m feat: add full studio and series flows
+[33mdd6242b[m feat: scaffold nextjs app with supabase schema
+[33mb46b175[m Add files via upload
