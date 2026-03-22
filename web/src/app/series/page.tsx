@@ -713,7 +713,7 @@ export default function SeriesPage() {
                           Open in Studio
                         </Link>
                       </div>
-                      {book.summary && (
+                      {Boolean(book.summary) && (
                         <p className="mt-2 text-xs text-zinc-300">
                           {String(book.summary)}
                         </p>
