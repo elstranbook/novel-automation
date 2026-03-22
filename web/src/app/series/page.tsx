@@ -1192,7 +1192,7 @@ export default function SeriesPage() {
                           const arcStages = Array.isArray(selectedCharacter.arc_stages)
                             ? selectedCharacter.arc_stages
                             : Array.isArray((selectedCharacter.arc as { stages?: unknown })?.stages)
-                              ? (selectedCharacter.arc as { stages?: unknown[] }).stages
+                              ? ((selectedCharacter.arc as { stages?: unknown[] }).stages ?? [])
                               : [];
                           return arcStages.slice(0, 4).map((stage, index) => (
                             <div
