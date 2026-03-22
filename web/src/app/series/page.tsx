@@ -527,6 +527,7 @@ export default function SeriesPage() {
                 setError(null);
                 try {
                   if (!seriesList[0]) throw new Error("Create a series first");
+                  if (!userId) throw new Error("Please sign in");
                   const response = await fetch("/api/generate/series/map", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -556,7 +557,7 @@ export default function SeriesPage() {
                         .select("id,series_id,book_number,title,status,summary");
                       if (inserted) {
                         const novelRows = inserted.map((bookRow) => ({
-                          user_id: user.id,
+                          user_id: userId,
                           title: bookRow.title ?? `Book ${bookRow.book_number}`,
                           series_id: bookRow.series_id,
                           book_number: bookRow.book_number,
