@@ -274,7 +274,7 @@ export default function SeriesPage() {
     });
   }, [seriesMemory, selectedCharacter]);
 
-  const logTypes = useMemo(() => {"}
+  const logTypes = useMemo(() => {
     const types = new Set<string>();
     seriesLogs.forEach((log) => {
       const value = String(log.type ?? "");
