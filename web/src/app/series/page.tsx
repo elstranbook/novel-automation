@@ -2575,7 +2575,9 @@ export default function SeriesPage() {
                     <p className="font-semibold">Continuity Warnings</p>
                     <ul className="mt-2 list-disc space-y-1 pl-4">
                       {memoryWarnings.map((warning, index) => (
-                        <li key={`${warning}-${index}`}>{warning}</li>
+                        <li key={`${index}-${String((warning as { id?: string }).id ?? "warn")}`}>
+                          {String((warning as { message?: string }).message ?? warning)}
+                        </li>
                       ))}
                     </ul>
                   </div>
