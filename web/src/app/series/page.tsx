@@ -992,7 +992,7 @@ export default function SeriesPage() {
                     ) : (
                       <button
                         onClick={() => {
-                          setEditingCanonId(entry.id);
+                          setEditingCanonId(String(entry.id ?? ""));
                           setEditingCanonFact(String(entry.fact ?? ""));
                           setEditingCanonCategory(String(entry.category ?? "world"));
                         }}
