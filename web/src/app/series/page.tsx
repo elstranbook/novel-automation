@@ -1163,7 +1163,7 @@ export default function SeriesPage() {
                   key={String(secret.id)}
                   className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
                 >
-                  {editingSecretId === secret.id ? (
+                  {editingSecretId === String(secret.id ?? "") ? (
                     <div className="space-y-2">
                       <input
                         value={editingSecretTitle}
@@ -1185,14 +1185,14 @@ export default function SeriesPage() {
                     </>
                   )}
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {editingSecretId === secret.id ? (
+                    {editingSecretId === String(secret.id ?? "") ? (
                       <button
                         onClick={async () => {
                           await fetch("/api/series/mystery/secret", {
                             method: "PUT",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
-                              id: secret.id,
+                              id: String(secret.id ?? ""),
                               title: editingSecretTitle,
                               description: editingSecretDescription,
                             }),
@@ -1211,7 +1211,7 @@ export default function SeriesPage() {
                     ) : (
                       <button
                         onClick={() => {
-                          setEditingSecretId(secret.id);
+                          setEditingSecretId(String(secret.id ?? ""));
                           setEditingSecretTitle(String(secret.title ?? ""));
                           setEditingSecretDescription(String(secret.description ?? ""));
                         }}
@@ -1223,7 +1223,7 @@ export default function SeriesPage() {
                     <button
                       onClick={() =>
                         setPendingDelete({
-                          id: secret.id,
+                          id: String(secret.id ?? ""),
                           endpoint: "/api/series/mystery/secret/delete",
                           refresh: async () => {
                             const refreshed = await fetch(
