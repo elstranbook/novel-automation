@@ -45,8 +45,15 @@ export default function SeriesPage() {
   const [seriesCharacters, setSeriesCharacters] = useState<
     Array<Record<string, unknown>>
   >([]);
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
   const [seriesWorld, setSeriesWorld] = useState<Record<string, unknown> | null>(null);
+  const [worldSettingDraft, setWorldSettingDraft] = useState("");
+  const [worldRulesDraft, setWorldRulesDraft] = useState("");
+  const [worldLoreDraft, setWorldLoreDraft] = useState("");
   const [seriesMemory, setSeriesMemory] = useState<Array<Record<string, unknown>>>([]);
+  const [seriesLogs, setSeriesLogs] = useState<Array<Record<string, unknown>>>([]);
+  const [activeMemoryTab, setActiveMemoryTab] = useState("canon");
+  const [logTypeFilter, setLogTypeFilter] = useState("all");
   const [canonCategory, setCanonCategory] = useState("world");
   const [canonFact, setCanonFact] = useState("");
   const [canonSource, setCanonSource] = useState("");
@@ -67,6 +74,15 @@ export default function SeriesPage() {
   const [relationshipB, setRelationshipB] = useState("");
   const [relationshipType, setRelationshipType] = useState("friends");
   const [relationshipStatus, setRelationshipStatus] = useState("neutral");
+  const [plotThreads, setPlotThreads] = useState<Array<Record<string, unknown>>>([]);
+  const [plotName, setPlotName] = useState("");
+  const [plotDescription, setPlotDescription] = useState("");
+  const [plotType, setPlotType] = useState("main");
+  const [plotIntroducedBook, setPlotIntroducedBook] = useState(1);
+  const [plotResolvedBook, setPlotResolvedBook] = useState<number | null>(null);
+  const [plotStatus, setPlotStatus] = useState("setup");
+  const [plotFilter, setPlotFilter] = useState("all");
+  const [plotSearch, setPlotSearch] = useState("");
   const [editingRelationshipId, setEditingRelationshipId] = useState<string | null>(null);
   const [editingRelationshipA, setEditingRelationshipA] = useState("");
   const [editingRelationshipB, setEditingRelationshipB] = useState("");
@@ -138,6 +154,85 @@ export default function SeriesPage() {
     });
   }, [seriesMemory, relationshipsSearch, relationshipsStatusFilter]);
 
+  const filteredPlots = useMemo(() => {
+    const query = plotSearch.trim().toLowerCase();
+    return plotThreads.filter((thread) => {
+      const matchesQuery =
+        !query || JSON.stringify(thread).toLowerCase().includes(query);
+      const matchesType =
+        plotFilter === "all" || String(thread.type ?? "main") === plotFilter;
+      return matchesQuery && matchesType;
+    });
+  }, [plotThreads, plotSearch, plotFilter]);
+
+  const tensionCurveData = useMemo(() => {
+    const bookNumbers = new Set<number>();
+    seriesBooks.forEach((book) => {
+      const value = Number(book.book_number ?? 0);
+      if (value) bookNumbers.add(value);
+    });
+    seriesTimeline.forEach((event) => {
+      const value = Number(event.book_number ?? 0);
+      if (value) bookNumbers.add(value);
+    });
+    plotThreads.forEach((thread) => {
+      const start = Number(thread.introduced_in_book ?? 0);
+      const end = Number(thread.resolved_in_book ?? 0);
+      if (start) bookNumbers.add(start);
+      if (end) bookNumbers.add(end);
+    });
+    const maxBook = Math.max(1, ...Array.from(bookNumbers));
+    const points = Array.from({ length: maxBook }, (_, index) => {
+      const book = index + 1;
+      const timelineCount = seriesTimeline.filter(
+        (event) => Number(event.book_number ?? 0) === book
+      ).length;
+      const activeThreads = plotThreads.filter((thread) => {
+        const start = Number(thread.introduced_in_book ?? 0) || book;
+        const end = Number(thread.resolved_in_book ?? 0) || maxBook;
+        return book >= start && book <= end;
+      }).length;
+      const score = timelineCount * 2 + activeThreads;
+      return { book, score };
+    });
+    return points;
+  }, [seriesBooks, seriesTimeline, plotThreads]);
+
+  const selectedCharacterRelationships = useMemo(() => {
+    if (!selectedCharacter) return [];
+    const name = String(selectedCharacter.name ?? "").toLowerCase();
+    if (!name) return [];
+    return seriesMemory.filter((entry) => {
+      const a = String(entry.character_a_name ?? "").toLowerCase();
+      const b = String(entry.character_b_name ?? "").toLowerCase();
+      return a === name || b === name;
+    });
+  }, [seriesMemory, selectedCharacter]);
+
+  const loadingSteps = useMemo(() => {
+    if (!loadingStep) return [];
+    const stepsByType: Record<string, string[]> = {
+      bible: [
+        "Collecting series inputs",
+        "Drafting series bible",
+        "Saving world & characters",
+      ],
+      map: ["Building series map", "Creating book entries", "Linking novels"],
+      evolution: [
+        "Analyzing character arcs",
+        "Generating evolution notes",
+        "Saving to memory",
+      ],
+      blueprint: [
+        "Drafting book blueprint",
+        "Structuring chapters",
+        "Saving blueprint memory",
+      ],
+      default: ["Generating content", "Compiling output", "Finalizing"],
+    };
+    return stepsByType[loadingStep] ?? stepsByType.default;
+  }, [loadingStep]);
+
   const filteredTimeline = useMemo(() => {
     const query = timelineSearch.trim().toLowerCase();
     return seriesTimeline.filter((entry) => {
@@ -148,6 +243,88 @@ export default function SeriesPage() {
       return matchesQuery && matchesBook;
     });
   }, [seriesTimeline, timelineSearch, timelineBookFilter]);
+
+  const groupedTimeline = useMemo(() => {
+    return filteredTimeline.reduce((acc, entry) => {
+      const bookNumber = Number(entry.book_number ?? 0) || 0;
+      const key = bookNumber || 0;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(entry);
+      return acc;
+    }, {} as Record<number, Array<Record<string, unknown>>>);
+  }, [filteredTimeline]);
+
+  const groupedCharacters = useMemo(() => {
+    return seriesCharacters.reduce(
+      (acc, character) => {
+        const role = String(character.role ?? "supporting").toLowerCase();
+        if (!acc[role]) acc[role] = [];
+        acc[role].push(character);
+        return acc;
+      },
+      {} as Record<string, Array<Record<string, unknown>>>
+    );
+  }, [seriesCharacters]);
+
+  const selectedCharacter = useMemo(() => {
+    return (
+      seriesCharacters.find(
+        (character) => String(character.id) === String(selectedCharacterId)
+      ) ?? null
+    );
+  }, [seriesCharacters, selectedCharacterId]);
+
+  const logTypes = useMemo(() => {
+    const types = new Set<string>();
+    seriesLogs.forEach((log) => {
+      const value = String(log.type ?? "");
+      if (value) types.add(value);
+    });
+    return ["all", ...Array.from(types)];
+  }, [seriesLogs]);
+
+  const filteredLogs = useMemo(() => {
+    return seriesLogs.filter((log) => {
+      if (logTypeFilter === "all") return true;
+      return String(log.type ?? "") === logTypeFilter;
+    });
+  }, [seriesLogs, logTypeFilter]);
+
+  const memoryCounts = useMemo(() => {
+    return seriesMemory.reduce(
+      (acc, entry) => {
+        const category = String(entry.category ?? "canon").toLowerCase();
+        acc[category] = (acc[category] ?? 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>
+    );
+  }, [seriesMemory]);
+
+  const memoryTabs = [
+    { id: "canon", label: "Canon" },
+    { id: "relationships", label: "Relationships" },
+    { id: "mystery", label: "Mysteries" },
+  ];
+
+  const filteredMemoryEntries = useMemo(() => {
+    if (activeMemoryTab === "relationships") {
+      return seriesMemory.filter((entry) =>
+        String(entry.category ?? "").toLowerCase().includes("relationship")
+      );
+    }
+    if (activeMemoryTab === "mystery") {
+      return seriesMemory.filter((entry) => {
+        const category = String(entry.category ?? "").toLowerCase();
+        return category.includes("clue") || category.includes("secret");
+      });
+    }
+    return seriesMemory.filter((entry) => {
+      const category = String(entry.category ?? "canon").toLowerCase();
+      return category === "canon" || category === "warning";
+    });
+  }, [activeMemoryTab, seriesMemory]);
+
   const [newMemoryContent, setNewMemoryContent] = useState("");
   const [newMemoryCategory, setNewMemoryCategory] = useState("canon");
   const [memoryStatus, setMemoryStatus] = useState<string | null>(null);
@@ -267,6 +444,50 @@ export default function SeriesPage() {
           </div>
         </div>
       )}
+
+      {loadingStep && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 px-6">
+          <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-6 text-center">
+            <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Generating</p>
+            <h2 className="mt-2 text-lg font-semibold text-zinc-100">
+              {String(loadingStep)} in progress
+            </h2>
+            <div className="mt-4 h-2 w-full rounded-full bg-zinc-800">
+              <div
+                className="h-full rounded-full bg-emerald-500/70"
+                style={{
+                  width: `${Math.max(20, Math.round((loadingSteps.length || 1) * 25))}%`,
+                }}
+              />
+            </div>
+            <div className="mt-4 space-y-2 text-left text-xs text-zinc-300">
+              {loadingSteps.map((step, index) => {
+                const isActive = index === 1;
+                const isDone = index === 0;
+                return (
+                  <div key={step} className="flex items-center gap-2">
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        isDone
+                          ? "bg-emerald-400"
+                          : isActive
+                            ? "bg-amber-400"
+                            : "bg-zinc-600"
+                      }`}
+                    />
+                    <span className={isActive ? "text-amber-200" : "text-zinc-300"}>
+                      {step}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-3 text-xs text-zinc-400">
+              This may take a minute. You can keep working in another tab.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-12">
         <header className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -381,6 +602,8 @@ export default function SeriesPage() {
             { id: "canon", label: "Canon" },
             { id: "mystery", label: "Mystery" },
             { id: "relationships", label: "Relationships" },
+            { id: "plots", label: "Plots" },
+            { id: "books", label: "Books" },
             { id: "memory", label: "Memory" },
             { id: "timeline", label: "Timeline" },
             { id: "logs", label: "Generation Logs" },
@@ -678,6 +901,61 @@ export default function SeriesPage() {
             </button>
           </div>
           <div className="mt-6 space-y-4">
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-zinc-100">Tension Curve</h3>
+                <span className="text-[10px] text-zinc-500">Auto-generated</span>
+              </div>
+              <div className="mt-3 h-32 rounded-lg border border-zinc-800 bg-zinc-900/40 p-3">
+                <svg viewBox="0 0 100 40" className="h-full w-full">
+                  {tensionCurveData.length > 1 && (
+                    <polyline
+                      fill="none"
+                      stroke="#34d399"
+                      strokeWidth="1.5"
+                      points={tensionCurveData
+                        .map((point, index) => {
+                          const x = (index / (tensionCurveData.length - 1)) * 100;
+                          const maxScore = Math.max(
+                            ...tensionCurveData.map((item) => item.score),
+                            1
+                          );
+                          const y = 36 - (point.score / maxScore) * 30;
+                          return `${x},${y}`;
+                        })
+                        .join(" ")}
+                    />
+                  )}
+                  {tensionCurveData.map((point, index) => {
+                    const x =
+                      tensionCurveData.length > 1
+                        ? (index / (tensionCurveData.length - 1)) * 100
+                        : 50;
+                    const maxScore = Math.max(
+                      ...tensionCurveData.map((item) => item.score),
+                      1
+                    );
+                    const y = 36 - (point.score / maxScore) * 30;
+                    return (
+                      <circle
+                        key={point.book}
+                        cx={x}
+                        cy={y}
+                        r="1.8"
+                        fill="#facc15"
+                      />
+                    );
+                  })}
+                </svg>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-zinc-400">
+                {tensionCurveData.map((point) => (
+                  <span key={point.book}>
+                    Book {point.book}: {point.score}
+                  </span>
+                ))}
+              </div>
+            </div>
             {seriesBible && (
               <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
                 <h3 className="text-sm font-semibold text-zinc-100">Series Bible</h3>
@@ -753,11 +1031,13 @@ export default function SeriesPage() {
 
         {activeTab === "characters" && (
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-            <h2 className="text-xl font-semibold">Characters</h2>
-            <p className="text-sm text-zinc-400">
-              Manage the characters across your series.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold">Characters</h2>
+                <p className="text-sm text-zinc-400">
+                  Manage the characters across your series.
+                </p>
+              </div>
               <button
                 onClick={async () => {
                   if (!seriesList[0]) return;
@@ -772,34 +1052,202 @@ export default function SeriesPage() {
                 Refresh Characters
               </button>
             </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {seriesCharacters.map((character) => (
-                <div
-                  key={String(character.id)}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
-                >
-                  <p className="text-sm font-semibold text-zinc-100">
-                    {String(character.name ?? "Unnamed")}
+
+            <div className="mt-4 grid gap-3 md:grid-cols-4">
+              {[
+                { label: "Protagonists", key: "protagonist" },
+                { label: "Antagonists", key: "antagonist" },
+                { label: "Supporting", key: "supporting" },
+                { label: "Other", key: "" },
+              ].map((item) => {
+                const count = Object.entries(groupedCharacters).reduce(
+                  (acc, [role, list]) => {
+                    if (item.key && role.includes(item.key)) {
+                      return acc + list.length;
+                    }
+                    if (!item.key && !role.includes("protagonist") && !role.includes("antagonist") && !role.includes("support")) {
+                      return acc + list.length;
+                    }
+                    return acc;
+                  },
+                  0
+                );
+                return (
+                  <div
+                    key={item.label}
+                    className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs"
+                  >
+                    <p className="text-xs text-zinc-400">{item.label}</p>
+                    <p className="mt-2 text-2xl font-semibold text-zinc-100">
+                      {count}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="space-y-3">
+                {Object.keys(groupedCharacters).length === 0 && (
+                  <p className="text-sm text-zinc-500">No characters yet.</p>
+                )}
+                {Object.entries(groupedCharacters).map(([role, characters]) => (
+                  <div key={role} className="space-y-2">
+                    <p className="text-xs font-semibold uppercase text-zinc-400">
+                      {role || "Uncategorized"}
+                    </p>
+                    {characters.map((character) => (
+                      <button
+                        key={String(character.id)}
+                        onClick={() => setSelectedCharacterId(String(character.id ?? ""))}
+                        className={`w-full rounded-lg border px-4 py-3 text-left text-xs transition ${
+                          String(character.id) === String(selectedCharacterId)
+                            ? "border-emerald-400/60 bg-emerald-500/10"
+                            : "border-zinc-800 bg-zinc-950/60"
+                        }`}
+                      >
+                        <p className="text-sm font-semibold text-zinc-100">
+                          {String(character.name ?? "Unnamed")}
+                        </p>
+                        <p className="text-xs text-zinc-400">
+                          {String(character.role ?? "Supporting")}
+                        </p>
+                        {character.description && (
+                          <p className="mt-2 text-xs text-zinc-300">
+                            {String(character.description)}
+                          </p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200">
+                {selectedCharacter ? (
+                  <>
+                    <p className="text-sm font-semibold text-zinc-100">
+                      {String(selectedCharacter.name ?? "Unnamed")}
+                    </p>
+                    <p className="text-xs text-zinc-400">
+                      Role: {String(selectedCharacter.role ?? "Supporting")}
+                    </p>
+                    <p className="mt-3 text-xs">
+                      {String(selectedCharacter.description ?? "No description yet.")}
+                    </p>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
+                        <p className="text-[10px] uppercase text-zinc-400">Motivation</p>
+                        <p className="mt-2 text-xs text-zinc-200">
+                          {String(selectedCharacter.motivation ?? "Not set")}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
+                        <p className="text-[10px] uppercase text-zinc-400">Conflict</p>
+                        <p className="mt-2 text-xs text-zinc-200">
+                          {String(selectedCharacter.conflict ?? "Not set")}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
+                        <p className="text-[10px] uppercase text-zinc-400">Personality</p>
+                        <p className="mt-2 text-xs text-zinc-200">
+                          {String(selectedCharacter.personality ?? "Not set")}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
+                        <p className="text-[10px] uppercase text-zinc-400">Backstory</p>
+                        <p className="mt-2 text-xs text-zinc-200">
+                          {String(selectedCharacter.backstory ?? "Not set")}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      <p className="text-xs font-semibold uppercase text-zinc-400">
+                        Emotional Memory
+                      </p>
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-3 text-xs text-zinc-200">
+                        {selectedCharacter.emotional_memory ? (
+                          <pre className="whitespace-pre-wrap text-[11px]">
+                            {JSON.stringify(selectedCharacter.emotional_memory ?? {}, null, 2)}
+                          </pre>
+                        ) : (
+                          <p className="text-xs text-zinc-400">No emotional memory captured.</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      <p className="text-xs font-semibold uppercase text-zinc-400">
+                        Arc Stages
+                      </p>
+                      <div className="space-y-2">
+                        {(selectedCharacter.arc_stages ?? selectedCharacter.arc?.stages ?? [])
+                          .slice(0, 4)
+                          .map((stage: unknown, index: number) => (
+                            <div
+                              key={`${selectedCharacter.id}-stage-${index}`}
+                              className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-200"
+                            >
+                              {typeof stage === "string" ? stage : JSON.stringify(stage)}
+                            </div>
+                          ))}
+                        {!(selectedCharacter.arc_stages ?? selectedCharacter.arc?.stages)?.length && (
+                          <p className="text-xs text-zinc-400">No arc stages available.</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      <p className="text-xs font-semibold uppercase text-zinc-400">
+                        Relationships Snapshot
+                      </p>
+                      <div className="space-y-2">
+                        {selectedCharacterRelationships.slice(0, 4).map((relationship) => (
+                          <div
+                            key={String(relationship.id)}
+                            className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-200"
+                          >
+                            <p className="text-xs text-zinc-400">
+                              {String(relationship.character_a_name ?? "?")} ↔ {String(
+                                relationship.character_b_name ?? "?"
+                              )}
+                            </p>
+                            <p className="mt-1 text-xs">
+                              {String(relationship.relationship_type ?? "")}
+                            </p>
+                          </div>
+                        ))}
+                        {selectedCharacterRelationships.length === 0 && (
+                          <p className="text-xs text-zinc-400">No relationships logged.</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      <p className="text-xs font-semibold uppercase text-zinc-400">
+                        Arc Snapshot
+                      </p>
+                      <pre className="whitespace-pre-wrap rounded-lg bg-zinc-900/70 p-3 text-[11px] text-zinc-200">
+                        {JSON.stringify(selectedCharacter.arc ?? {}, null, 2)}
+                      </pre>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-zinc-400">
+                    Select a character to view details.
                   </p>
-                  <p className="text-xs text-zinc-400">
-                    {String(character.role ?? "")}
-                  </p>
-                  <p className="mt-2 text-xs">
-                    {String(character.description ?? "")}
-                  </p>
-                </div>
-              ))}
+                )}
+              </div>
             </div>
           </section>
         )}
 
         {activeTab === "world" && (
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-            <h2 className="text-xl font-semibold">World</h2>
-            <p className="text-sm text-zinc-400">
-              Track world rules, lore, and settings.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold">World</h2>
+                <p className="text-sm text-zinc-400">
+                  Track world rules, lore, and settings.
+                </p>
+              </div>
               <button
                 onClick={async () => {
                   if (!seriesList[0]) return;
@@ -808,19 +1256,92 @@ export default function SeriesPage() {
                   );
                   const data = await response.json();
                   setSeriesWorld(data.world ?? null);
+                  setWorldSettingDraft(String(data.world?.setting ?? ""));
+                  setWorldRulesDraft(String(data.world?.rules ?? ""));
+                  setWorldLoreDraft(String(data.world?.lore ?? ""));
                 }}
                 className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
               >
                 Refresh World
               </button>
             </div>
-            {seriesWorld ? (
-              <pre className="mt-4 whitespace-pre-wrap rounded-lg bg-zinc-950/60 p-4 text-xs text-zinc-200">
-                {JSON.stringify(seriesWorld, null, 2)}
-              </pre>
-            ) : (
-              <p className="mt-4 text-xs text-zinc-500">No world data yet.</p>
-            )}
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="space-y-3">
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs uppercase text-zinc-400">World Overview</p>
+                  <p className="mt-2 text-sm text-zinc-200">
+                    {String(seriesWorld?.summary ?? "Add a world summary to guide your series.")}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs uppercase text-zinc-400">Setting</p>
+                  <textarea
+                    value={worldSettingDraft}
+                    onChange={(event) => setWorldSettingDraft(event.target.value)}
+                    className="mt-2 min-h-[120px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100"
+                    placeholder="City, era, cultural context"
+                  />
+                </div>
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs uppercase text-zinc-400">Rules & Constraints</p>
+                  <textarea
+                    value={worldRulesDraft}
+                    onChange={(event) => setWorldRulesDraft(event.target.value)}
+                    className="mt-2 min-h-[120px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100"
+                    placeholder="Rules, limitations, systems"
+                  />
+                </div>
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs uppercase text-zinc-400">Lore & History</p>
+                  <textarea
+                    value={worldLoreDraft}
+                    onChange={(event) => setWorldLoreDraft(event.target.value)}
+                    className="mt-2 min-h-[120px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100"
+                    placeholder="Lore, myths, historical anchors"
+                  />
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!seriesList[0]) return;
+                    await fetch("/api/series/world", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        seriesId: seriesList[0].id,
+                        setting: worldSettingDraft,
+                        rules: worldRulesDraft,
+                        lore: worldLoreDraft,
+                      }),
+                    });
+                    const response = await fetch(
+                      `/api/series/world?seriesId=${seriesList[0].id}`
+                    );
+                    const data = await response.json();
+                    setSeriesWorld(data.world ?? null);
+                  }}
+                  className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200"
+                >
+                  Save World Overview
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs uppercase text-zinc-400">World Elements</p>
+                  <p className="mt-2 text-xs text-zinc-400">
+                    {Array.isArray(seriesWorld?.elements) && seriesWorld?.elements.length
+                      ? "Elements linked to this series."
+                      : "No world elements yet. Add them from the Studio workflow or API."}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200">
+                  <pre className="whitespace-pre-wrap">
+                    {JSON.stringify(seriesWorld?.elements ?? [], null, 2)}
+                  </pre>
+                </div>
+              </div>
+            </div>
           </section>
         )}
 
@@ -1067,6 +1588,9 @@ export default function SeriesPage() {
                 />
               </label>
             </div>
+            <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-xs text-zinc-300">
+              Tip: Use consistent titles to connect clues with secrets (ex: "The Key" clue for "The Key" secret).
+            </div>
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <label className="text-xs text-zinc-300">
                 Search
@@ -1182,6 +1706,9 @@ export default function SeriesPage() {
                         {String(secret.title ?? "Secret")}
                       </p>
                       <p className="mt-2 text-xs">{String(secret.description ?? "")}</p>
+                      <p className="mt-2 text-[10px] text-zinc-500">
+                        Status: {String(secret.status ?? "open")}
+                      </p>
                     </>
                   )}
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -1264,6 +1791,9 @@ export default function SeriesPage() {
                     <>
                       <p className="text-xs text-zinc-400">Clue</p>
                       <p className="mt-2 text-xs">{String(clue.description ?? "")}</p>
+                      <p className="mt-2 text-[10px] text-zinc-500">
+                        Planted in book {String(clue.planted_in_book ?? "?")}
+                      </p>
                     </>
                   )}
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -1451,12 +1981,16 @@ export default function SeriesPage() {
                 Refresh Relationships
               </button>
             </div>
-            <div className="mt-4 space-y-3">
-              {filteredRelationships.map((relationship) => (
-                <div
-                  key={String(relationship.id)}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
-                >
+            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="space-y-3">
+                {filteredRelationships.length === 0 && (
+                  <p className="text-xs text-zinc-500">No relationships yet.</p>
+                )}
+                {filteredRelationships.map((relationship) => (
+                  <div
+                    key={String(relationship.id)}
+                    className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
+                  >
                   {editingRelationshipId === String(relationship.id ?? "") ? (
                     <div className="grid gap-2 md:grid-cols-2">
                       <input
@@ -1566,75 +2100,339 @@ export default function SeriesPage() {
                   </div>
                 </div>
               ))}
+              </div>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs uppercase text-zinc-400">By Status</p>
+                  <div className="mt-3 space-y-2 text-xs text-zinc-300">
+                    {["positive", "neutral", "tense", "broken"].map((status) => {
+                      const count = filteredRelationships.filter(
+                        (entry) => String(entry.status ?? "").toLowerCase() === status
+                      ).length;
+                      return (
+                        <div key={status} className="flex items-center justify-between">
+                          <span className="capitalize">{status}</span>
+                          <span className="text-zinc-400">{count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs uppercase text-zinc-400">Highlights</p>
+                  <p className="mt-2 text-xs text-zinc-400">
+                    Focus on tense or broken relationships for major plot beats.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activeTab === "plots" && (
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+            <h2 className="text-xl font-semibold">Plots</h2>
+            <p className="text-sm text-zinc-400">
+              Track plot threads across the series.
+            </p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <label className="text-xs text-zinc-300">
+                Thread name
+                <input
+                  value={plotName}
+                  onChange={(event) => setPlotName(event.target.value)}
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                />
+              </label>
+              <label className="text-xs text-zinc-300">
+                Type
+                <select
+                  value={plotType}
+                  onChange={(event) => setPlotType(event.target.value)}
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                >
+                  <option value="main">Main</option>
+                  <option value="subplot">Subplot</option>
+                  <option value="character">Character</option>
+                  <option value="world">World</option>
+                </select>
+              </label>
+              <label className="text-xs text-zinc-300">
+                Introduced in book
+                <input
+                  type="number"
+                  value={plotIntroducedBook}
+                  onChange={(event) =>
+                    setPlotIntroducedBook(Number(event.target.value) || 1)
+                  }
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                />
+              </label>
+              <label className="text-xs text-zinc-300">
+                Resolved in book (optional)
+                <input
+                  type="number"
+                  value={plotResolvedBook ?? ""}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    setPlotResolvedBook(value ? value : null);
+                  }}
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                />
+              </label>
+              <label className="text-xs text-zinc-300 md:col-span-2">
+                Description
+                <textarea
+                  value={plotDescription}
+                  onChange={(event) => setPlotDescription(event.target.value)}
+                  className="min-h-[90px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                />
+              </label>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <label className="text-xs text-zinc-300">
+                Filter
+                <select
+                  value={plotFilter}
+                  onChange={(event) => setPlotFilter(event.target.value)}
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                >
+                  <option value="all">All</option>
+                  <option value="main">Main</option>
+                  <option value="subplot">Subplot</option>
+                  <option value="character">Character</option>
+                  <option value="world">World</option>
+                </select>
+              </label>
+              <label className="text-xs text-zinc-300">
+                Search
+                <input
+                  value={plotSearch}
+                  onChange={(event) => setPlotSearch(event.target.value)}
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                />
+              </label>
+              <button
+                onClick={() => {
+                  setPlotFilter("all");
+                  setPlotSearch("");
+                }}
+                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+              >
+                Clear Filters
+              </button>
+              <button
+                onClick={async () => {
+                  if (!seriesList[0] || !plotName || !plotDescription) return;
+                  await fetch("/api/series/plot-threads", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      seriesId: seriesList[0].id,
+                      name: plotName,
+                      description: plotDescription,
+                      type: plotType,
+                      introducedInBook: plotIntroducedBook,
+                      resolvedInBook: plotResolvedBook,
+                    }),
+                  });
+                  setPlotName("");
+                  setPlotDescription("");
+                  const response = await fetch(
+                    `/api/series/plot-threads?seriesId=${seriesList[0].id}`
+                  );
+                  const data = await response.json();
+                  setPlotThreads(data.threads ?? []);
+                }}
+                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+              >
+                Add Thread
+              </button>
+              <button
+                onClick={async () => {
+                  if (!seriesList[0]) return;
+                  const response = await fetch(
+                    `/api/series/plot-threads?seriesId=${seriesList[0].id}`
+                  );
+                  const data = await response.json();
+                  setPlotThreads(data.threads ?? []);
+                }}
+                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+              >
+                Refresh Threads
+              </button>
+            </div>
+            <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="space-y-3">
+                {filteredPlots.length === 0 && (
+                  <p className="text-xs text-zinc-500">No plot threads yet.</p>
+                )}
+                {filteredPlots.map((thread) => (
+                  <div
+                    key={String(thread.id)}
+                    className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
+                  >
+                    <p className="text-sm font-semibold text-zinc-100">
+                      {String(thread.name ?? "Thread")}
+                    </p>
+                    <p className="text-xs text-zinc-400">
+                      {String(thread.type ?? "main")}
+                      <span className="ml-2 rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
+                        {String(thread.status ?? plotStatus)}
+                      </span>
+                    </p>
+                    <p className="mt-2 text-xs">{String(thread.description ?? "")}</p>
+                    <p className="mt-2 text-[10px] text-zinc-500">
+                      Book {String(thread.introduced_in_book ?? "?")}
+                      {thread.resolved_in_book ? ` → Book ${thread.resolved_in_book}` : ""}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        onClick={async () => {
+                          await fetch("/api/series/plot-threads/update", {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              id: String(thread.id ?? ""),
+                              status: "in_progress",
+                              resolvedInBook: thread.resolved_in_book ?? null,
+                            }),
+                          });
+                          const response = await fetch(
+                            `/api/series/plot-threads?seriesId=${seriesList[0].id}`
+                          );
+                          const data = await response.json();
+                          setPlotThreads(data.threads ?? []);
+                        }}
+                        className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                      >
+                        Mark In Progress
+                      </button>
+                      <button
+                        onClick={() =>
+                          setPendingDelete({
+                            id: String(thread.id ?? ""),
+                            endpoint: "/api/series/plot-threads/delete",
+                            refresh: async () => {
+                              const response = await fetch(
+                                `/api/series/plot-threads?seriesId=${seriesList[0].id}`
+                              );
+                              const data = await response.json();
+                              setPlotThreads(data.threads ?? []);
+                            },
+                          })
+                        }
+                        className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs uppercase text-zinc-400">Plot Summary</p>
+                  <p className="mt-2 text-xs text-zinc-400">
+                    {filteredPlots.length} threads across the series.
+                  </p>
+                </div>
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs uppercase text-zinc-400">By Type</p>
+                  <div className="mt-2 space-y-2 text-xs text-zinc-300">
+                    {[
+                      "main",
+                      "subplot",
+                      "character",
+                      "world",
+                    ].map((type) => {
+                      const count = filteredPlots.filter(
+                        (thread) => String(thread.type ?? "") === type
+                      ).length;
+                      return (
+                        <div key={type} className="flex items-center justify-between">
+                          <span className="capitalize">{type}</span>
+                          <span className="text-zinc-400">{count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activeTab === "books" && (
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold">Books</h2>
+                <p className="text-sm text-zinc-400">
+                  Overview of books in this series.
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!seriesList[0]) return;
+                  const response = await fetch(
+                    `/api/series/chapters?seriesId=${seriesList[0].id}`
+                  );
+                  const data = await response.json();
+                  setSeriesBooks(data.books ?? []);
+                }}
+                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+              >
+                Refresh Books
+              </button>
+            </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              {seriesBooks.length === 0 && (
+                <p className="text-xs text-zinc-500">No books yet.</p>
+              )}
+              {seriesBooks.map((book) => (
+                <div
+                  key={String(book.id)}
+                  className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-zinc-100">
+                      Book {String(book.book_number ?? "?")}: {String(
+                        book.title ?? "Untitled"
+                      )}
+                    </p>
+                    <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
+                      {String(book.status ?? "draft")}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-zinc-400">
+                    {String(book.summary ?? "No summary yet.")}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {book.novel_id && (
+                      <span className="rounded-full border border-emerald-500/40 px-2 py-0.5 text-[10px] text-emerald-200">
+                        Novel linked
+                      </span>
+                    )}
+                    <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
+                      Chapters: {String(book.chapter_count ?? "?")}
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
         )}
 
         {activeTab === "memory" && (
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-            <h2 className="text-xl font-semibold">Memory</h2>
-            <p className="text-sm text-zinc-400">
-              Capture canon updates, callbacks, and continuity notes.
-            </p>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <label className="text-xs text-zinc-300">
-                Category
-                <select
-                  value={newMemoryCategory}
-                  onChange={(event) => setNewMemoryCategory(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
-                >
-                  <option value="canon">Canon</option>
-                  <option value="callback">Callback</option>
-                  <option value="foreshadow">Foreshadow</option>
-                  <option value="clue">Clue</option>
-                  <option value="secret">Secret</option>
-                  <option value="relationship">Relationship</option>
-                  <option value="knowledge">Knowledge</option>
-                  <option value="warning">Warning</option>
-                </select>
-              </label>
-              <label className="text-xs text-zinc-300 md:col-span-2">
-                Memory entry
-                <textarea
-                  value={newMemoryContent}
-                  onChange={(event) => setNewMemoryContent(event.target.value)}
-                  className="min-h-[120px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
-                />
-              </label>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <button
-                onClick={async () => {
-                  if (!seriesList[0] || !newMemoryContent) return;
-                  const response = await fetch("/api/series/memory", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      seriesId: seriesList[0].id,
-                      category: newMemoryCategory,
-                      content: newMemoryContent,
-                    }),
-                  });
-                  if (response.ok) {
-                    setMemoryStatus("Saved memory entry.");
-                    setNewMemoryContent("");
-                    const refreshed = await fetch(
-                      `/api/series/memory?seriesId=${seriesList[0].id}`
-                    );
-                    const data = await refreshed.json();
-                    setSeriesMemory(data.entries ?? []);
-                    const warningsResponse = await fetch(
-                      `/api/series/memory/validate?seriesId=${seriesList[0].id}`
-                    );
-                    const warningsData = await warningsResponse.json();
-                    setMemoryWarnings(warningsData.warnings ?? []);
-                  }
-                }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
-              >
-                Save Memory
-              </button>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold">Memory</h2>
+                <p className="text-sm text-zinc-400">
+                  Capture canon updates, callbacks, and continuity notes.
+                </p>
+              </div>
               <button
                 onClick={async () => {
                   if (!seriesList[0]) return;
@@ -1653,32 +2451,152 @@ export default function SeriesPage() {
               >
                 Refresh Memory
               </button>
-              {memoryStatus && (
-                <span className="text-xs text-emerald-400">{memoryStatus}</span>
-              )}
             </div>
-            {memoryWarnings.length > 0 && (
-              <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-xs text-amber-200">
-                <p className="text-sm font-semibold">Memory issues detected</p>
-                <ul className="mt-2 list-disc pl-5">
-                  {memoryWarnings.map((warning) => (
-                    <li key={warning.id}>{warning.message}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <div className="mt-4 space-y-3">
-              {seriesMemory.map((entry) => (
-                <div
-                  key={String(entry.id)}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
+
+            <div className="mt-4 grid gap-3 md:grid-cols-4">
+              {memoryTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveMemoryTab(tab.id)}
+                  className={`rounded-xl border px-4 py-3 text-left text-xs transition ${
+                    activeMemoryTab === tab.id
+                      ? "border-emerald-400/60 bg-emerald-500/10"
+                      : "border-zinc-800 bg-zinc-950/60"
+                  }`}
                 >
-                  <p className="text-xs text-zinc-400">
-                    {String(entry.category ?? "canon")} • {String(entry.created_at ?? "")}
+                  <p className="text-xs text-zinc-400">{tab.label}</p>
+                  <p className="mt-2 text-lg font-semibold text-zinc-100">
+                    {memoryCounts[tab.id] ?? 0}
                   </p>
-                  <p className="mt-2 text-xs">{String(entry.content ?? "")}</p>
-                </div>
+                </button>
               ))}
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs">
+                <p className="text-xs text-zinc-400">Warnings</p>
+                <p className="mt-2 text-lg font-semibold text-amber-200">
+                  {memoryWarnings.length}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+              <div className="space-y-4">
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <p className="text-xs uppercase text-zinc-400">Add Memory Entry</p>
+                  <div className="mt-3 grid gap-3">
+                    <label className="text-xs text-zinc-300">
+                      Category
+                      <select
+                        value={newMemoryCategory}
+                        onChange={(event) => setNewMemoryCategory(event.target.value)}
+                        className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                      >
+                        <option value="canon">Canon</option>
+                        <option value="callback">Callback</option>
+                        <option value="foreshadow">Foreshadow</option>
+                        <option value="clue">Clue</option>
+                        <option value="secret">Secret</option>
+                        <option value="relationship">Relationship</option>
+                        <option value="knowledge">Knowledge</option>
+                        <option value="warning">Warning</option>
+                      </select>
+                    </label>
+                    <label className="text-xs text-zinc-300">
+                      Memory entry
+                      <textarea
+                        value={newMemoryContent}
+                        onChange={(event) => setNewMemoryContent(event.target.value)}
+                        className="min-h-[120px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                      />
+                    </label>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        onClick={async () => {
+                          if (!seriesList[0] || !newMemoryContent) return;
+                          const response = await fetch("/api/series/memory", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              seriesId: seriesList[0].id,
+                              category: newMemoryCategory,
+                              content: newMemoryContent,
+                            }),
+                          });
+                          if (response.ok) {
+                            setMemoryStatus("Saved memory entry.");
+                            setNewMemoryContent("");
+                            const refreshed = await fetch(
+                              `/api/series/memory?seriesId=${seriesList[0].id}`
+                            );
+                            const data = await refreshed.json();
+                            setSeriesMemory(data.entries ?? []);
+                            const warningsResponse = await fetch(
+                              `/api/series/memory/validate?seriesId=${seriesList[0].id}`
+                            );
+                            const warningsData = await warningsResponse.json();
+                            setMemoryWarnings(warningsData.warnings ?? []);
+                          }
+                        }}
+                        className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                      >
+                        Save Memory
+                      </button>
+                      <button
+                        onClick={() => {
+                          setNewMemoryContent("");
+                          setNewMemoryCategory("canon");
+                        }}
+                        className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    {memoryStatus && (
+                      <p className="text-xs text-emerald-300">{memoryStatus}</p>
+                    )}
+                  </div>
+                </div>
+
+                {memoryWarnings.length > 0 && (
+                  <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-xs text-amber-200">
+                    <p className="font-semibold">Continuity Warnings</p>
+                    <ul className="mt-2 list-disc space-y-1 pl-4">
+                      {memoryWarnings.map((warning, index) => (
+                        <li key={`${warning}-${index}`}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs uppercase text-zinc-400">Entries</p>
+                    <span className="text-xs text-zinc-500">
+                      {filteredMemoryEntries.length} entries
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-3">
+                    {filteredMemoryEntries.length === 0 && (
+                      <p className="text-xs text-zinc-500">No entries yet.</p>
+                    )}
+                    {filteredMemoryEntries.map((entry) => (
+                      <div
+                        key={String(entry.id)}
+                        className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-200"
+                      >
+                        <p className="text-[10px] uppercase text-zinc-400">
+                          {String(entry.category ?? "canon")}
+                        </p>
+                        <p className="mt-2 text-xs">{String(entry.content ?? "")}</p>
+                        <p className="mt-2 text-[10px] text-zinc-500">
+                          {String(entry.created_at ?? "")}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           </section>
         )}
@@ -1815,130 +2733,168 @@ export default function SeriesPage() {
                 Refresh Timeline
               </button>
             </div>
-            <div className="mt-4 space-y-3">
-              {filteredTimeline.map((event) => (
-                <div
-                  key={String(event.id)}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
-                >
-                  {editingTimelineId === String(event.id ?? "") ? (
-                    <div className="space-y-2">
-                      <input
-                        value={editingTimelineTitle}
-                        onChange={(eventInput) => setEditingTimelineTitle(eventInput.target.value)}
-                        className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
-                      />
-                      <textarea
-                        value={editingTimelineDescription}
-                        onChange={(eventInput) => setEditingTimelineDescription(eventInput.target.value)}
-                        className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
-                      />
-                      <div className="grid gap-2 md:grid-cols-2">
-                        <input
-                          type="number"
-                          value={editingTimelineBook}
-                          onChange={(eventInput) =>
-                            setEditingTimelineBook(Number(eventInput.target.value) || 1)
-                          }
-                          className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
-                        />
-                        <input
-                          type="number"
-                          value={editingTimelineOrder}
-                          onChange={(eventInput) =>
-                            setEditingTimelineOrder(Number(eventInput.target.value) || 1)
-                          }
-                          className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
-                        />
-                      </div>
+            <div className="mt-4 space-y-6">
+              {Object.keys(groupedTimeline).length === 0 && (
+                <p className="text-xs text-zinc-500">No timeline events yet.</p>
+              )}
+              {Object.entries(groupedTimeline)
+                .sort(([a], [b]) => Number(a) - Number(b))
+                .map(([bookNumber, events]) => (
+                  <div key={bookNumber} className="space-y-3">
+                    <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-2">
+                      <p className="text-xs font-semibold text-zinc-200">
+                        Book {Number(bookNumber) || "Unassigned"}
+                      </p>
+                      <span className="text-[10px] text-zinc-400">
+                        {events.length} events
+                      </span>
                     </div>
-                  ) : (
-                    <>
-                      <p className="text-sm font-semibold text-zinc-100">
-                        {String(event.title ?? "Event")}
-                      </p>
-                      <p className="text-xs text-zinc-400">
-                        <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
-                          Book {String(event.book_number ?? "?")}
-                        </span>
-                        <span className="ml-2 rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
-                          Order {String(event.event_order ?? "?")}
-                        </span>
-                      </p>
-                      <p className="mt-2 text-xs">{String(event.description ?? "")}</p>
-                    </>
-                  )}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {editingTimelineId === String(event.id ?? "") ? (
-                      <button
-                        onClick={async () => {
-                          await fetch("/api/series/timeline-events/update", {
-                            method: "PUT",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              id: String(event.id ?? ""),
-                              eventName: editingTimelineTitle,
-                              description: editingTimelineDescription,
-                              eventType: "plot",
-                            }),
-                          });
-                          setEditingTimelineId(null);
-                          const response = await fetch(
-                            `/api/series/timeline?seriesId=${seriesList[0].id}`
-                          );
-                          const data = await response.json();
-                          setSeriesTimeline(data.events ?? []);
-                        }}
-                        className="rounded-full border border-emerald-500/60 px-3 py-1 text-[10px] text-emerald-200"
-                      >
-                        Save
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setEditingTimelineId(String(event.id ?? ""));
-                          setEditingTimelineTitle(String(event.title ?? ""));
-                          setEditingTimelineDescription(String(event.description ?? ""));
-                          setEditingTimelineBook(Number(event.book_number ?? 1));
-                          setEditingTimelineOrder(Number(event.event_order ?? 1));
-                        }}
-                        className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
-                      >
-                        Edit
-                      </button>
-                    )}
-                    <button
-                      onClick={() =>
-                        setPendingDelete({
-                          id: String(event.id ?? ""),
-                          endpoint: "/api/series/timeline-events/delete",
-                          refresh: async () => {
-                            const response = await fetch(
-                              `/api/series/timeline?seriesId=${seriesList[0].id}`
-                            );
-                            const data = await response.json();
-                            setSeriesTimeline(data.events ?? []);
-                          },
-                        })
-                      }
-                      className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
-                    >
-                      Delete
-                    </button>
+                    <div className="space-y-4">
+                      {events.map((event, index) => (
+                        <div key={String(event.id)} className="relative pl-6">
+                          <span className="absolute left-1 top-3 h-full w-px bg-zinc-800" />
+                          <span
+                            className={`absolute left-0 top-3 h-3 w-3 rounded-full border bg-zinc-950 ${
+                              String(event.event_type ?? event.eventType ?? "plot") === "character"
+                                ? "border-blue-400/60"
+                                : String(event.event_type ?? event.eventType ?? "plot") === "world"
+                                  ? "border-purple-400/60"
+                                  : "border-emerald-400/60"
+                            }`}
+                          />
+                          <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200">
+                          {editingTimelineId === String(event.id ?? "") ? (
+                            <div className="space-y-2">
+                              <input
+                                value={editingTimelineTitle}
+                                onChange={(eventInput) => setEditingTimelineTitle(eventInput.target.value)}
+                                className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                              />
+                              <textarea
+                                value={editingTimelineDescription}
+                                onChange={(eventInput) => setEditingTimelineDescription(eventInput.target.value)}
+                                className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                              />
+                              <div className="grid gap-2 md:grid-cols-2">
+                                <input
+                                  type="number"
+                                  value={editingTimelineBook}
+                                  onChange={(eventInput) =>
+                                    setEditingTimelineBook(Number(eventInput.target.value) || 1)
+                                  }
+                                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                                />
+                                <input
+                                  type="number"
+                                  value={editingTimelineOrder}
+                                  onChange={(eventInput) =>
+                                    setEditingTimelineOrder(Number(eventInput.target.value) || 1)
+                                  }
+                                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-sm font-semibold text-zinc-100">
+                                {String(event.title ?? "Event")}
+                              </p>
+                              <p className="text-xs text-zinc-400">
+                                <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
+                                  Book {String(event.book_number ?? "?")}
+                                </span>
+                                <span className="ml-2 rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
+                                  Order {String(event.event_order ?? "?")}
+                                </span>
+                                <span className="ml-2 rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
+                                  {String(event.event_type ?? event.eventType ?? "plot")}
+                                </span>
+                              </p>
+                              {event.in_world_date && (
+                                <p className="mt-2 text-[10px] text-zinc-500">
+                                  Date: {String(event.in_world_date)}
+                                </p>
+                              )}
+                              <p className="mt-2 text-xs">{String(event.description ?? "")}</p>
+                            </>
+                          )}
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {editingTimelineId === String(event.id ?? "") ? (
+                              <button
+                                onClick={async () => {
+                                  await fetch("/api/series/timeline-events/update", {
+                                    method: "PUT",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({
+                                      id: String(event.id ?? ""),
+                                      eventName: editingTimelineTitle,
+                                      description: editingTimelineDescription,
+                                      eventType: "plot",
+                                    }),
+                                  });
+                                  setEditingTimelineId(null);
+                                  const response = await fetch(
+                                    `/api/series/timeline?seriesId=${seriesList[0].id}`
+                                  );
+                                  const data = await response.json();
+                                  setSeriesTimeline(data.events ?? []);
+                                }}
+                                className="rounded-full border border-emerald-500/60 px-3 py-1 text-[10px] text-emerald-200"
+                              >
+                                Save
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  setEditingTimelineId(String(event.id ?? ""));
+                                  setEditingTimelineTitle(String(event.title ?? ""));
+                                  setEditingTimelineDescription(String(event.description ?? ""));
+                                  setEditingTimelineBook(Number(event.book_number ?? 1));
+                                  setEditingTimelineOrder(Number(event.event_order ?? 1));
+                                }}
+                                className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                              >
+                                Edit
+                              </button>
+                            )}
+                            <button
+                              onClick={() =>
+                                setPendingDelete({
+                                  id: String(event.id ?? ""),
+                                  endpoint: "/api/series/timeline-events/delete",
+                                  refresh: async () => {
+                                    const response = await fetch(
+                                      `/api/series/timeline?seriesId=${seriesList[0].id}`
+                                    );
+                                    const data = await response.json();
+                                    setSeriesTimeline(data.events ?? []);
+                                  },
+                                })
+                              }
+                              className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
           </section>
         )}
 
         {activeTab === "logs" && (
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-            <h2 className="text-xl font-semibold">Generation Logs</h2>
-            <p className="text-sm text-zinc-400">
-              Track model calls and outputs for this series.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold">Generation Logs</h2>
+                <p className="text-sm text-zinc-400">
+                  Track model calls and outputs for this series.
+                </p>
+              </div>
               <button
                 onClick={async () => {
                   if (!seriesList[0]) return;
@@ -1946,24 +2902,58 @@ export default function SeriesPage() {
                     `/api/series/generation-log?seriesId=${seriesList[0].id}`
                   );
                   const data = await response.json();
-                  setSeriesMemory(data.logs ?? []);
+                  setSeriesLogs(data.logs ?? []);
                 }}
                 className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
               >
                 Refresh Logs
               </button>
             </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <label className="text-xs text-zinc-300">
+                Filter
+                <select
+                  value={logTypeFilter}
+                  onChange={(event) => setLogTypeFilter(event.target.value)}
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                >
+                  {logTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type === "all" ? "All" : type}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-xs">
+                <p className="text-xs text-zinc-400">Total Logs</p>
+                <p className="mt-1 text-lg font-semibold text-zinc-100">
+                  {filteredLogs.length}
+                </p>
+              </div>
+            </div>
+
             <div className="mt-4 space-y-3">
-              {seriesMemory.slice(0, 10).map((log) => (
+              {filteredLogs.length === 0 && (
+                <p className="text-xs text-zinc-500">No logs yet.</p>
+              )}
+              {filteredLogs.slice(0, 10).map((log) => (
                 <div
                   key={String(log.id)}
                   className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
                 >
-                  <p className="text-xs text-zinc-400">
-                    {String(log.type ?? "")}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-zinc-400">
+                      {String(log.type ?? "Unknown")}
+                    </p>
+                    <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
+                      {String(log.status ?? "")}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-zinc-300">
+                    {String(log.summary ?? log.message ?? "")}
                   </p>
-                  <p className="mt-2 text-xs">{String(log.status ?? "")}</p>
-                  <p className="mt-2 text-xs text-zinc-400">
+                  <p className="mt-2 text-[10px] text-zinc-500">
                     {String(log.started_at ?? "")}
                   </p>
                 </div>
