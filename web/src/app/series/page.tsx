@@ -2423,7 +2423,7 @@ export default function SeriesPage() {
                     {String(book.summary ?? "No summary yet.")}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {book.novel_id && (
+                    {Boolean(book.novel_id) && (
                       <span className="rounded-full border border-emerald-500/40 px-2 py-0.5 text-[10px] text-emerald-200">
                         Novel linked
                       </span>
