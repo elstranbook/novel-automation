@@ -2755,30 +2755,32 @@ export default function SeriesPage() {
               )}
               {Object.entries(groupedTimeline)
                 .sort(([a], [b]) => Number(a) - Number(b))
-                .map(([bookNumber, events]) => (
-                  <div key={bookNumber} className="space-y-3">
-                    <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-2">
-                      <p className="text-xs font-semibold text-zinc-200">
-                        Book {Number(bookNumber) || "Unassigned"}
-                      </p>
-                      <span className="text-[10px] text-zinc-400">
-                        {events.length} events
-                      </span>
-                    </div>
-                    <div className="space-y-4">
-                      {events.map((event, index) => (
-                        <div key={String(event.id)} className="relative pl-6">
-                          <span className="absolute left-1 top-3 h-full w-px bg-zinc-800" />
-                          <span
-                            className={`absolute left-0 top-3 h-3 w-3 rounded-full border bg-zinc-950 ${
-                              String(event.event_type ?? event.eventType ?? "plot") === "character"
-                                ? "border-blue-400/60"
-                                : String(event.event_type ?? event.eventType ?? "plot") === "world"
-                                  ? "border-purple-400/60"
-                                  : "border-emerald-400/60"
-                            }`}
-                          />
-                          <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200">
+                .map(([bookNumber, events]) => {
+                  const list = Array.isArray(events) ? events : [];
+                  return (
+                    <div key={bookNumber} className="space-y-3">
+                      <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-2">
+                        <p className="text-xs font-semibold text-zinc-200">
+                          Book {Number(bookNumber) || "Unassigned"}
+                        </p>
+                        <span className="text-[10px] text-zinc-400">
+                          {list.length} events
+                        </span>
+                      </div>
+                      <div className="space-y-4">
+                        {list.map((event, index) => (
+                          <div key={String(event.id)} className="relative pl-6">
+                            <span className="absolute left-1 top-3 h-full w-px bg-zinc-800" />
+                            <span
+                              className={`absolute left-0 top-3 h-3 w-3 rounded-full border bg-zinc-950 ${
+                                String(event.event_type ?? event.eventType ?? "plot") === "character"
+                                  ? "border-blue-400/60"
+                                  : String(event.event_type ?? event.eventType ?? "plot") === "world"
+                                    ? "border-purple-400/60"
+                                    : "border-emerald-400/60"
+                              }`}
+                            />
+                            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200">
                           {editingTimelineId === String(event.id ?? "") ? (
                             <div className="space-y-2">
                               <input
