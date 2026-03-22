@@ -375,6 +375,14 @@ function StudioContent() {
   const [authEmail, setAuthEmail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const isFilled = (value: unknown) => {
+    if (Array.isArray(value)) return value.length > 0;
+    if (value && typeof value === "object") {
+      return Object.keys(value as Record<string, unknown>).length > 0;
+    }
+    return Boolean(value);
+  };
+
   const stepsCompleted = useMemo(() => {
     const steps = [
       storyDetails,
@@ -1757,6 +1765,135 @@ function StudioContent() {
 
         {activeStudioTab === "pipeline" && (
           <>
+            <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-6">
+              <h2 className="text-xl font-semibold">Pipeline prompt map</h2>
+              <p className="mt-2 text-sm text-zinc-300">
+                This map shows which outputs feed each step and what needs to exist
+                before a step can run.
+              </p>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                {[
+                  {
+                    step: "Story details",
+                    requires: ["Title", "Novel about"],
+                    produces: ["storyDetails"],
+                    status: isFilled(storyDetails) ? "ready" : "missing",
+                  },
+                  {
+                    step: "Premises & endings",
+                    requires: ["storyDetails"],
+                    produces: ["premisesAndEndings"],
+                    status: isFilled(premisesAndEndings) ? "ready" : "missing",
+                  },
+                  {
+                    step: "Synopsis",
+                    requires: ["storyDetails", "premisesAndEndings"],
+                    produces: ["novelSynopsis"],
+                    status: isFilled(novelSynopsis) ? "ready" : "missing",
+                  },
+                  {
+                    step: "Character profiles",
+                    requires: ["storyDetails", "novelSynopsis"],
+                    produces: ["characterProfiles"],
+                    status: isFilled(characterProfiles) ? "ready" : "missing",
+                  },
+                  {
+                    step: "Novel plan",
+                    requires: [
+                      "storyDetails",
+                      "novelSynopsis",
+                      "characterProfiles",
+                    ],
+                    produces: ["novelPlan"],
+                    status: isFilled(novelPlan) ? "ready" : "missing",
+                  },
+                  {
+                    step: "Chapter outline",
+                    requires: ["storyDetails", "novelPlan"],
+                    produces: ["chapterOutline"],
+                    status: isFilled(chapterOutline) ? "ready" : "missing",
+                  },
+                  {
+                    step: "Chapter guide",
+                    requires: [
+                      "chapterOutline",
+                      "novelSynopsis",
+                      "characterProfiles",
+                      "novelPlan",
+                    ],
+                    produces: ["chapterGuide"],
+                    status: isFilled(chapterGuide) ? "ready" : "missing",
+                  },
+                  {
+                    step: "Chapter beats",
+                    requires: ["chapterGuide"],
+                    produces: ["chapterBeats"],
+                    status: isFilled(chapterBeats) ? "ready" : "missing",
+                  },
+                  {
+                    step: "Scenes",
+                    requires: ["chapterBeats"],
+                    produces: ["allScenes"],
+                    status: isFilled(allScenes) ? "ready" : "missing",
+                  },
+                  {
+                    step: "Prose",
+                    requires: ["allScenes"],
+                    produces: ["proseScenes"],
+                    status: isFilled(proseScenes) ? "ready" : "missing",
+                  },
+                  {
+                    step: "Exports",
+                    requires: ["proseScenes"],
+                    produces: ["novelFormats"],
+                    status: isFilled(novelFormats) ? "ready" : "missing",
+                  },
+                ].map((row) => (
+                  <div
+                    key={row.step}
+                    className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-zinc-100">
+                        {row.step}
+                      </p>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                          row.status === "ready"
+                            ? "border-emerald-400/60 text-emerald-200"
+                            : "border-amber-500/40 text-amber-200"
+                        }`}
+                      >
+                        {row.status === "ready" ? "Ready" : "Missing"}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-[11px] text-zinc-400">Requires</p>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {row.requires.map((item) => (
+                        <span
+                          key={`${row.step}-${item}`}
+                          className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]"
+                        >
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="mt-3 text-[11px] text-zinc-400">Produces</p>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {row.produces.map((item) => (
+                        <span
+                          key={`${row.step}-${item}`}
+                          className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]"
+                        >
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
             <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <div className="grid gap-4 md:grid-cols-2">
             <label className="flex flex-col gap-2 text-sm">
@@ -2711,6 +2848,70 @@ function StudioContent() {
             Clear Articles
           </button>
         </div>
+
+        <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6">
+          <h3 className="text-lg font-semibold text-zinc-100">Promotional prompt map</h3>
+          <p className="mt-2 text-sm text-zinc-300">
+            This map shows what feeds promotional articles and social snippets.
+          </p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {[
+              {
+                step: "Promotional article",
+                requires: ["storyDetails"],
+                produces: ["promotionalArticles"],
+                status: isFilled(promotionalArticles) ? "ready" : "missing",
+              },
+              {
+                step: "Social snippets",
+                requires: ["storyDetails", "promotionalArticles (optional)"],
+                produces: ["socialSnippets"],
+                status: isFilled(socialSnippets) ? "ready" : "missing",
+              },
+            ].map((row) => (
+              <div
+                key={row.step}
+                className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-zinc-100">{row.step}</p>
+                  <span
+                    className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                      row.status === "ready"
+                        ? "border-emerald-400/60 text-emerald-200"
+                        : "border-amber-500/40 text-amber-200"
+                    }`}
+                  >
+                    {row.status === "ready" ? "Ready" : "Missing"}
+                  </span>
+                </div>
+                <p className="mt-2 text-[11px] text-zinc-400">Requires</p>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {row.requires.map((item) => (
+                    <span
+                      key={`${row.step}-${item}`}
+                      className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]"
+                    >
+                      {item}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-3 text-[11px] text-zinc-400">Produces</p>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {row.produces.map((item) => (
+                    <span
+                      key={`${row.step}-${item}`}
+                      className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]"
+                    >
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <label className="text-xs text-zinc-300">
             Article Type
