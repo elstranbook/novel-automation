@@ -2480,7 +2480,7 @@ export default function SeriesPage() {
                 >
                   <p className="text-xs text-zinc-400">{tab.label}</p>
                   <p className="mt-2 text-lg font-semibold text-zinc-100">
-                    {memoryCounts[tab.id] ?? 0}
+                    {Number(memoryCounts[tab.id] ?? 0)}
                   </p>
                 </button>
               ))}
