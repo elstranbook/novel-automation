@@ -238,7 +238,7 @@ export default function SeriesPage() {
       (acc, entry) => {
         const bookNumber = Number(entry.book_number ?? 0) || 0;
         const key = bookNumber || 0;
-        const existing = acc[key] ?? [];
+        const existing = Array.isArray(acc[key]) ? acc[key] : [];
         acc[key] = [...existing, entry];
         return acc;
       },
