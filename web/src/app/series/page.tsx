@@ -250,8 +250,8 @@ export default function SeriesPage() {
     return seriesCharacters.reduce(
       (acc, character) => {
         const role = String(character.role ?? "supporting").toLowerCase();
-        if (!acc[role]) acc[role] = [];
-        acc[role].push(character);
+        const existing = Array.isArray(acc[role]) ? acc[role] : [];
+        acc[role] = [...existing, character];
         return acc;
       },
       {} as Record<string, Array<Record<string, unknown>>>
