@@ -1188,19 +1188,25 @@ export default function SeriesPage() {
                         Arc Stages
                       </p>
                       <div className="space-y-2">
-                        {(selectedCharacter.arc_stages ?? selectedCharacter.arc?.stages ?? [])
-                          .slice(0, 4)
-                          .map((stage: unknown, index: number) => (
+                        {(() => {
+                          const arcStages = Array.isArray(selectedCharacter.arc_stages)
+                            ? selectedCharacter.arc_stages
+                            : Array.isArray((selectedCharacter.arc as { stages?: unknown })?.stages)
+                              ? (selectedCharacter.arc as { stages?: unknown[] }).stages
+                              : [];
+                          return arcStages.slice(0, 4).map((stage, index) => (
                             <div
                               key={`${selectedCharacter.id}-stage-${index}`}
                               className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-200"
                             >
                               {typeof stage === "string" ? stage : JSON.stringify(stage)}
                             </div>
-                          ))}
-                        {!(selectedCharacter.arc_stages ?? selectedCharacter.arc?.stages)?.length && (
-                          <p className="text-xs text-zinc-400">No arc stages available.</p>
-                        )}
+                          ));
+                        })()}
+                        {!Array.isArray(selectedCharacter.arc_stages) &&
+                          !Array.isArray((selectedCharacter.arc as { stages?: unknown })?.stages) && (
+                            <p className="text-xs text-zinc-400">No arc stages available.</p>
+                          )}
                       </div>
                     </div>
                     <div className="mt-4 space-y-2">
