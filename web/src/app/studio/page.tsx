@@ -324,11 +324,12 @@ function StudioContent() {
   const [storyDetails, setStoryDetails] = useState<StoryDetails | null>(null);
   const [premisesAndEndings, setPremisesAndEndings] =
     useState<PremisesAndEndings | null>(null);
-  const [showPremisesPanel, setShowPremisesPanel] = useState(true);
+  const [showPremisesPanel, setShowPremisesPanel] = useState(false);
   const [novelSynopsis, setNovelSynopsis] = useState<string | null>(null);
   const [characterProfiles, setCharacterProfiles] = useState<string | null>(null);
   const [bookDescriptions, setBookDescriptions] =
     useState<BookDescriptions | null>(null);
+  const [showBookDescriptions, setShowBookDescriptions] = useState(false);
   const [novelKeywords, setNovelKeywords] = useState<string[] | null>(null);
   const [novelBisac, setNovelBisac] = useState<string[] | null>(null);
   const [novelPlan, setNovelPlan] = useState<string | null>(null);
@@ -2171,103 +2172,102 @@ function StudioContent() {
               </button>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200">
-                <p className="text-sm font-semibold text-zinc-100">
-                  Chosen premise
-                </p>
-                <p className="mt-2 text-sm">
-                  {premisesAndEndings.chosen_premise}
-                </p>
-                <div className="mt-3 space-y-2">
-                  <p className="text-[10px] uppercase text-zinc-500">Select a premise</p>
-                  {premisesAndEndings.premises.map((premise, index) => (
-                    <button
-                      key={`premise-select-${index}`}
-                      onClick={async () => {
-                        const updated = {
-                          ...premisesAndEndings,
-                          chosen_premise: premise,
-                        };
-                        setPremisesAndEndings(updated);
-                        try {
-                          const user = await requireUser();
-                          const novelIdValue = await ensureNovel(user.id);
-                          await saveSingleRow(
-                            "premises_and_endings",
-                            {
-                              premises: updated.premises,
-                              chosen_premise: updated.chosen_premise,
-                              potential_endings: updated.potential_endings,
-                              chosen_ending: updated.chosen_ending,
-                            },
-                            novelIdValue,
-                            user.id
-                          );
-                        } catch (err) {
-                          setError(err instanceof Error ? err.message : "Unknown error");
-                        }
-                      }}
-                      className={`w-full rounded-lg border px-3 py-2 text-left text-xs ${
-                        premisesAndEndings.chosen_premise === premise
-                          ? "border-emerald-400/60 bg-emerald-500/10"
-                          : "border-zinc-800 bg-zinc-950/60"
-                      }`}
-                    >
-                      {premise}
-                    </button>
-                  ))}
+                  <p className="text-sm font-semibold text-zinc-100">
+                    Chosen premise
+                  </p>
+                  <p className="mt-2 text-sm">
+                    {premisesAndEndings.chosen_premise}
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    <p className="text-[10px] uppercase text-zinc-500">Select a premise</p>
+                    {premisesAndEndings.premises.map((premise, index) => (
+                      <button
+                        key={`premise-select-${index}`}
+                        onClick={async () => {
+                          const updated = {
+                            ...premisesAndEndings,
+                            chosen_premise: premise,
+                          };
+                          setPremisesAndEndings(updated);
+                          try {
+                            const user = await requireUser();
+                            const novelIdValue = await ensureNovel(user.id);
+                            await saveSingleRow(
+                              "premises_and_endings",
+                              {
+                                premises: updated.premises,
+                                chosen_premise: updated.chosen_premise,
+                                potential_endings: updated.potential_endings,
+                                chosen_ending: updated.chosen_ending,
+                              },
+                              novelIdValue,
+                              user.id
+                            );
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "Unknown error");
+                          }
+                        }}
+                        className={`w-full rounded-lg border px-3 py-2 text-left text-xs ${
+                          premisesAndEndings.chosen_premise === premise
+                            ? "border-emerald-400/60 bg-emerald-500/10"
+                            : "border-zinc-800 bg-zinc-950/60"
+                        }`}
+                      >
+                        {premise}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-4 text-sm font-semibold text-zinc-100">
+                    Chosen ending
+                  </p>
+                  <p className="mt-2 text-sm">
+                    {premisesAndEndings.chosen_ending}
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    <p className="text-[10px] uppercase text-zinc-500">Select an ending</p>
+                    {premisesAndEndings.potential_endings.map((ending, index) => (
+                      <button
+                        key={`ending-select-${index}`}
+                        onClick={async () => {
+                          const updated = {
+                            ...premisesAndEndings,
+                            chosen_ending: ending,
+                          };
+                          setPremisesAndEndings(updated);
+                          try {
+                            const user = await requireUser();
+                            const novelIdValue = await ensureNovel(user.id);
+                            await saveSingleRow(
+                              "premises_and_endings",
+                              {
+                                premises: updated.premises,
+                                chosen_premise: updated.chosen_premise,
+                                potential_endings: updated.potential_endings,
+                                chosen_ending: updated.chosen_ending,
+                              },
+                              novelIdValue,
+                              user.id
+                            );
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "Unknown error");
+                          }
+                        }}
+                        className={`w-full rounded-lg border px-3 py-2 text-left text-xs ${
+                          premisesAndEndings.chosen_ending === ending
+                            ? "border-emerald-400/60 bg-emerald-500/10"
+                            : "border-zinc-800 bg-zinc-950/60"
+                        }`}
+                      >
+                        {ending}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <p className="mt-4 text-sm font-semibold text-zinc-100">
-                  Chosen ending
-                </p>
-                <p className="mt-2 text-sm">
-                  {premisesAndEndings.chosen_ending}
-                </p>
-                <div className="mt-3 space-y-2">
-                  <p className="text-[10px] uppercase text-zinc-500">Select an ending</p>
-                  {premisesAndEndings.potential_endings.map((ending, index) => (
-                    <button
-                      key={`ending-select-${index}`}
-                      onClick={async () => {
-                        const updated = {
-                          ...premisesAndEndings,
-                          chosen_ending: ending,
-                        };
-                        setPremisesAndEndings(updated);
-                        try {
-                          const user = await requireUser();
-                          const novelIdValue = await ensureNovel(user.id);
-                          await saveSingleRow(
-                            "premises_and_endings",
-                            {
-                              premises: updated.premises,
-                              chosen_premise: updated.chosen_premise,
-                              potential_endings: updated.potential_endings,
-                              chosen_ending: updated.chosen_ending,
-                            },
-                            novelIdValue,
-                            user.id
-                          );
-                        } catch (err) {
-                          setError(err instanceof Error ? err.message : "Unknown error");
-                        }
-                      }}
-                      className={`w-full rounded-lg border px-3 py-2 text-left text-xs ${
-                        premisesAndEndings.chosen_ending === ending
-                          ? "border-emerald-400/60 bg-emerald-500/10"
-                          : "border-zinc-800 bg-zinc-950/60"
-                      }`}
-                    >
-                      {ending}
-                    </button>
-                  ))}
-                </div>
-              </div>
                 <Collapsible label="Premises & endings">
                   <pre className="whitespace-pre-wrap text-xs text-zinc-200">
                     {formatReadable(premisesAndEndings)}
                   </pre>
                 </Collapsible>
-              )}
               </div>
             </div>
           )}
@@ -3225,8 +3225,8 @@ function StudioContent() {
             </button>
           </div>
           {showPremisesPanel && (
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
               <h3 className="text-lg font-semibold text-zinc-100">
                 Social media snippets
               </h3>
