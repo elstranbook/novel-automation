@@ -1594,6 +1594,67 @@ function StudioContent() {
     }
   };
 
+  const generateExportFormats = async () => {
+    if (!proseScenes) return null;
+    const response = await fetch("/api/generate/formats", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scenes: proseScenes,
+        title: title || storyDetails?.title || "Untitled Novel",
+      }),
+    });
+    if (!response.ok) {
+      throw new Error("Failed to generate formats");
+    }
+    const data = await response.json();
+    const formats = data.formats as {
+      txt: string;
+      markdown: string;
+      html: string;
+    };
+
+    try {
+      const user = await requireUser();
+      const novelIdValue = await ensureNovel(user.id);
+      await supabase
+        .from("novel_formats")
+        .delete()
+        .eq("novel_id", novelIdValue)
+        .in("format_name", ["txt", "md", "html"]);
+      await supabase.from("novel_formats").insert([
+        {
+          novel_id: novelIdValue,
+          user_id: user.id,
+          format_name: "txt",
+          content: formats.txt,
+        },
+        {
+          novel_id: novelIdValue,
+          user_id: user.id,
+          format_name: "md",
+          content: formats.markdown,
+        },
+        {
+          novel_id: novelIdValue,
+          user_id: user.id,
+          format_name: "html",
+          content: formats.html,
+        },
+      ]);
+      setNovelFormats((prev) => ({
+        ...prev,
+        txt: formats.txt,
+        md: formats.markdown,
+        html: formats.html,
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    }
+
+    return formats;
+  };
+
   const saveDocxExport = async () => {
     if (!proseScenes) return;
     setSavingExport("docx");
@@ -2594,40 +2655,42 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">12. Formats & exports</h2>
+          <h2 className="text-xl font-semibold">11. Formats & exports</h2>
           <p className="mt-2 text-sm text-zinc-400">
             Export the full novel prose (all scenes stitched together).
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             <button
-              onClick={() =>
-                proseScenes &&
-                saveNovelFormat("txt", formatProseText(proseScenes), "text/plain")
-              }
+              onClick={async () => {
+                if (!proseScenes) return;
+                const formats = await generateExportFormats();
+                if (!formats) return;
+                await saveNovelFormat("txt", formats.txt, "text/plain");
+              }}
               disabled={!proseScenes || savingExport === "txt"}
               className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
             >
               {savingExport === "txt" ? "Saving..." : "Save TXT"}
             </button>
             <button
-              onClick={() =>
-                proseScenes &&
-                saveNovelFormat(
-                  "md",
-                  formatProseMarkdown(proseScenes),
-                  "text/markdown"
-                )
-              }
+              onClick={async () => {
+                if (!proseScenes) return;
+                const formats = await generateExportFormats();
+                if (!formats) return;
+                await saveNovelFormat("md", formats.markdown, "text/markdown");
+              }}
               disabled={!proseScenes || savingExport === "md"}
               className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
             >
               {savingExport === "md" ? "Saving..." : "Save Markdown"}
             </button>
             <button
-              onClick={() =>
-                proseScenes &&
-                saveNovelFormat("html", formatProseHtml(proseScenes), "text/html")
-              }
+              onClick={async () => {
+                if (!proseScenes) return;
+                const formats = await generateExportFormats();
+                if (!formats) return;
+                await saveNovelFormat("html", formats.html, "text/html");
+              }}
               disabled={!proseScenes || savingExport === "html"}
               className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
             >
@@ -2724,7 +2787,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">Bonus: Cover prompt</h2>
+          <h2 className="text-xl font-semibold">12. Cover prompt</h2>
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateCoverPrompt}
@@ -2761,7 +2824,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">Bonus: Quote snippets</h2>
+          <h2 className="text-xl font-semibold">13. Quote snippets</h2>
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateQuotes}
@@ -2803,7 +2866,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">Bonus: Editing feedback</h2>
+          <h2 className="text-xl font-semibold">Editing feedback</h2>
           <textarea
             value={editingText}
             onChange={(event) => setEditingText(event.target.value)}

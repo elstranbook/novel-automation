@@ -1,43 +1,80 @@
 import { NextResponse } from "next/server";
 
-const formatScenesToText = (scenes: Record<string, string[]>) => {
-  return Object.entries(scenes)
-    .map(([title, sceneList]) => {
-      const chapterText = sceneList
+const buildStructuredNovel = (scenes: Record<string, string[]>, title?: string) => {
+  const chapters = Object.entries(scenes).map(([chapterTitle, chapterScenes]) => {
+    const [numberPart, ...titleParts] = chapterTitle.split(":");
+    const number = numberPart?.trim() ?? "";
+    const name = titleParts.join(":").trim();
+    return {
+      number,
+      title: name,
+      scenes: chapterScenes,
+    };
+  });
+
+  return {
+    title: title ?? "Untitled Novel",
+    author: "AI Novel Generator",
+    chapters,
+  };
+};
+
+const formatScenesToText = (novelContent: ReturnType<typeof buildStructuredNovel>) => {
+  const header = `${novelContent.title}\n${"=".repeat(novelContent.title.length)}\n\n`;
+  const chapterText = novelContent.chapters
+    .map((chapter) => {
+      const titleLine = chapter.title
+        ? `${chapter.number}: ${chapter.title}`
+        : chapter.number;
+      const scenes = chapter.scenes
         .map((scene, index) => `Scene ${index + 1}\n${scene}`)
         .join("\n\n");
-      return `${title}\n${"=".repeat(title.length)}\n\n${chapterText}`;
+      return `${titleLine}\n${"-".repeat(titleLine.length)}\n\n${scenes}`;
     })
     .join("\n\n");
+
+  return `${header}${chapterText}`;
 };
 
-const formatScenesToMarkdown = (scenes: Record<string, string[]>) => {
-  return Object.entries(scenes)
-    .map(([title, sceneList]) => {
-      const chapterText = sceneList
-        .map((scene, index) => `### Scene ${index + 1}\n\n${scene}`)
-        .join("\n\n");
-      return `# ${title}\n\n${chapterText}`;
-    })
-    .join("\n\n");
+const formatScenesToMarkdown = (novelContent: ReturnType<typeof buildStructuredNovel>) => {
+  return [
+    `# ${novelContent.title}`,
+    `*Author: ${novelContent.author}*`,
+    "",
+    ...novelContent.chapters.flatMap((chapter) => {
+      const titleLine = chapter.title
+        ? `${chapter.number}: ${chapter.title}`
+        : chapter.number;
+      const sceneLines = chapter.scenes.map(
+        (scene, index) => `### Scene ${index + 1}\n\n${scene}`
+      );
+      return [`## ${titleLine}`, "", ...sceneLines, ""];
+    }),
+  ].join("\n");
 };
 
-const formatScenesToHtml = (scenes: Record<string, string[]>) => {
-  const chapters = Object.entries(scenes)
-    .map(([title, sceneList]) => {
-      const sceneHtml = sceneList
-        .map((scene, index) => `<!----><h3>Scene ${index + 1}</h3><p>${scene.replace(/\n/g, "<br />")}</p>`)
+const formatScenesToHtml = (novelContent: ReturnType<typeof buildStructuredNovel>) => {
+  const chapters = novelContent.chapters
+    .map((chapter) => {
+      const titleLine = chapter.title
+        ? `${chapter.number}: ${chapter.title}`
+        : chapter.number;
+      const sceneHtml = chapter.scenes
+        .map(
+          (scene, index) =>
+            `<!----><h3>Scene ${index + 1}</h3><p>${scene.replace(/\n/g, "<br />")}</p>`
+        )
         .join("");
-      return `<!----><section><h2>${title}</h2>${sceneHtml}</section>`;
+      return `<!----><section><h2>${titleLine}</h2>${sceneHtml}</section>`;
     })
     .join("");
 
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Novel Export</title></head><body>${chapters}</body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>${novelContent.title}</title></head><body><h1>${novelContent.title}</h1><p><em>Author: ${novelContent.author}</em></p>${chapters}</body></html>`;
 };
 
 export async function POST(request: Request) {
   try {
-    const { scenes } = await request.json();
+    const { scenes, title } = await request.json();
 
     if (!scenes) {
       return NextResponse.json(
@@ -46,10 +83,11 @@ export async function POST(request: Request) {
       );
     }
 
+    const novelContent = buildStructuredNovel(scenes, title);
     const formatted = {
-      txt: formatScenesToText(scenes),
-      markdown: formatScenesToMarkdown(scenes),
-      html: formatScenesToHtml(scenes),
+      txt: formatScenesToText(novelContent),
+      markdown: formatScenesToMarkdown(novelContent),
+      html: formatScenesToHtml(novelContent),
     };
 
     return NextResponse.json({ formats: formatted });

@@ -84,7 +84,27 @@ Write with an emotionally engaging, fast-paced tone tailored to teen readers, us
       maxTokens: 2000,
     });
 
-    return NextResponse.json({ quotes: response });
+    if (Array.isArray(response)) {
+      return NextResponse.json({ quotes: response });
+    }
+
+    const lines = String(response).trim().split(/\r?\n/);
+    const parsed: string[] = [];
+    lines.forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      if (trimmed.startsWith("\"") && trimmed.includes(" — ")) {
+        parsed.push(trimmed);
+      } else if (trimmed.startsWith("\"") && trimmed.includes(" - ")) {
+        parsed.push(trimmed.replace(" - ", " — "));
+      }
+    });
+
+    if (parsed.length === 0) {
+      return NextResponse.json({ quotes: [String(response)] });
+    }
+
+    return NextResponse.json({ quotes: parsed });
   } catch (error) {
     console.error(error);
     return NextResponse.json(
