@@ -1,6 +1,133 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 
+const createDefaultChapterEntry = () => ({
+  key_dialogue: [
+    "This is where a revealing line of dialogue would appear.",
+    "Here's where a character would express their emotions.",
+    "This dialogue would advance the plot or reveal character.",
+  ],
+  symbolism: [
+    "A symbolic element that represents the character's journey",
+    "An object or image that reinforces the chapter's theme",
+  ],
+  emotional_pacing:
+    "The chapter would start with tension, build through conflict, and end with a moment of realization.",
+  sensory_details: [
+    "A visual detail that grounds the reader in the setting",
+    "A sound that creates atmosphere in a key scene",
+    "A tactile sensation that makes the scene feel real",
+  ],
+  foreshadowing: [
+    "A subtle hint about a future plot development",
+    "An unexplained detail that will become significant later",
+  ],
+  scene_goal: "The protagonist needs to overcome an obstacle related to their overall character arc.",
+});
+
+const parseGuideResponse = (response: unknown) => {
+  if (!response) return null;
+  if (typeof response === "object") {
+    return response as Record<string, Record<string, unknown>>;
+  }
+  if (typeof response === "string") {
+    try {
+      const match = response.match(/\{[\s\S]*\}/);
+      const parsed = match ? JSON.parse(match[0]) : JSON.parse(response);
+      return parsed as Record<string, Record<string, unknown>>;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
+
+const completeChapterGuide = (
+  chapterGuide: Record<string, Record<string, unknown>>,
+  outlineArray: Array<Record<string, unknown>>
+) => {
+  const result: Record<string, Record<string, unknown>> = {};
+  outlineArray.forEach((chapter, index) => {
+    const number = String(chapter.number ?? index + 1);
+    const entry = chapterGuide[number] ?? {};
+    const defaults = createDefaultChapterEntry();
+    const completed: Record<string, unknown> = {};
+
+    Object.entries(defaults).forEach(([key, value]) => {
+      const current = (entry as Record<string, unknown>)[key];
+      if (current) {
+        completed[key] = current;
+      } else {
+        completed[key] = value;
+      }
+    });
+
+    result[number] = completed;
+  });
+
+  return result;
+};
+
+const generateMissingChapters = async (
+  chapterGuide: Record<string, Record<string, unknown>>,
+  outlineArray: Array<Record<string, unknown>>,
+  model: string
+) => {
+  const updated = { ...chapterGuide };
+
+  for (const [index, chapter] of outlineArray.entries()) {
+    const number = String(chapter.number ?? index + 1);
+    if (updated[number]) continue;
+
+    const prompt = `Create a detailed guide for Chapter ${number}: ${
+      chapter.title ?? `Chapter ${number}`
+    }.
+
+Chapter Summary: ${chapter.summary ?? "No summary available"}
+
+Include these exact fields:
+1. key_dialogue: 3-4 specific lines or exchanges
+2. symbolism: 2-3 symbolic elements
+3. emotional_pacing: A description of the emotional arc
+4. sensory_details: 3-4 vivid sensory descriptions
+5. foreshadowing: 2-3 subtle hints about future developments
+6. scene_goal: What the viewpoint character wants to achieve
+
+Format as valid JSON for a SINGLE chapter with the exact structure shown.`;
+
+    try {
+      const response = await runChatCompletion({
+        model,
+        system: "You are creating a detailed guide for a single chapter in a novel. Format your response as valid JSON.",
+        prompt,
+        jsonResponse: true,
+        maxTokens: 1000,
+      });
+
+      const parsed = parseGuideResponse(response);
+      if (parsed) {
+        if (parsed[number]) {
+          updated[number] = parsed[number];
+        } else if (
+          (parsed as Record<string, unknown>).key_dialogue ||
+          (parsed as Record<string, unknown>).symbolism ||
+          (parsed as Record<string, unknown>).emotional_pacing
+        ) {
+          updated[number] = parsed as unknown as Record<string, unknown>;
+        }
+      }
+    } catch {
+      updated[number] = createDefaultChapterEntry();
+    }
+
+    if (!updated[number]) {
+      updated[number] = createDefaultChapterEntry();
+    }
+  }
+
+  return updated;
+};
+
 export async function POST(request: Request) {
   try {
     const { chapterOutline, novelSynopsis, characterProfiles, novelPlan, storyDetails, model } =
@@ -96,47 +223,52 @@ IMPORTANT INSTRUCTIONS:
 
 Your response will be parsed directly as JSON and any formatting errors will cause failure.`;
 
-    const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
-      system,
-      prompt,
-      jsonResponse: false,
-      maxTokens: 3000,
-    });
+    const baseModel = model || "gpt-4.1-mini";
+    const maxRetries = 3;
+    let guide: Record<string, Record<string, unknown>> | null = null;
 
-    let guide: Record<string, Record<string, unknown>> = {};
-    try {
-      if (typeof response === "string") {
-        const match = response.match(/\{[\s\S]*\}/);
-        const parsed = match ? JSON.parse(match[0]) : JSON.parse(response);
-        guide = parsed as Record<string, Record<string, unknown>>;
-      } else if (response && typeof response === "object") {
-        guide = { ...(response as Record<string, Record<string, unknown>>) };
+    for (let attempt = 0; attempt < maxRetries; attempt += 1) {
+      const response = await runChatCompletion({
+        model: baseModel,
+        system,
+        prompt,
+        jsonResponse: attempt === 0,
+        maxTokens: 3000,
+      });
+
+      guide = parseGuideResponse(response);
+      if (!guide) {
+        const shortenedPrompt = prompt.replace(
+          /Novel Context:[\s\S]*?Chapter Outline:/,
+          "Novel Context: Young adult novel with character development and emotional journey.\n\nChapter Outline:"
+        );
+        const retryResponse = await runChatCompletion({
+          model: baseModel,
+          system,
+          prompt: shortenedPrompt,
+          jsonResponse: false,
+          maxTokens: 3000,
+        });
+        guide = parseGuideResponse(retryResponse);
       }
-    } catch {
+
+      if (guide) break;
+    }
+
+    if (!guide) {
       return NextResponse.json(
         { error: "Failed to parse chapter guide JSON" },
         { status: 502 }
       );
     }
 
-    outlineArray.forEach((chapter, index) => {
-      const number = String(
-        (chapter as Record<string, unknown>).number ?? index + 1
-      );
-      if (!guide[number]) {
-        guide[number] = {
-          key_dialogue: [`Missing guide for chapter ${number}.`],
-          symbolism: ["Missing symbolism"],
-          emotional_pacing: "Missing emotional pacing.",
-          sensory_details: ["Missing sensory details"],
-          foreshadowing: ["Missing foreshadowing"],
-          scene_goal: "Missing scene goal.",
-        };
-      }
-    });
+    if (Object.keys(guide).length < outlineArray.length) {
+      guide = await generateMissingChapters(guide, outlineArray, baseModel);
+    }
 
-    return NextResponse.json({ guide });
+    const completedGuide = completeChapterGuide(guide, outlineArray);
+
+    return NextResponse.json({ guide: completedGuide });
   } catch (error) {
     console.error(error);
     return NextResponse.json(

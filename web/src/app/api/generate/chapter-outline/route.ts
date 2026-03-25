@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 
-const ensureOutlineShape = (outline: unknown, minCount = 18) => {
+const ensureOutlineShape = (
+  outline: unknown,
+  minCount = 18,
+  fillMissing = true
+) => {
   let response: Array<Record<string, unknown>> = [];
 
   if (Array.isArray(outline)) {
@@ -15,7 +19,7 @@ const ensureOutlineShape = (outline: unknown, minCount = 18) => {
     }
   }
 
-  if (response.length < minCount) {
+  if (response.length < minCount && fillMissing) {
     const existingCount = response.length;
     for (let i = existingCount + 1; i <= minCount; i += 1) {
       response.push({
@@ -134,13 +138,61 @@ This is for a software application that needs this exact format to function prop
       parsed = raw;
     }
 
-    const outline = ensureOutlineShape(parsed, 18);
+    let outline = ensureOutlineShape(parsed, 18);
 
     if (outline.some((chapter) => String(chapter.title ?? "").includes("needs generation"))) {
-      return NextResponse.json({
-        outline,
-        warning: "Outline incomplete; regenerate to fill missing chapters.",
+      const missingStart = outline.findIndex((chapter) =>
+        String(chapter.title ?? "").includes("needs generation")
+      );
+      const missingNumbers = outline
+        .filter((chapter) => String(chapter.title ?? "").includes("needs generation"))
+        .map((chapter) => Number(chapter.number ?? 0))
+        .filter((value) => value > 0);
+
+      const fillPrompt = `You are continuing a chapter outline for "${title}".
+We already have chapters 1-${missingStart}. Create full chapter entries for chapters ${missingNumbers.join(", ")},
+keeping the tone, emotional arc, and themes consistent. Use the same JSON array format with fields:
+number, title, pov, summary, emotional_development, theme_focus, estimated_word_count, events.
+Do not include chapters outside of ${missingNumbers.join(", ")}.`; 
+
+      const fillRaw = await runChatCompletion({
+        model: model || "gpt-4.1-mini",
+        system,
+        prompt: `${fillPrompt}\n\nContext:\n${structuredPlan}\n\nAuthor Intent:\n${novelAbout}`,
+        jsonResponse: false,
       });
+
+      let fillParsed: unknown = fillRaw;
+      try {
+        if (typeof fillRaw === "string") {
+          const match = fillRaw.match(/\[\s*{[\s\S]*}\s*\]/);
+          fillParsed = match ? JSON.parse(match[0]) : JSON.parse(fillRaw);
+        } else {
+          fillParsed = fillRaw;
+        }
+      } catch {
+        fillParsed = fillRaw;
+      }
+
+      const fillOutline = ensureOutlineShape(fillParsed, missingNumbers.length, false);
+      const filledMap = new Map(
+        fillOutline.map((chapter) => [Number(chapter.number ?? 0), chapter])
+      );
+
+      outline = outline.map((chapter) => {
+        const num = Number(chapter.number ?? 0);
+        if (filledMap.has(num)) {
+          return filledMap.get(num) ?? chapter;
+        }
+        return chapter;
+      });
+
+      if (outline.some((chapter) => String(chapter.title ?? "").includes("needs generation"))) {
+        return NextResponse.json({
+          outline,
+          warning: "Outline incomplete; regenerate to fill missing chapters.",
+        });
+      }
     }
 
     return NextResponse.json({ outline });
