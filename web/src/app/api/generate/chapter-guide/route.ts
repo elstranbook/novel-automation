@@ -36,7 +36,15 @@ const parseGuideResponse = (response: unknown) => {
       const parsed = match ? JSON.parse(match[0]) : JSON.parse(response);
       return parsed as Record<string, Record<string, unknown>>;
     } catch {
-      return null;
+      try {
+        const match = response.match(/\{[\s\S]*\}/);
+        if (!match) return null;
+        let cleanText = match[0].replace(/\n|\r/g, " ");
+        cleanText = cleanText.replace(/,\s*}/g, "}").replace(/,\s*]/g, "]");
+        return JSON.parse(cleanText) as Record<string, Record<string, unknown>>;
+      } catch {
+        return null;
+      }
     }
   }
   return null;
@@ -224,7 +232,8 @@ IMPORTANT INSTRUCTIONS:
 Your response will be parsed directly as JSON and any formatting errors will cause failure.`;
 
     const baseModel = model || "gpt-4.1-mini";
-    const maxRetries = 3;
+    const maxRetries = 5;
+    let retryDelay = 3000;
     let guide: Record<string, Record<string, unknown>> | null = null;
 
     for (let attempt = 0; attempt < maxRetries; attempt += 1) {
@@ -232,7 +241,7 @@ Your response will be parsed directly as JSON and any formatting errors will cau
         model: baseModel,
         system,
         prompt,
-        jsonResponse: attempt === 0,
+        jsonResponse: true,
         maxTokens: 3000,
       });
 
@@ -246,20 +255,47 @@ Your response will be parsed directly as JSON and any formatting errors will cau
           model: baseModel,
           system,
           prompt: shortenedPrompt,
-          jsonResponse: false,
+          jsonResponse: true,
           maxTokens: 3000,
         });
         guide = parseGuideResponse(retryResponse);
       }
 
-      if (guide) break;
+      if (!guide) {
+        const shortenedPrompt = prompt.replace(
+          /Novel Context:[\s\S]*?Chapter Outline:/,
+          "Novel Context: Young adult novel with character development and emotional journey.\n\nChapter Outline:"
+        );
+        const rawResponse = await runChatCompletion({
+          model: baseModel,
+          system,
+          prompt: shortenedPrompt,
+          jsonResponse: false,
+          maxTokens: 3000,
+        });
+        guide = parseGuideResponse(rawResponse);
+      }
+
+      if (guide && Object.keys(guide).length > 0) {
+        break;
+      }
+
+      if (attempt < maxRetries - 1) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
+        retryDelay *= 2;
+      }
     }
 
-    if (!guide) {
-      return NextResponse.json(
-        { error: "Failed to parse chapter guide JSON" },
-        { status: 502 }
+    if (!guide || Object.keys(guide).length === 0) {
+      const fallback = outlineArray.reduce(
+        (acc, chapter, index) => {
+          const number = String(chapter.number ?? index + 1);
+          acc[number] = createDefaultChapterEntry();
+          return acc;
+        },
+        {} as Record<string, Record<string, unknown>>
       );
+      return NextResponse.json({ guide: fallback, warning: "Default chapter guide used." });
     }
 
     if (Object.keys(guide).length < outlineArray.length) {
