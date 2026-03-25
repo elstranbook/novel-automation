@@ -2267,6 +2267,7 @@ function StudioContent() {
                     {formatReadable(premisesAndEndings)}
                   </pre>
                 </Collapsible>
+              )}
               </div>
             </div>
           )}
@@ -3214,6 +3215,16 @@ function StudioContent() {
         </p>
 
         <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold">Premises & endings</p>
+            <button
+              onClick={() => setShowPremisesPanel((prev) => !prev)}
+              className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+            >
+              {showPremisesPanel ? "Hide" : "Show"}
+            </button>
+          </div>
+          {showPremisesPanel && (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-semibold text-zinc-100">

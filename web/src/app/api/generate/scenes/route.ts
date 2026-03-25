@@ -193,7 +193,7 @@ Return your scenes ONLY as a JSON array of strings.`;
   let parsed: unknown = response;
   try {
     if (typeof response === "string") {
-      const match = response.match(/\[\s*{[\s\S]*}\s*\]/);
+      const match = response.match(/\[[\s\S]*\]/);
       parsed = match ? JSON.parse(match[0]) : JSON.parse(response);
     }
   } catch {
@@ -201,7 +201,7 @@ Return your scenes ONLY as a JSON array of strings.`;
   }
 
   if (Array.isArray(parsed)) {
-    return parsed as Array<Record<string, unknown>>;
+    return parsed;
   }
 
   return [`Scene for Chapter ${chapterNumber}: ${chapterTitle}`];
@@ -241,6 +241,14 @@ export async function POST(request: Request) {
     }
 
     const allScenes: Record<string, string[]> = {};
+    const normalizeSceneValue = (value: unknown) => {
+      if (typeof value === "string") return value;
+      try {
+        return JSON.stringify(value, null, 2) ?? "";
+      } catch {
+        return String(value);
+      }
+    };
 
     for (const chapter of chapters) {
       const chapterNumber = String(chapter.number ?? "?");
@@ -257,8 +265,8 @@ export async function POST(request: Request) {
 
       const chapterTitle = `Chapter ${chapter.number ?? "?"}: ${chapter.title ?? "Untitled"}`;
       allScenes[chapterTitle] = Array.isArray(scenes)
-        ? scenes.map((scene) => String(scene))
-        : [String(scenes)];
+        ? scenes.map((scene) => normalizeSceneValue(scene))
+        : [normalizeSceneValue(scenes)];
     }
 
     return NextResponse.json({ scenes: allScenes });
