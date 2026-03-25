@@ -364,6 +364,7 @@ function StudioContent() {
   const [activeStudioTab, setActiveStudioTab] = useState<
     "pipeline" | "promotional"
   >("pipeline");
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [showPipelineMap, setShowPipelineMap] = useState(false);
   const [showPromotionalMap, setShowPromotionalMap] = useState(false);
   const [coverPrompt, setCoverPrompt] = useState<string | null>(null);
@@ -468,6 +469,7 @@ function StudioContent() {
       user_id: userIdValue,
     });
     if (insertError) throw insertError;
+    setLastSavedAt(new Date().toLocaleString());
   };
 
   const loadNovels = async (userIdValue: string) => {
@@ -1585,6 +1587,7 @@ function StudioContent() {
         format_name: format,
         content,
       });
+      setLastSavedAt(new Date().toLocaleString());
       setNovelFormats((prev) => ({ ...prev, [format]: content }));
       setMessage("Export saved to your library.");
     } catch (err) {
@@ -1642,6 +1645,7 @@ function StudioContent() {
           content: formats.html,
         },
       ]);
+      setLastSavedAt(new Date().toLocaleString());
       setNovelFormats((prev) => ({
         ...prev,
         txt: formats.txt,
@@ -1726,12 +1730,17 @@ function StudioContent() {
             <Link href="/" className="text-sm text-zinc-400">
               ← Back to home
             </Link>
-            <Link
-              href="/series"
-              className="rounded-full border border-emerald-500/60 px-3 py-1 text-xs text-emerald-200"
-            >
-              Go to Series
-            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              {lastSavedAt && (
+                <span className="text-xs text-zinc-400">Last saved: {lastSavedAt}</span>
+              )}
+              <Link
+                href="/series"
+                className="rounded-full border border-emerald-500/60 px-3 py-1 text-xs text-emerald-200"
+              >
+                Go to Series
+              </Link>
+            </div>
           </div>
           <h1 className="text-3xl font-semibold">Studio</h1>
           <p className="text-zinc-300">
