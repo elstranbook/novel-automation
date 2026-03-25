@@ -367,7 +367,8 @@ export default function SeriesPage() {
         setAuthEmail(user.email ?? null);
         await loadSeries(user.id);
       } else {
-        window.location.href = "/login";
+        const redirectTo = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `/login?redirect=${redirectTo}`;
       }
     };
 

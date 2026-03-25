@@ -1,12 +1,23 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 
 export default function LoginPage() {
   const supabase = createSupabaseBrowserClient();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const ownerEmail = "elstranbooks@gmail.com";
+  const redirectTo = useMemo(() => {
+    const rawRedirect = searchParams.get("redirect");
+    if (!rawRedirect) return "/";
+    if (rawRedirect.startsWith("/") && !rawRedirect.startsWith("//")) {
+      return rawRedirect;
+    }
+    return "/";
+  }, [searchParams]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,7 +36,8 @@ export default function LoginPage() {
     if (error) {
       setMessage(error.message);
     } else {
-      setMessage("Signed in! You can return to the studio.");
+      setMessage("Signed in! Redirecting...");
+      router.push(redirectTo);
     }
   };
 

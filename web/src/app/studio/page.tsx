@@ -810,7 +810,8 @@ function StudioContent() {
           setNovelAbout(prefillAbout);
         }
       } else {
-        window.location.href = "/login";
+        const redirectTo = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `/login?redirect=${redirectTo}`;
       }
     };
 
@@ -942,7 +943,12 @@ function StudioContent() {
       const response = await fetch("/api/generate/synopsis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ storyDetails, premisesAndEndings, model }),
+        body: JSON.stringify({
+          storyDetails,
+          premisesAndEndings,
+          model,
+          studioTitle: title,
+        }),
       });
       if (!response.ok) throw new Error("Failed to generate synopsis");
       const data = await response.json();
@@ -2047,8 +2053,9 @@ function StudioContent() {
               </pre>
             </div>
           )}
-          <div className="mt-6 flex flex-wrap gap-3">
-            <button
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap gap-3">
+              <button
               onClick={generateStoryDetails}
               disabled={!title || !novelAbout || loadingStep === "story"}
               className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-zinc-900 disabled:opacity-50"
@@ -2349,26 +2356,30 @@ function StudioContent() {
               : "Generate Book Descriptions"}
           </button>
           {bookDescriptions && (
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              {Object.entries(bookDescriptions).map(([key, value]) => (
-                <div
-                  key={key}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-zinc-100">{key}</p>
-                    <button
-                      onClick={() =>
-                        downloadText(`${title || "story"}_${key}.txt`, value)
-                      }
-                      className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+            <div className="mt-4">
+              <Collapsible label="Book descriptions">
+                <div className="grid gap-4 md:grid-cols-2">
+                  {Object.entries(bookDescriptions).map(([key, value]) => (
+                    <div
+                      key={key}
+                      className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
                     >
-                      Download
-                    </button>
-                  </div>
-                  <pre className="mt-2 whitespace-pre-wrap text-xs">{value}</pre>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-zinc-100">{key}</p>
+                        <button
+                          onClick={() =>
+                            downloadText(`${title || "story"}_${key}.txt`, value)
+                          }
+                          className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                        >
+                          Download
+                        </button>
+                      </div>
+                      <pre className="mt-2 whitespace-pre-wrap text-xs">{value}</pre>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </Collapsible>
             </div>
           )}
         </section>

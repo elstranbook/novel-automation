@@ -3,7 +3,7 @@ import { runChatCompletion } from "@/lib/openaiClient";
 
 export async function POST(request: Request) {
   try {
-    const { storyDetails, premisesAndEndings, model } = await request.json();
+    const { storyDetails, premisesAndEndings, model, studioTitle } = await request.json();
 
     if (!storyDetails) {
       return NextResponse.json(
@@ -12,7 +12,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const title = storyDetails.title ?? "Untitled";
+    const title = storyDetails.title ?? studioTitle ?? "Untitled";
     const theme = storyDetails.story_theme ?? "Growth and self-discovery";
     const wordCount = storyDetails.estimated_word_count ?? "70,000-90,000";
     const targetAge = storyDetails.target_age_range ?? "13-18";

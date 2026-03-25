@@ -19,7 +19,8 @@ export default function Home() {
 
   const handleNavigate = (href: string) => {
     if (!userId) {
-      router.push("/login");
+      const redirectTo = encodeURIComponent(href);
+      router.push(`/login?redirect=${redirectTo}`);
       return;
     }
     router.push(href);
