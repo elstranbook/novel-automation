@@ -6,8 +6,19 @@ export const maxDuration = 300;
 
 export async function POST(request: Request) {
   try {
-    const { scene, chapterTitle, sceneNumber, model, maxSceneLength } =
-      await request.json();
+    const {
+      scene,
+      chapterTitle,
+      sceneNumber,
+      model,
+      maxSceneLength,
+      chapterSummary,
+      chapterBeats,
+      previousScene,
+      emotionalState,
+      keyConflict,
+      voiceAnchor,
+    } = await request.json();
 
     if (!scene) {
       return NextResponse.json(
@@ -16,12 +27,33 @@ export async function POST(request: Request) {
       );
     }
 
-    const prompt = `
-${scene}
+    const baseModel = model || "gpt-4.1-mini";
+    const trimmedPrevious =
+      typeof previousScene === "string"
+        ? previousScene.slice(-800)
+        : "No previous scene available.";
+    const beatsText = Array.isArray(chapterBeats)
+      ? chapterBeats
+          .map(
+            (beat: Record<string, unknown>) =>
+              `Beat ${beat.beat_number ?? "?"}: ${beat.action ?? "No action"}`
+          )
+          .join("\n")
+      : "No chapter beats provided.";
 
-Begin writing Chapter ${chapterTitle}, Scene ${sceneNumber} using the detailed scene summary provided.
+    const contextBlock = `
+Chapter Title: ${chapterTitle ?? "Untitled"}
+Chapter Summary: ${chapterSummary ?? "Not provided"}
+Chapter Beats:\n${beatsText}
+Previous Scene (last lines): ${trimmedPrevious}
+Character Emotional State: ${emotionalState ?? "Not provided"}
+Key Conflict: ${keyConflict ?? "Not provided"}
+Voice Anchor: ${voiceAnchor ?? "raw, emotional, slightly messy, introspective"}
+Scene Summary:\n${scene}
+`;
 
-The writing should naturally reflect the scene's genre, tone, point of view, setting, and key characters—all of which can be inferred from the scene summary provided.
+    const longDirective = `
+Begin writing Chapter ${chapterTitle ?? "Untitled"}, Scene ${sceneNumber ?? "?"} using the detailed scene summary and context provided.
 
 Writing Guidelines:
 – Focus on a slow, deliberate buildup, allowing the emotional tone and character stakes to deepen gradually.
@@ -36,22 +68,66 @@ Narrative Style:
 * Tense: Past
 
 Write up to ${maxSceneLength ?? 1000} words of character-driven, emotionally layered prose.
-Let the scene summary guide your tone, structure, pacing, and character focus.
-
 Write only the prose for the scene, without any formatting, headers, or scene numbers.
 `;
 
     const system = `You are an expert fiction writer specializing in deep, emotionally resonant first-person prose. Write immersive, character-driven scenes that follow "show, don't tell" principles. Focus on emotional depth, vivid sensory detail, and authentic dialogue.`;
 
-    const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
-      system,
-      prompt,
-      jsonResponse: false,
-      maxTokens: 3000,
-    });
+    const buildPrompt = (instruction: string) => `${contextBlock}\n${instruction}`;
 
-    return NextResponse.json({ prose: response });
+    const validateProse = (text: string) => {
+      if (!text.trim()) return false;
+      if (text.trim().length < 200) return false;
+      const hasDialogue = /"[^"]+"/.test(text);
+      const hasAction = /(walked|ran|turned|looked|grabbed|held|sat|stood)/i.test(text);
+      return hasDialogue || hasAction;
+    };
+
+    const runProse = async (instruction: string) =>
+      runChatCompletion({
+        model: baseModel,
+        system,
+        prompt: buildPrompt(instruction),
+        jsonResponse: false,
+        maxTokens: 3000,
+      });
+
+    let response = await runProse(longDirective);
+    let prose = String(response ?? "");
+
+    if (!validateProse(prose)) {
+      response = await runProse(
+        `${longDirective}\n\nStrict: Follow all instructions. Must be vivid and detailed.`
+      );
+      prose = String(response ?? "");
+    }
+
+    if (!validateProse(prose)) {
+      response = await runProse(
+        `Write the scene in clear, straightforward prose. Keep first-person past tense and emotional truth.\n${scene}`
+      );
+      prose = String(response ?? "");
+    }
+
+    if (!validateProse(prose)) {
+      response = await runProse(
+        `Recovery mode: Write a simple but complete version of this scene. First-person past tense, 2-4 paragraphs.\n${scene}`
+      );
+      prose = String(response ?? "");
+    }
+
+    if (!validateProse(prose)) {
+      prose = `I moved through the moment with a heavy heart, trying to make sense of what just happened. ${scene}`;
+    }
+
+    if (typeof previousScene === "string" && previousScene.trim()) {
+      const lastParagraph = previousScene.trim().split(/\n\n+/).slice(-1)[0];
+      if (!prose.includes(lastParagraph.trim())) {
+        prose = `${lastParagraph}\n\n${prose}`;
+      }
+    }
+
+    return NextResponse.json({ prose });
   } catch (error) {
     console.error(error);
     return NextResponse.json(

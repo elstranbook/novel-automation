@@ -23,10 +23,29 @@ const generateScenesForChapter = async ({
   premisesAndEndings?: Record<string, unknown>;
   characterProfiles?: string;
 }) => {
-  const chapterNumber = chapter.number ?? "?";
-  const chapterTitle = chapter.title ?? "Untitled";
-  const chapterInfo = JSON.stringify(chapter, null, 2);
-  const storyInfo = JSON.stringify(storyDetails, null, 2);
+  const chapterInfoRecord: Record<string, unknown> =
+    typeof chapter === "object" && chapter ? (chapter as Record<string, unknown>) : {};
+  if (!chapterInfoRecord.number) chapterInfoRecord.number = 1;
+  if (!chapterInfoRecord.title) chapterInfoRecord.title = "Untitled Chapter";
+  if (!chapterInfoRecord.pov) chapterInfoRecord.pov = "Main Character";
+  if (!Array.isArray(chapterInfoRecord.events)) {
+    chapterInfoRecord.events = ["Key event 1", "Key event 2", "Key event 3"];
+  }
+
+  const chapterNumber = chapterInfoRecord.number ?? "?";
+  const chapterTitle = chapterInfoRecord.title ?? "Untitled";
+  console.info(`Starting scene generation for Chapter ${chapterNumber}: ${chapterTitle}`);
+  const chapterInfo = JSON.stringify(chapterInfoRecord, null, 2);
+
+  const storyInfoRecord: Record<string, unknown> =
+    typeof storyDetails === "object" && storyDetails
+      ? (storyDetails as Record<string, unknown>)
+      : {};
+  if (!storyInfoRecord.genre) storyInfoRecord.genre = "Young Adult Fiction";
+  if (!storyInfoRecord.story_theme) storyInfoRecord.story_theme = "Coming of age";
+  if (!storyInfoRecord.setting) storyInfoRecord.setting = "Contemporary world";
+
+  const storyInfo = JSON.stringify(storyInfoRecord, null, 2);
 
   let premisesEndingInfo = "";
   if (premisesAndEndings?.chosen_premise && premisesAndEndings?.chosen_ending) {
@@ -45,7 +64,7 @@ ${premisesAndEndings.chosen_ending}
 
   if (!chapterBeats || chapterBeats.length === 0) {
     const prompt = `
-Write the complete scenes for Chapter ${chapterNumber}: "${chapterTitle}" in the novel "${storyDetails.title ?? ""}".
+Write the complete scenes for Chapter ${chapterNumber}: "${chapterTitle}" in the novel "${storyInfoRecord.title ?? ""}".
 
 STORY DETAILS:
 ${storyInfo}
@@ -66,20 +85,37 @@ Guidelines:
 Format the response as a JSON array of scene strings. Return just the array of scene strings.
 `;
 
-    const system = `You are a professional novelist writing scenes for Chapter ${chapterNumber} in the novel '${storyDetails.title ?? ""}'.
+    const system = `You are a professional novelist writing scenes for Chapter ${chapterNumber} in the novel '${storyInfoRecord.title ?? ""}'.
 Write compelling, immersive scenes that advance the plot and develop the characters.
 Use first-person past tense from the POV character's perspective.
 Return your scenes ONLY as a JSON array of strings.`;
 
-    return runChatCompletion({
+    const response = await runChatCompletion({
       model,
       system,
       prompt,
-      jsonResponse: true,
+      jsonResponse: false,
       maxTokens: 8000,
     });
+
+    let parsed: unknown = response;
+    try {
+      if (typeof response === "string") {
+        const match = response.match(/\[\s*{[\s\S]*}\s*\]/);
+        parsed = match ? JSON.parse(match[0]) : JSON.parse(response);
+      }
+    } catch {
+      parsed = null;
+    }
+
+    if (Array.isArray(parsed)) {
+      return parsed as Array<Record<string, unknown>>;
+    }
+
+    return [`Scene for Chapter ${chapterNumber}: ${chapterTitle}`];
   }
 
+  console.info(`Chapter beats count: ${chapterBeats.length}`);
   const beatsText = chapterBeats
     .map((beat: Record<string, unknown>) =>
       `Beat ${beat.beat_number ?? "?"}: ${beat.action ?? "No action"}\nEmotional Impact: ${beat.emotional_impact ?? "None"}\nTension/Hook: ${beat.tension_hook ?? "None"}`
@@ -146,13 +182,29 @@ Use intimate, vivid moments to show the emotional toll of the scene and let read
 Write only the prose for each scene, without any formatting, headers, or scene numbers.
 Return your scenes ONLY as a JSON array of strings.`;
 
-  return runChatCompletion({
+  const response = await runChatCompletion({
     model,
     system,
     prompt,
-    jsonResponse: true,
+    jsonResponse: false,
     maxTokens: 8000,
   });
+
+  let parsed: unknown = response;
+  try {
+    if (typeof response === "string") {
+      const match = response.match(/\[\s*{[\s\S]*}\s*\]/);
+      parsed = match ? JSON.parse(match[0]) : JSON.parse(response);
+    }
+  } catch {
+    parsed = null;
+  }
+
+  if (Array.isArray(parsed)) {
+    return parsed as Array<Record<string, unknown>>;
+  }
+
+  return [`Scene for Chapter ${chapterNumber}: ${chapterTitle}`];
 };
 
 export async function POST(request: Request) {

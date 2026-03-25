@@ -26,6 +26,8 @@ export async function POST(request: Request) {
       const chapterSummary = chapterRecord.summary ?? "No summary available";
       const guideDetails = (chapterGuide as Record<string, unknown>)[chapterNum] ?? {};
 
+      console.info(`Generating detailed action beats for Chapter ${chapterNum}: ${chapterTitle}...`);
+
       const prompt = `
 Take the following chapter summary and generate a list of 5 highly detailed action beats for a prose draft. Use the additional story information provided to fully flesh out the chapter's structure and momentum.
 
@@ -92,9 +94,33 @@ Format your response as a proper JSON array with all the required fields.`;
         beats[chapterNum] = [
           {
             beat_number: 1,
-            action: "Introduce the scene goal.",
-            emotional_impact: "Establishes stakes.",
-            tension_hook: "A new complication emerges.",
+            action: "Character faces an initial challenge related to the chapter's main conflict",
+            emotional_impact: "Starts with confidence but shifts to uncertainty as obstacles arise",
+            tension_hook: "Will they make the right choice when faced with unexpected resistance?",
+          },
+          {
+            beat_number: 2,
+            action: "A key conversation reveals important information or character dynamics",
+            emotional_impact: "Surprise or concern as new information changes their understanding",
+            tension_hook: "How will they adapt their approach with this new knowledge?",
+          },
+          {
+            beat_number: 3,
+            action: "An unexpected complication makes the character's goal more difficult",
+            emotional_impact: "Frustration turns to determination as they commit to overcoming the obstacle",
+            tension_hook: "Can they find a creative solution before time runs out?",
+          },
+          {
+            beat_number: 4,
+            action: "Character makes progress but at a cost or sacrifice",
+            emotional_impact: "Relief mixed with concern about the consequences of their actions",
+            tension_hook: "Will the sacrifice they made come back to haunt them?",
+          },
+          {
+            beat_number: 5,
+            action: "Resolution of immediate problem creates a new question or direction",
+            emotional_impact: "Satisfaction with current progress but anxiety about what comes next",
+            tension_hook: "How will this apparent victory affect their overall journey?",
           },
         ];
       }

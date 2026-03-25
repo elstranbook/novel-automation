@@ -1329,6 +1329,12 @@ function StudioContent() {
               sceneNumber: sceneIndex + 1,
               model,
               maxSceneLength,
+              chapterSummary: chapterOutline?.[index]?.summary ?? "",
+              chapterBeats: chapterBeats?.[chapterTitle] ?? chapterBeats?.[index + 1],
+              previousScene: sceneIndex > 0 ? chapterProse[sceneIndex - 1] : "",
+              emotionalState: chapterOutline?.[index]?.emotional_development ?? "",
+              keyConflict: chapterOutline?.[index]?.theme_focus ?? "",
+              voiceAnchor: storyDetails?.tone ?? "raw, emotional, slightly messy, introspective",
             }),
           });
 
@@ -2510,7 +2516,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">11. Generate Prose</h2>
+          <h2 className="text-xl font-semibold">10. Generate Prose</h2>
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateProse}
