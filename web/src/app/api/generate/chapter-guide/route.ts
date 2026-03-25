@@ -100,14 +100,25 @@ Your response will be parsed directly as JSON and any formatting errors will cau
       model: model || "gpt-4.1-mini",
       system,
       prompt,
-      jsonResponse: true,
+      jsonResponse: false,
       maxTokens: 3000,
     });
 
-    const guide: Record<string, Record<string, unknown>> =
-      response && typeof response === "object"
-        ? { ...(response as Record<string, Record<string, unknown>>) }
-        : {};
+    let guide: Record<string, Record<string, unknown>> = {};
+    try {
+      if (typeof response === "string") {
+        const match = response.match(/\{[\s\S]*\}/);
+        const parsed = match ? JSON.parse(match[0]) : JSON.parse(response);
+        guide = parsed as Record<string, Record<string, unknown>>;
+      } else if (response && typeof response === "object") {
+        guide = { ...(response as Record<string, Record<string, unknown>>) };
+      }
+    } catch {
+      return NextResponse.json(
+        { error: "Failed to parse chapter guide JSON" },
+        { status: 502 }
+      );
+    }
 
     outlineArray.forEach((chapter, index) => {
       const number = String(
@@ -115,12 +126,12 @@ Your response will be parsed directly as JSON and any formatting errors will cau
       );
       if (!guide[number]) {
         guide[number] = {
-          key_dialogue: ["Character reveals a goal."],
-          symbolism: ["A recurring motif"],
-          emotional_pacing: "Builds tension and character growth.",
-          sensory_details: ["Atmosphere", "Lighting", "Sound"],
-          foreshadowing: ["A subtle hint of future conflict."],
-          scene_goal: "Advance the plot and emotional arc.",
+          key_dialogue: [`Missing guide for chapter ${number}.`],
+          symbolism: ["Missing symbolism"],
+          emotional_pacing: "Missing emotional pacing.",
+          sensory_details: ["Missing sensory details"],
+          foreshadowing: ["Missing foreshadowing"],
+          scene_goal: "Missing scene goal.",
         };
       }
     });

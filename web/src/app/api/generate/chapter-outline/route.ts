@@ -20,13 +20,13 @@ const ensureOutlineShape = (outline: unknown, minCount = 18) => {
     for (let i = existingCount + 1; i <= minCount; i += 1) {
       response.push({
         number: i,
-        title: `Chapter ${i}`,
+        title: `Chapter ${i} (needs generation)`,
         pov: "Main Character",
-        summary: `Summary of Chapter ${i}`,
-        emotional_development: "Character growth and emotional changes",
-        theme_focus: "Main theme explored in this chapter",
+        summary: `Missing outline for chapter ${i}. Please regenerate.`,
+        emotional_development: "Missing emotional development",
+        theme_focus: "Missing theme focus",
         estimated_word_count: 900,
-        events: [`Event 1 in Chapter ${i}`, `Event 2 in Chapter ${i}`],
+        events: [`Missing event for chapter ${i}`],
       });
     }
   }
@@ -135,6 +135,13 @@ This is for a software application that needs this exact format to function prop
     }
 
     const outline = ensureOutlineShape(parsed, 18);
+
+    if (outline.some((chapter) => String(chapter.title ?? "").includes("needs generation"))) {
+      return NextResponse.json({
+        outline,
+        warning: "Outline incomplete; regenerate to fill missing chapters.",
+      });
+    }
 
     return NextResponse.json({ outline });
   } catch (error) {
