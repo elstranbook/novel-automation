@@ -169,15 +169,16 @@ Return your scenes ONLY as a JSON array of strings.`;
     return [];
   })();
 
-  console.info(`Chapter beats count: ${beatsForChapter.length}`);
-  const beatsText = beatsForChapter
+  const beatsList = Array.isArray(beatsForChapter) ? beatsForChapter : [];
+  console.info(`Chapter beats count: ${beatsList.length}`);
+  const beatsText = beatsList
     .map(
       (beat) =>
         `Beat ${beat.beat_number ?? "?"}: ${
           beat.action ?? "No action"
         }\nEmotional Impact: ${
-          beat.emotional_impact ?? "None"
-        }\nTension/Hook: ${beat.tension_hook ?? "None"}`
+          beat.emotional_impact ?? "None"}
+        \nTension/Hook: ${beat.tension_hook ?? "None"}`
     )
     .join("\n\n");
 
