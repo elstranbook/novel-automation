@@ -730,13 +730,15 @@ function StudioContent() {
       .maybeSingle();
     if (quotes?.quotes) setNovelQuotes(quotes.quotes);
 
-    const { data: promotionalArticlesRows } = await supabase
+    const { data: promotionalArticlesRows, error: promotionalArticlesError } = await supabase
       .from("promotional_articles")
       .select("article_type,length_type,tone,cta_type,title,content")
       .eq("novel_id", novelIdValue)
       .order("created_at", { ascending: false });
 
-    if (promotionalArticlesRows) {
+    if (promotionalArticlesError) {
+      console.warn("Failed to load promotional articles", promotionalArticlesError);
+    } else if (promotionalArticlesRows) {
       setPromotionalArticles(
         promotionalArticlesRows.map((row) => ({
           article_type: row.article_type,
@@ -1303,7 +1305,8 @@ function StudioContent() {
         });
 
         if (!response.ok) {
-          throw new Error("Failed to generate scenes");
+          const errorText = await response.text();
+          throw new Error(errorText || "Failed to generate scenes");
         }
 
         const data = await response.json();

@@ -310,6 +310,18 @@ export async function POST(request: Request) {
       );
     }
 
+    const safeChapter = chapter as Record<string, unknown>;
+    const chapterNumber =
+      typeof safeChapter.number === "number" ||
+      typeof safeChapter.number === "string"
+        ? safeChapter.number
+        : typeof safeChapter.chapter_number === "number" ||
+            typeof safeChapter.chapter_number === "string"
+          ? safeChapter.chapter_number
+          : undefined;
+    const chapterTitleValue =
+      safeChapter.title ?? safeChapter.chapter_title ?? safeChapter.name ?? "Untitled";
+
     const scenes = await generateScenesForChapter({
       chapter,
       storyDetails,
@@ -321,9 +333,7 @@ export async function POST(request: Request) {
       characterProfiles,
     });
 
-    const chapterTitle = `Chapter ${chapter.number ?? "?"}: ${
-      chapter.title ?? "Untitled"
-    }`;
+    const chapterTitle = `Chapter ${chapterNumber ?? "?"}: ${chapterTitleValue}`;
 
     const normalizedScenes = Array.isArray(scenes)
     ? scenes.map((scene) =>
@@ -334,8 +344,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ chapterTitle, scenes: normalizedScenes });
   } catch (error) {
     console.error(error);
+    const message = error instanceof Error ? error.message : "Failed to generate scenes";
     return NextResponse.json(
-      { error: "Failed to generate scenes" },
+      { error: message },
       { status: 500 }
     );
   }
