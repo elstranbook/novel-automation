@@ -4,6 +4,9 @@ import { runChatCompletion } from "@/lib/openaiClient";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+const safeMap = <T, U>(value: unknown, mapper: (item: T) => U): U[] =>
+  Array.isArray(value) ? (value as T[]).map(mapper) : [];
+
 const generateScenesForChapter = async ({
   chapter,
   storyDetails,
@@ -137,9 +140,10 @@ Return your scenes ONLY as a JSON array of strings.`;
         key.toLowerCase().startsWith("scene")
       );
       if (sceneKeys.length > 0) {
-        return sceneKeys
-          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-          .map((key) => parsedRecord[key] ?? "");
+        return safeMap(
+          sceneKeys.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+          (key) => parsedRecord[key] ?? ""
+        );
       }
       return Object.values(parsedRecord);
     }
@@ -171,16 +175,13 @@ Return your scenes ONLY as a JSON array of strings.`;
 
   const beatsList = Array.isArray(beatsForChapter) ? beatsForChapter : [];
   console.info(`Chapter beats count: ${beatsList.length}`);
-  const beatsText = beatsList
-    .map(
-      (beat) =>
-        `Beat ${beat.beat_number ?? "?"}: ${
-          beat.action ?? "No action"
-        }\nEmotional Impact: ${
-          beat.emotional_impact ?? "None"}
-        \nTension/Hook: ${beat.tension_hook ?? "None"}`
-    )
-    .join("\n\n");
+  const beatsText = safeMap(beatsList, (beat) =>
+    `Beat ${beat.beat_number ?? "?"}: ${
+      beat.action ?? "No action"
+    }\nEmotional Impact: ${
+      beat.emotional_impact ?? "None"}
+    \nTension/Hook: ${beat.tension_hook ?? "None"}`
+  ).join("\n\n");
 
   const prompt = `
 Using the chapter summary and story beats, expand Chapter ${chapterNumber} of "${
@@ -295,9 +296,10 @@ Return your scenes ONLY as a JSON array of strings.`;
       key.toLowerCase().startsWith("scene")
     );
     if (sceneKeys.length > 0) {
-      return sceneKeys
-        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-        .map((key) => parsedRecord[key] ?? "");
+      return safeMap(
+        sceneKeys.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+        (key) => parsedRecord[key] ?? ""
+      );
     }
     return Object.values(parsedRecord);
   }
