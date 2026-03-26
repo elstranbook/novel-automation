@@ -200,8 +200,12 @@ Return your scenes ONLY as a JSON array of strings.`;
     parsed = null;
   }
 
-  if (Array.isArray(parsed)) {
+  if (Array.isArray(parsed) && parsed.length > 0) {
     return parsed;
+  }
+
+  if (typeof response === "string" && response.trim()) {
+    return [response.trim()];
   }
 
   return [`Scene for Chapter ${chapterNumber}: ${chapterTitle}`];

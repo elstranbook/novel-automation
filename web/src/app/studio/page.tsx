@@ -678,8 +678,14 @@ function StudioContent() {
         if (!grouped[row.chapter_title]) {
           grouped[row.chapter_title] = [];
         }
-        let content = row.scene_content as string;
-        if (content === "[object Object]") {
+        let content: string;
+        const rawContent = row.scene_content as unknown;
+        if (typeof rawContent === "string") {
+          content = rawContent;
+        } else {
+          content = formatReadable(rawContent);
+        }
+        if (!content || content === "[object Object]") {
           content = "(Scene content missing or invalid.)";
         }
         grouped[row.chapter_title].push(content);
