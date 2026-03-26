@@ -749,7 +749,7 @@ function StudioContent() {
       );
     }
 
-    const { data: socialSnippetRow } = await supabase
+    const { data: socialSnippetRow, error: socialSnippetError } = await supabase
       .from("social_snippets")
       .select("content")
       .eq("novel_id", novelIdValue)
@@ -757,7 +757,9 @@ function StudioContent() {
       .limit(1)
       .maybeSingle();
 
-    if (socialSnippetRow?.content) {
+    if (socialSnippetError) {
+      console.warn("Failed to load social snippets", socialSnippetError);
+    } else if (socialSnippetRow?.content) {
       setSocialSnippets(socialSnippetRow.content);
     }
 
@@ -1266,40 +1268,46 @@ function StudioContent() {
       const user = await requireUser();
       const novelIdValue = await ensureNovel(user.id);
 
-      const response = await fetch("/api/generate/scenes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: "all",
-          storyDetails,
-          chapterOutline,
-          chapterBeats,
-          model,
-          maxSceneLength,
-          minSceneLength,
-          premisesAndEndings,
-          characterProfiles,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to generate scenes");
-      }
-
-      const data = await response.json();
-      if (!data.scenes || Object.keys(data.scenes).length === 0) {
-        throw new Error("Scenes generation returned no output.");
-      }
-
       const normalizedScenes: ScenesMap = {};
-      Object.entries(data.scenes as Record<string, unknown>).forEach(
-        ([chapterTitle, scenes]) => {
-          const scenesArray = Array.isArray(scenes) ? scenes : [scenes];
-          normalizedScenes[chapterTitle] = scenesArray.map((scene) =>
-            typeof scene === "string" ? scene : formatReadable(scene)
-          );
+      const chapters = Array.isArray(chapterOutline)
+        ? chapterOutline
+        : (chapterOutline as Record<string, unknown>)?.chapters ?? [];
+
+      for (let index = 0; index < chapters.length; index += 1) {
+        const chapter = chapters[index] as Record<string, unknown>;
+        const chapterTitle = String(
+          chapter.title ?? chapter.chapter_title ?? chapter.name ?? "Untitled"
+        );
+        setMessage(`Generating scenes for Chapter ${index + 1}: ${chapterTitle}`);
+        const response = await fetch("/api/generate/scenes/chapter", {
+          signal: AbortSignal.timeout(240000),
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chapter,
+            storyDetails,
+            chapterBeats,
+            model,
+            maxSceneLength,
+            minSceneLength,
+            premisesAndEndings,
+            characterProfiles,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to generate scenes");
         }
-      );
+
+        const data = await response.json();
+        if (!data.scenes || data.scenes.length === 0) {
+          throw new Error("Scenes generation returned no output.");
+        }
+
+        normalizedScenes[data.chapterTitle] = data.scenes.map((scene: unknown) =>
+          typeof scene === "string" ? scene : formatReadable(scene)
+        );
+      }
 
       setMessage(null);
       setAllScenes(normalizedScenes);
