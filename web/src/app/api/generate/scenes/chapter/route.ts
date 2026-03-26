@@ -117,7 +117,7 @@ Return your scenes ONLY as a JSON array of strings.`;
     let parsed: unknown = response;
     try {
       if (typeof response === "string") {
-        const match = response.match(/\[\s*{[\s\S]*}\s*\]/);
+        const match = response.match(/\[[\s\S]*\]/);
         parsed = match ? JSON.parse(match[0]) : JSON.parse(response);
       }
     } catch {
@@ -126,6 +126,26 @@ Return your scenes ONLY as a JSON array of strings.`;
 
     if (Array.isArray(parsed)) {
       return parsed as Array<Record<string, unknown>>;
+    }
+
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const parsedRecord = parsed as Record<string, unknown>;
+      if (Array.isArray(parsedRecord.scenes)) {
+        return parsedRecord.scenes as Array<Record<string, unknown>>;
+      }
+      const sceneKeys = Object.keys(parsedRecord).filter((key) =>
+        key.toLowerCase().startsWith("scene")
+      );
+      if (sceneKeys.length > 0) {
+        return sceneKeys
+          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+          .map((key) => parsedRecord[key] ?? "");
+      }
+      return Object.values(parsedRecord);
+    }
+
+    if (typeof response === "string" && response.trim()) {
+      return [response.trim()];
     }
 
     return [`Scene for Chapter ${chapterNumber}: ${chapterTitle}`];
@@ -236,7 +256,7 @@ Return your scenes ONLY as a JSON array of strings.`;
   let parsed: unknown = response;
   try {
     if (typeof response === "string") {
-      const match = response.match(/\[\s*{[\s\S]*}\s*\]/);
+      const match = response.match(/\[[\s\S]*\]/);
       parsed = match ? JSON.parse(match[0]) : JSON.parse(response);
     }
   } catch {
@@ -245,6 +265,26 @@ Return your scenes ONLY as a JSON array of strings.`;
 
   if (Array.isArray(parsed)) {
     return parsed as Array<Record<string, unknown>>;
+  }
+
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const parsedRecord = parsed as Record<string, unknown>;
+    if (Array.isArray(parsedRecord.scenes)) {
+      return parsedRecord.scenes as Array<Record<string, unknown>>;
+    }
+    const sceneKeys = Object.keys(parsedRecord).filter((key) =>
+      key.toLowerCase().startsWith("scene")
+    );
+    if (sceneKeys.length > 0) {
+      return sceneKeys
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+        .map((key) => parsedRecord[key] ?? "");
+    }
+    return Object.values(parsedRecord);
+  }
+
+  if (typeof response === "string" && response.trim()) {
+    return [response.trim()];
   }
 
   return [`Scene for Chapter ${chapterNumber}: ${chapterTitle}`];
