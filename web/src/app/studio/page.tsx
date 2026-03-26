@@ -2071,6 +2071,7 @@ function StudioContent() {
               Reset pipeline
             </button>
           </div>
+        </div>
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
