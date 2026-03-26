@@ -388,6 +388,22 @@ function StudioContent() {
     return Boolean(value);
   };
 
+  const getChapterDisplayTitle = (chapterKey: string, index: number) => {
+    const chapterNumber = Number.parseInt(chapterKey, 10);
+    const outlineIndex = Number.isNaN(chapterNumber) ? index : chapterNumber - 1;
+    const outlineEntry = chapterOutline?.[outlineIndex] as Record<string, unknown> | undefined;
+    const chapterTitle = outlineEntry?.title ? String(outlineEntry.title) : "Untitled";
+    const displayNumber = Number.isNaN(chapterNumber) ? index + 1 : chapterNumber;
+    return `Chapter ${displayNumber}: ${chapterTitle}`;
+  };
+
+  const formatChapterBeatsText = (beats: ChapterBeats) =>
+    Object.entries(beats)
+      .map(([chapterKey, chapterBeats], index) =>
+        `${getChapterDisplayTitle(chapterKey, index)}\n\n${formatReadable(chapterBeats)}`
+      )
+      .join("\n\n");
+
   const stepsCompleted = useMemo(() => {
     const steps = [
       storyDetails,
@@ -2609,7 +2625,7 @@ function StudioContent() {
                 onClick={() =>
                   downloadText(
                     `${title || "story"}_chapter_beats.txt`,
-                    formatReadable(chapterBeats)
+                    formatChapterBeatsText(chapterBeats)
                   )
                 }
                 className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
@@ -2617,9 +2633,21 @@ function StudioContent() {
                 Download TXT
               </button>
               <Collapsible label="Chapter beats">
-                <pre className="whitespace-pre-wrap text-xs text-zinc-200">
-                  {formatReadable(chapterBeats)}
-                </pre>
+                <div className="space-y-4 text-xs text-zinc-200">
+                  {Object.entries(chapterBeats).map(([chapterKey, beats], index) => (
+                    <div
+                      key={chapterKey}
+                      className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4"
+                    >
+                      <p className="text-sm font-semibold text-zinc-100">
+                        {getChapterDisplayTitle(chapterKey, index)}
+                      </p>
+                      <pre className="mt-2 whitespace-pre-wrap text-xs">
+                        {formatReadable(beats)}
+                      </pre>
+                    </div>
+                  ))}
+                </div>
               </Collapsible>
             </div>
           )}
