@@ -1275,6 +1275,10 @@ function StudioContent() {
           ? ((chapterOutline as Record<string, unknown>)?.chapters as Record<string, unknown>[]) 
           : [];
 
+      if (chapters.length === 0) {
+        throw new Error("Chapter outline is empty. Regenerate the chapter outline first.");
+      }
+
       for (let index = 0; index < chapters.length; index += 1) {
         const chapter = chapters[index] as Record<string, unknown>;
         const chapterTitle = String(
