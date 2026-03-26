@@ -151,8 +151,26 @@ Return your scenes ONLY as a JSON array of strings.`;
     return [`Scene for Chapter ${chapterNumber}: ${chapterTitle}`];
   }
 
-  console.info(`Chapter beats count: ${chapterBeats.length}`);
-  const beatsText = chapterBeats
+  const beatsForChapter = (() => {
+    if (Array.isArray(chapterBeats)) {
+      return chapterBeats;
+    }
+    if (chapterBeats && typeof chapterBeats === "object") {
+      const beatsRecord = chapterBeats as Record<string, unknown>;
+      const chapterKey = chapterNumber ? String(chapterNumber) : undefined;
+      const directBeats = chapterKey ? beatsRecord[chapterKey] : undefined;
+      if (Array.isArray(directBeats)) {
+        return directBeats;
+      }
+      return Object.values(beatsRecord).flatMap((value) =>
+        Array.isArray(value) ? value : []
+      );
+    }
+    return [];
+  })();
+
+  console.info(`Chapter beats count: ${beatsForChapter.length}`);
+  const beatsText = beatsForChapter
     .map(
       (beat) =>
         `Beat ${beat.beat_number ?? "?"}: ${

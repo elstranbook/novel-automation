@@ -404,6 +404,24 @@ function StudioContent() {
       )
       .join("\n\n");
 
+  const normalizeScenesResponse = (scenes: unknown): string[] => {
+    if (Array.isArray(scenes)) {
+      return scenes.map((scene) => (typeof scene === "string" ? scene : formatReadable(scene)));
+    }
+    if (scenes && typeof scenes === "object") {
+      const record = scenes as Record<string, unknown>;
+      if (Array.isArray(record.scenes)) {
+        return record.scenes.map((scene) =>
+          typeof scene === "string" ? scene : formatReadable(scene)
+        );
+      }
+      return Object.values(record).map((scene) =>
+        typeof scene === "string" ? scene : formatReadable(scene)
+      );
+    }
+    return scenes ? [String(scenes)] : [];
+  };
+
   const stepsCompleted = useMemo(() => {
     const steps = [
       storyDetails,
@@ -1310,13 +1328,12 @@ function StudioContent() {
         }
 
         const data = await response.json();
-        if (!data.scenes || data.scenes.length === 0) {
+        const scenesList = normalizeScenesResponse(data.scenes);
+        if (scenesList.length === 0) {
           throw new Error("Scenes generation returned no output.");
         }
 
-        normalizedScenes[displayTitle] = data.scenes.map((scene: unknown) =>
-          typeof scene === "string" ? scene : formatReadable(scene)
-        );
+        normalizedScenes[displayTitle] = scenesList;
       }
 
       setMessage(null);
