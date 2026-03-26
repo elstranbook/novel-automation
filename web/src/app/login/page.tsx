@@ -1,11 +1,11 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 
-export default function LoginPage() {
+function LoginForm() {
   const supabase = createSupabaseBrowserClient();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -159,5 +159,21 @@ export default function LoginPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-zinc-950 text-zinc-100">
+          <div className="mx-auto flex max-w-md flex-col gap-6 px-6 py-16">
+            <p className="text-sm text-zinc-400">Loading sign-in...</p>
+          </div>
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
