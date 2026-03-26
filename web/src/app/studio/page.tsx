@@ -2147,7 +2147,8 @@ function StudioContent() {
         </section>
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <h2 className="text-xl font-semibold">2. Premises & endings</h2>
-          <div className="mt-4 flex flex-wrap gap-3">
+          <Collapsible label="Premises & endings">
+            <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generatePremises}
               disabled={!storyDetails || !storyDetails?.novel_about || loadingStep === "premises"}
@@ -2279,6 +2280,7 @@ function StudioContent() {
               </div>
             </div>
           )}
+          </Collapsible>
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
