@@ -1280,7 +1280,8 @@ function StudioContent() {
         const chapterTitle = String(
           chapter.title ?? chapter.chapter_title ?? chapter.name ?? "Untitled"
         );
-        setMessage(`Generating scenes for Chapter ${index + 1}: ${chapterTitle}`);
+        const displayTitle = getChapterDisplayTitle(String(index + 1), index);
+        setMessage(`Generating scenes for ${displayTitle}`);
         const response = await fetch("/api/generate/scenes/chapter", {
           signal: AbortSignal.timeout(240000),
           method: "POST",
@@ -1306,7 +1307,7 @@ function StudioContent() {
           throw new Error("Scenes generation returned no output.");
         }
 
-        normalizedScenes[data.chapterTitle] = data.scenes.map((scene: unknown) =>
+        normalizedScenes[displayTitle] = data.scenes.map((scene: unknown) =>
           typeof scene === "string" ? scene : formatReadable(scene)
         );
       }
