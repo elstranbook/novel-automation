@@ -1271,7 +1271,9 @@ function StudioContent() {
       const normalizedScenes: ScenesMap = {};
       const chapters = Array.isArray(chapterOutline)
         ? chapterOutline
-        : (chapterOutline as Record<string, unknown>)?.chapters ?? [];
+        : Array.isArray((chapterOutline as Record<string, unknown>)?.chapters)
+          ? ((chapterOutline as Record<string, unknown>)?.chapters as Record<string, unknown>[]) 
+          : [];
 
       for (let index = 0; index < chapters.length; index += 1) {
         const chapter = chapters[index] as Record<string, unknown>;
