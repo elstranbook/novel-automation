@@ -3239,21 +3239,22 @@ function StudioContent() {
           {showPremisesPanel && (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-              <h3 className="text-lg font-semibold text-zinc-100">
-                Social media snippets
-              </h3>
-              <p className="text-xs text-zinc-400">
-                Generate multi-platform social posts (X, Instagram, TikTok, Facebook, newsletter).
-              </p>
+                <h3 className="text-lg font-semibold text-zinc-100">
+                  Social media snippets
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  Generate multi-platform social posts (X, Instagram, TikTok, Facebook, newsletter).
+                </p>
+              </div>
+              <button
+                onClick={() => generateSocialSnippets()}
+                disabled={!storyDetails || loadingStep === "social"}
+                className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+              >
+                {loadingStep === "social" ? "Generating..." : "Generate Snippets"}
+              </button>
             </div>
-            <button
-              onClick={() => generateSocialSnippets()}
-              disabled={!storyDetails || loadingStep === "social"}
-              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
-            >
-              {loadingStep === "social" ? "Generating..." : "Generate Snippets"}
-            </button>
-          </div>
+          )}
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={() =>
