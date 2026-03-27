@@ -2011,7 +2011,7 @@ function StudioContent() {
   };
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <div className="mx-auto flex max-w-6xl gap-8 px-6 py-12">
+      <div className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-12">
         <header className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Link href="/" className="text-sm text-zinc-400">
@@ -2285,34 +2285,30 @@ function StudioContent() {
         </div>
         </section>
 
-        <aside className="sticky top-24 hidden h-[calc(100vh-6rem)] w-64 flex-shrink-0 flex-col gap-4 self-start overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 lg:flex">
-          <div className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
-              Saved novels
-            </h2>
-            <p className="text-xs text-zinc-500">
-              Pick a stored novel to reload all generation steps.
-            </p>
-          </div>
-          <div className="flex flex-col gap-2">
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+          <h2 className="text-xl font-semibold">Saved novels</h2>
+          <p className="text-sm text-zinc-400">
+            Pick a stored novel to reload all generation steps.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
             {novels.length === 0 && (
-              <span className="text-xs text-zinc-500">No novels saved yet.</span>
+              <span className="text-sm text-zinc-500">No novels saved yet.</span>
             )}
             {novels.map((novel) => (
               <button
                 key={novel.id}
                 onClick={() => setSelectedNovelId(novel.id)}
-                className={`rounded-lg border px-3 py-2 text-left text-xs transition ${
+                className={`rounded-full border px-4 py-2 text-sm ${
                   novel.id === selectedNovelId
-                    ? "border-emerald-400/60 bg-emerald-500/10 text-emerald-200"
-                    : "border-zinc-800 text-zinc-300 hover:border-zinc-600"
+                    ? "border-white text-white"
+                    : "border-zinc-700 text-zinc-300"
                 }`}
               >
                 {novel.title}
               </button>
             ))}
           </div>
-        </aside>
+        </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <SectionHeading title="1. Story details" step="Story details" />
