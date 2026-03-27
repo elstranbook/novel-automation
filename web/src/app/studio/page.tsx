@@ -2064,12 +2064,14 @@ function StudioContent() {
                 </Link>
               </div>
             </div>
-          <h1 className="text-3xl font-semibold">Studio</h1>
-          <p className="text-zinc-300">
-            Full pipeline studio with Supabase persistence. Use the steps below to
-            generate everything you need.
-          </p>
-          <div className="flex flex-wrap items-center gap-4 text-sm text-zinc-400">
+          </header>
+          <div>
+            <h1 className="text-3xl font-semibold">Studio</h1>
+            <p className="text-zinc-300">
+              Full pipeline studio with Supabase persistence. Use the steps below to
+              generate everything you need.
+            </p>
+            <div className="flex flex-wrap items-center gap-4 text-sm text-zinc-400">
             <span>Steps complete: {stepsCompleted} / 10</span>
             {userId ? (
               <span className="rounded-full border border-zinc-700 px-3 py-1">
@@ -2080,6 +2082,7 @@ function StudioContent() {
                 Sign in to save
               </Link>
             )}
+            </div>
           </div>
         </header>
 
