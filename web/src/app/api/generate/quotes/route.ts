@@ -1,5 +1,24 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+
+const logGeneration = async (payload: {
+  step: string;
+  attempt: number;
+  success: boolean;
+  usedFallback: boolean;
+}) => {
+  try {
+    await supabaseAdmin.from("generation_logs").insert({
+      step: payload.step,
+      attempt: payload.attempt,
+      success: payload.success,
+      used_fallback: payload.usedFallback,
+    });
+  } catch (error) {
+    console.warn("Failed to write generation log", error);
+  }
+};
 
 const formatScenesForQuotes = (scenes: Record<string, string[]>) => {
   const formatted: string[] = [];
@@ -31,7 +50,17 @@ const formatScenesForQuotes = (scenes: Record<string, string[]>) => {
 
 export async function POST(request: Request) {
   try {
-    const { storyDetails, model, allScenes } = await request.json();
+    const { storyDetails: requestStory, model, allScenes, novelId } = await request.json();
+
+    let storyDetails = requestStory as Record<string, unknown> | null;
+    if (!storyDetails && novelId) {
+      const { data: novelRow } = await supabaseAdmin
+        .from("novels")
+        .select("story_details")
+        .eq("id", novelId)
+        .maybeSingle();
+      storyDetails = (novelRow?.story_details as Record<string, unknown> | null) ?? null;
+    }
 
     if (!storyDetails || !allScenes || Object.keys(allScenes).length === 0) {
       return NextResponse.json(
@@ -104,6 +133,12 @@ Write with an emotionally engaging, fast-paced tone tailored to teen readers, us
 
     if (Array.isArray(response)) {
       console.info("quotes parsed output", { quotes: response });
+      await logGeneration({
+        step: "quotes",
+        attempt: 1,
+        success: true,
+        usedFallback: false,
+      });
       return NextResponse.json({ quotes: response });
     }
 
@@ -123,10 +158,22 @@ Write with an emotionally engaging, fast-paced tone tailored to teen readers, us
 
     if (parsed.length === 0) {
       console.info("quotes parsed output", { quotes: [String(response)] });
+      await logGeneration({
+        step: "quotes",
+        attempt: 2,
+        success: true,
+        usedFallback: true,
+      });
       return NextResponse.json({ quotes: [String(response)] });
     }
 
     console.info("quotes parsed output", { quotes: parsed });
+    await logGeneration({
+      step: "quotes",
+      attempt: 2,
+      success: true,
+      usedFallback: false,
+    });
     return NextResponse.json({ quotes: parsed });
   } catch (error) {
     console.error(error);

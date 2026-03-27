@@ -1704,6 +1704,7 @@ function StudioContent() {
           storyDetails,
           model,
           allScenes: scenesSource,
+          novelId: novelIdValue,
         }),
       });
       if (!response.ok) throw new Error("Failed to generate quotes");
