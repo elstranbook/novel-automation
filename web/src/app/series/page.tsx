@@ -511,7 +511,6 @@ export default function SeriesPage() {
                   <span>{authEmail}</span>
                   <button
                     onClick={async () => {
-                      setSeriesId(null);
                       setSeriesBooks([]);
                       setSuiteThemes("Coming of age, identity, relationships");
                       setSuiteCoreConflict("");
