@@ -1651,13 +1651,59 @@ function StudioContent() {
     try {
       const user = await requireUser();
       const novelIdValue = await ensureNovel(user.id);
+      let scenesSource = proseScenes ?? allScenes;
+
+      if (!scenesSource || Object.keys(scenesSource).length === 0) {
+        const { data: proseRows } = await supabase
+          .from("prose_scenes")
+          .select("chapter_title,scene_content,scene_order")
+          .eq("novel_id", novelIdValue)
+          .order("scene_order", { ascending: true });
+
+        if (proseRows && proseRows.length > 0) {
+          const groupedProse: ScenesMap = {};
+          proseRows.forEach((row) => {
+            if (!groupedProse[row.chapter_title]) {
+              groupedProse[row.chapter_title] = [];
+            }
+            groupedProse[row.chapter_title].push(row.scene_content as string);
+          });
+          setProseScenes(groupedProse);
+          scenesSource = groupedProse;
+        }
+      }
+
+      if (!scenesSource || Object.keys(scenesSource).length === 0) {
+        const { data: sceneRows } = await supabase
+          .from("scenes")
+          .select("chapter_title,scene_content,scene_order")
+          .eq("novel_id", novelIdValue)
+          .order("scene_order", { ascending: true });
+
+        if (sceneRows && sceneRows.length > 0) {
+          const groupedScenes: ScenesMap = {};
+          sceneRows.forEach((row) => {
+            if (!groupedScenes[row.chapter_title]) {
+              groupedScenes[row.chapter_title] = [];
+            }
+            groupedScenes[row.chapter_title].push(row.scene_content as string);
+          });
+          setAllScenes(groupedScenes);
+          scenesSource = groupedScenes;
+        }
+      }
+
+      if (!scenesSource || Object.keys(scenesSource).length === 0) {
+        throw new Error("Generate scenes or prose before quotes.");
+      }
+
       const response = await fetch("/api/generate/quotes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           storyDetails,
           model,
-          allScenes: proseScenes ?? allScenes,
+          allScenes: scenesSource,
         }),
       });
       if (!response.ok) throw new Error("Failed to generate quotes");
