@@ -165,7 +165,16 @@ Write only the prose for the scene, without any formatting, headers, or scene nu
       }
     }
 
-    return NextResponse.json({ prose });
+    return NextResponse.json({
+      prose,
+      proseRaw: {
+        attempts: attempts.map((instruction, index) => ({
+          attempt: index + 1,
+          text: instruction,
+        })),
+        final: prose,
+      },
+    });
   } catch (error) {
     console.error(error);
     return NextResponse.json(

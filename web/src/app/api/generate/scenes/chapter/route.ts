@@ -373,7 +373,18 @@ Return valid JSON only.`;
         success: true,
         usedFallback: false,
       });
-      return parsed as Array<Record<string, unknown>>;
+      return {
+        scenes: parsed as Array<Record<string, unknown>>,
+        sceneRaw: {
+          input: {
+            chapterNumber,
+            chapterTitle,
+            beatsCount: beatsList.length,
+          },
+          output: parsed,
+          parsed,
+        },
+      };
     }
   }
 
@@ -390,7 +401,18 @@ Return valid JSON only.`;
     beat_reference: `Beat ${index + 1}`,
   }));
 
-  return fallbackScenes;
+  return {
+    scenes: fallbackScenes,
+    sceneRaw: {
+      input: {
+        chapterNumber,
+        chapterTitle,
+        beatsCount: beatsList.length,
+      },
+      output: fallbackScenes,
+      parsed: fallbackScenes,
+    },
+  };
 };
 
 export async function POST(request: Request) {
@@ -425,7 +447,7 @@ export async function POST(request: Request) {
     const chapterTitleValue =
       safeChapter.title ?? safeChapter.chapter_title ?? safeChapter.name ?? "Untitled";
 
-    const scenes = await generateScenesForChapter({
+    const result = await generateScenesForChapter({
       chapter,
       storyDetails,
       chapterBeats,
@@ -438,13 +460,17 @@ export async function POST(request: Request) {
 
     const chapterTitle = `Chapter ${chapterNumber ?? "?"}: ${chapterTitleValue}`;
 
-    const normalizedScenes = Array.isArray(scenes)
-    ? scenes.map((scene) =>
-        typeof scene === "string" ? scene : JSON.stringify(scene)
-      )
-    : [typeof scenes === "string" ? scenes : JSON.stringify(scenes)];
+    const normalizedScenes = Array.isArray(result.scenes)
+      ? result.scenes.map((scene) =>
+          typeof scene === "string" ? scene : JSON.stringify(scene)
+        )
+      : [typeof result.scenes === "string" ? result.scenes : JSON.stringify(result.scenes)];
 
-    return NextResponse.json({ chapterTitle, scenes: normalizedScenes });
+    return NextResponse.json({
+      chapterTitle,
+      scenes: normalizedScenes,
+      sceneRaw: result.sceneRaw,
+    });
   } catch (error) {
     console.error(error);
     const message = error instanceof Error ? error.message : "Failed to generate scenes";

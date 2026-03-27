@@ -133,25 +133,30 @@ Return valid JSON only.`;
           maxTokens: 4000,
         });
         console.info("chapter_beats raw output", { chapterNum, attempt, response });
+        const rawLog = { attempt: attempt + 1, output: response };
         try {
           const parsed = parseJsonArray(response);
           console.info("chapter_beats parsed output", { chapterNum, attempt, parsed });
           if (Array.isArray(parsed) && validateBeats(parsed as Beat[], 5)) {
-            return { parsed, success: true };
+            return { parsed, success: true, raw: rawLog };
           }
-          return { parsed, success: false };
+          return { parsed, success: false, raw: rawLog };
         } catch (error) {
           console.warn("chapter_beats parse error", { chapterNum, attempt, error });
-          return { parsed: null, success: false };
+          return { parsed: null, success: false, raw: rawLog };
         }
       };
 
       const attempts = [strictPrompt, simplifiedPrompt, recoveryPrompt];
       let finalParsed: Beat[] | null = null;
       let usedFallback = false;
+      const rawAttempts: Array<{ attempt: number; output: unknown }> = [];
 
       for (let attempt = 0; attempt < attempts.length; attempt += 1) {
-        const { parsed, success } = await runAttempt(attempts[attempt], attempt + 1);
+        const { parsed, success, raw } = await runAttempt(attempts[attempt], attempt + 1);
+        if (raw) {
+          rawAttempts.push(raw);
+        }
         if (success && Array.isArray(parsed)) {
           finalParsed = parsed as Beat[];
           await logGeneration({
@@ -207,9 +212,14 @@ Return valid JSON only.`;
       }
 
       beats[chapterNum] = finalParsed;
+
+      const beatsRaw = {
+        attempts: rawAttempts,
+        final: finalParsed,
+      };
     }
 
-    return NextResponse.json({ beats });
+    return NextResponse.json({ beats, beatsRaw: { attempts: rawAttempts, final: beats } });
   } catch (error) {
     console.error(error);
     return NextResponse.json(

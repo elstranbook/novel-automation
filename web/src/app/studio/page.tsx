@@ -1265,7 +1265,7 @@ function StudioContent() {
       setChapterBeats(data.beats ?? {});
       await saveSingleRow(
         "chapter_beats",
-        { beats: data.beats ?? {} },
+        { beats: data.beats ?? {}, beats_raw: data.beatsRaw ?? null },
         novelIdValue,
         user.id
       );
@@ -1329,11 +1329,23 @@ function StudioContent() {
 
         const data = await response.json();
         const scenesList = normalizeScenesResponse(data.scenes);
+        const sceneRaw = data.sceneRaw ?? null;
         if (scenesList.length === 0) {
           throw new Error("Scenes generation returned no output.");
         }
 
         normalizedScenes[displayTitle] = scenesList;
+        await saveSingleRow(
+          "scenes",
+          {
+            chapter_title: displayTitle,
+            scene_content: JSON.stringify(scenesList),
+            scene_order: index + 1,
+            scene_raw: sceneRaw,
+          },
+          novelIdValue,
+          user.id
+        );
       }
 
       setMessage(null);
@@ -1411,6 +1423,17 @@ function StudioContent() {
 
           const data = await response.json();
           chapterProse.push(String(data.prose));
+
+          await saveSingleRow(
+            "novel_formats",
+            {
+              format_name: `prose_${chapterTitle}_scene_${sceneIndex + 1}`,
+              content: String(data.prose),
+              prose_raw: data.proseRaw ?? null,
+            },
+            novelIdValue,
+            user.id
+          );
         }
 
         prose[chapterTitle] = chapterProse;

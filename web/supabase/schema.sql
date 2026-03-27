@@ -74,6 +74,7 @@ create table if not exists public.chapter_beats (
   user_id uuid references auth.users(id) on delete cascade,
   novel_id uuid references public.novels(id) on delete cascade,
   beats jsonb not null,
+  beats_raw jsonb,
   created_at timestamptz default now()
 );
 
@@ -84,6 +85,7 @@ create table if not exists public.scenes (
   chapter_title text not null,
   scene_content text not null,
   scene_order integer not null,
+  scene_raw jsonb,
   created_at timestamptz default now()
 );
 
@@ -93,6 +95,7 @@ create table if not exists public.novel_formats (
   novel_id uuid references public.novels(id) on delete cascade,
   format_name text not null,
   content text not null,
+  prose_raw jsonb,
   created_at timestamptz default now()
 );
 
