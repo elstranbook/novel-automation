@@ -3,7 +3,7 @@ import { runChatCompletion } from "@/lib/openaiClient";
 
 export async function POST(request: Request) {
   try {
-    const { storyDetails, model } = await request.json();
+    const { storyDetails, model, studioTitle } = await request.json();
 
     if (!storyDetails) {
       return NextResponse.json(
@@ -12,8 +12,9 @@ export async function POST(request: Request) {
       );
     }
 
+    const title = storyDetails.title ?? studioTitle ?? "Untitled";
     const prompt = `
-Create a prompt for a front cover design for the novel "${storyDetails.title ?? "Untitled"}" written by Elstran Books.
+Create a prompt for a front cover design for the novel "${title}" written by Elstran Books.
 
 Guidelines:
 – The cover should visually represent the core theme(s) of the novel—think mood, symbolism, and emotional tone.
@@ -28,7 +29,7 @@ Examples:
 
 Format the request like this:
 
-Design a front cover for the novel "${storyDetails.title ?? "Untitled"}" by Elstran Books.
+Design a front cover for the novel "${title}" by Elstran Books.
 This novel is a ${storyDetails.genre ?? "Young Adult"} story with themes of ${
       storyDetails.story_theme ?? "transformation and growth"
     }.
@@ -39,7 +40,7 @@ The cover should feature [Main visual concept that captures the story's essence]
 Use a [Color palette/style] to reflect the mood of the story.
 Optional: Include [Symbols, background elements, or objects that represent the deeper themes].
 
-Make sure the title "${storyDetails.title ?? "Untitled"}" and author name "Elstran Books" are clearly visible on the cover.
+Make sure the title "${title}" and author name "Elstran Books" are clearly visible on the cover.
 `;
 
     const system = `You are a professional book cover designer. Create a detailed, specific cover design 
@@ -54,7 +55,7 @@ actionable specifics that an illustrator could follow.`;
       jsonResponse: false,
     });
 
-    return NextResponse.json({ prompt: response });
+    return NextResponse.json({ prompt: response, title });
   } catch (error) {
     console.error(error);
     return NextResponse.json(

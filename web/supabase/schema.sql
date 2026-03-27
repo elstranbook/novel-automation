@@ -138,6 +138,7 @@ create table if not exists public.cover_design_prompts (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade,
   novel_id uuid references public.novels(id) on delete cascade,
+  title text,
   prompt text not null,
   created_at timestamptz default now()
 );
@@ -187,6 +188,7 @@ create table if not exists public.novel_quotes (
   user_id uuid references auth.users(id) on delete cascade,
   novel_id uuid references public.novels(id) on delete cascade,
   quotes jsonb not null,
+  source text,
   created_at timestamptz default now()
 );
 

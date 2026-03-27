@@ -422,32 +422,160 @@ function StudioContent() {
     return scenes ? [String(scenes)] : [];
   };
 
-  const stepsCompleted = useMemo(() => {
-    const steps = [
+  const pipelineSteps = useMemo(
+    () => [
+      {
+        step: "Story details",
+        requires: ["Title", "Novel about"],
+        produces: ["storyDetails"],
+        status: isFilled(storyDetails) ? "ready" : "missing",
+      },
+      {
+        step: "Premises & endings",
+        requires: ["storyDetails"],
+        produces: ["premisesAndEndings"],
+        status: isFilled(premisesAndEndings) ? "ready" : "missing",
+      },
+      {
+        step: "Synopsis",
+        requires: ["storyDetails", "premisesAndEndings"],
+        produces: ["novelSynopsis"],
+        status: isFilled(novelSynopsis) ? "ready" : "missing",
+      },
+      {
+        step: "Character profiles",
+        requires: ["storyDetails", "novelSynopsis"],
+        produces: ["characterProfiles"],
+        status: isFilled(characterProfiles) ? "ready" : "missing",
+      },
+      {
+        step: "Book descriptions",
+        requires: ["storyDetails", "novelSynopsis"],
+        produces: ["bookDescriptions"],
+        status: isFilled(bookDescriptions) ? "ready" : "missing",
+      },
+      {
+        step: "Keywords",
+        requires: ["storyDetails", "novelSynopsis"],
+        produces: ["novelKeywords"],
+        status: isFilled(novelKeywords) ? "ready" : "missing",
+      },
+      {
+        step: "BISAC",
+        requires: ["storyDetails", "novelSynopsis"],
+        produces: ["novelBisac"],
+        status: isFilled(novelBisac) ? "ready" : "missing",
+      },
+      {
+        step: "Novel plan",
+        requires: ["storyDetails", "novelSynopsis", "characterProfiles"],
+        produces: ["novelPlan"],
+        status: isFilled(novelPlan) ? "ready" : "missing",
+      },
+      {
+        step: "Chapter outline",
+        requires: ["storyDetails", "novelPlan"],
+        produces: ["chapterOutline"],
+        status: isFilled(chapterOutline) ? "ready" : "missing",
+      },
+      {
+        step: "Chapter guide",
+        requires: ["chapterOutline", "novelSynopsis", "characterProfiles", "novelPlan"],
+        produces: ["chapterGuide"],
+        status: isFilled(chapterGuide) ? "ready" : "missing",
+      },
+      {
+        step: "Chapter beats",
+        requires: ["chapterGuide"],
+        produces: ["chapterBeats"],
+        status: isFilled(chapterBeats) ? "ready" : "missing",
+      },
+      {
+        step: "Scenes",
+        requires: ["chapterBeats"],
+        produces: ["allScenes"],
+        status: isFilled(allScenes) ? "ready" : "missing",
+      },
+      {
+        step: "Prose",
+        requires: ["allScenes"],
+        produces: ["proseScenes"],
+        status: isFilled(proseScenes) ? "ready" : "missing",
+      },
+      {
+        step: "Cover prompt",
+        requires: ["storyDetails"],
+        produces: ["coverPrompt"],
+        status: isFilled(coverPrompt) ? "ready" : "missing",
+      },
+      {
+        step: "Quotes",
+        requires: ["proseScenes"],
+        produces: ["novelQuotes"],
+        status: isFilled(novelQuotes) ? "ready" : "missing",
+      },
+      {
+        step: "Promotional articles",
+        requires: ["storyDetails"],
+        produces: ["promotionalArticles"],
+        status: isFilled(promotionalArticles) ? "ready" : "missing",
+      },
+      {
+        step: "Social snippets",
+        requires: ["promotionalArticles"],
+        produces: ["socialSnippets"],
+        status: isFilled(socialSnippets) ? "ready" : "missing",
+      },
+      {
+        step: "Exports",
+        requires: ["proseScenes"],
+        produces: ["novelFormats"],
+        status: isFilled(novelFormats) ? "ready" : "missing",
+      },
+    ],
+    [
       storyDetails,
       premisesAndEndings,
       novelSynopsis,
       characterProfiles,
+      bookDescriptions,
+      novelKeywords,
+      novelBisac,
       novelPlan,
       chapterOutline,
       chapterGuide,
       chapterBeats,
       allScenes,
+      proseScenes,
+      coverPrompt,
+      novelQuotes,
       promotionalArticles,
-    ];
-    return steps.filter(Boolean).length;
-  }, [
-    storyDetails,
-    premisesAndEndings,
-    novelSynopsis,
-    characterProfiles,
-    novelPlan,
-    chapterOutline,
-    chapterGuide,
-    chapterBeats,
-    allScenes,
-    promotionalArticles,
-  ]);
+      socialSnippets,
+      novelFormats,
+    ]
+  );
+
+  const stepsCompleted = useMemo(
+    () => pipelineSteps.filter((row) => row.status === "ready").length,
+    [pipelineSteps]
+  );
+
+  const renderStepBadge = (stepName: string) => {
+    const step = pipelineSteps.find((row) => row.step === stepName);
+    if (!step || step.status !== "ready") return null;
+    return (
+      <span className="inline-flex rounded-full border border-emerald-400/40 px-2 py-0.5 text-[10px] text-emerald-200">
+        {step.step === "Exports" ? "Formats & Exports ready" : `${step.step} done`}
+      </span>
+    );
+  };
+
+  const SectionHeading = ({ title, step }: { title: string; step: string }) => (
+    <div className="flex flex-wrap items-center gap-2">
+      <h2 className="text-xl font-semibold">{title}</h2>
+      {renderStepBadge(step)}
+    </div>
+  );
 
   const studioTabs = [
     { id: "pipeline" as const, label: "Pipeline" },
@@ -711,6 +839,23 @@ function StudioContent() {
       setAllScenes(grouped);
     }
 
+    const { data: proseRows } = await supabase
+      .from("prose_scenes")
+      .select("chapter_title,scene_content,scene_order")
+      .eq("novel_id", novelIdValue)
+      .order("scene_order", { ascending: true });
+
+    if (proseRows) {
+      const groupedProse: ScenesMap = {};
+      proseRows.forEach((row) => {
+        if (!groupedProse[row.chapter_title]) {
+          groupedProse[row.chapter_title] = [];
+        }
+        groupedProse[row.chapter_title].push(row.scene_content as string);
+      });
+      setProseScenes(groupedProse);
+    }
+
     const { data: keywords } = await supabase
       .from("novel_keywords")
       .select("keywords")
@@ -829,6 +974,7 @@ function StudioContent() {
         setAuthEmail(user.email ?? null);
         await loadNovels(user.id);
         let loadedLatest = false;
+        resetPipeline();
         if (seriesId) {
           const { data: bookRows } = await supabase
             .from("series_books")
@@ -845,9 +991,6 @@ function StudioContent() {
 
         if (seriesId && seriesBookNumber) {
           loadedLatest = await loadSeriesNovel(user.id, seriesId, seriesBookNumber);
-        }
-        if (!loadedLatest) {
-          loadedLatest = await loadLatestNovel(user.id);
         }
         if (!loadedLatest && prefillTitle) {
           setTitle(prefillTitle);
@@ -1458,6 +1601,16 @@ function StudioContent() {
       if (rows.length) {
         await supabase.from("prose_scenes").insert(rows);
       }
+
+      const formats = await generateExportFormats();
+      if (formats) {
+        setNovelFormats((prev) => ({
+          ...prev,
+          txt: formats.txt,
+          md: formats.markdown,
+          html: formats.html,
+        }));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -1474,14 +1627,14 @@ function StudioContent() {
       const response = await fetch("/api/generate/cover-prompt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ storyDetails, model }),
+        body: JSON.stringify({ storyDetails, model, studioTitle: title }),
       });
       if (!response.ok) throw new Error("Failed to generate cover prompt");
       const data = await response.json();
       setCoverPrompt(data.prompt);
       await saveSingleRow(
         "cover_design_prompts",
-        { prompt: data.prompt ?? "" },
+        { prompt: data.prompt ?? "", title: data.title ?? title },
         novelIdValue,
         user.id
       );
@@ -1504,8 +1657,7 @@ function StudioContent() {
         body: JSON.stringify({
           storyDetails,
           model,
-          chapterOutline,
-          scenes: allScenes,
+          allScenes: proseScenes ?? allScenes,
         }),
       });
       if (!response.ok) throw new Error("Failed to generate quotes");
@@ -1513,7 +1665,7 @@ function StudioContent() {
       setNovelQuotes(data.quotes ?? []);
       await saveSingleRow(
         "novel_quotes",
-        { quotes: data.quotes ?? [] },
+        { quotes: data.quotes ?? [], source: proseScenes ? "prose" : "scenes" },
         novelIdValue,
         user.id
       );
@@ -1949,83 +2101,7 @@ function StudioContent() {
               </div>
               {showPipelineMap && (
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  {[
-                    {
-                      step: "Story details",
-                      requires: ["Title", "Novel about"],
-                      produces: ["storyDetails"],
-                      status: isFilled(storyDetails) ? "ready" : "missing",
-                    },
-                    {
-                      step: "Premises & endings",
-                      requires: ["storyDetails"],
-                      produces: ["premisesAndEndings"],
-                      status: isFilled(premisesAndEndings) ? "ready" : "missing",
-                    },
-                    {
-                      step: "Synopsis",
-                      requires: ["storyDetails", "premisesAndEndings"],
-                      produces: ["novelSynopsis"],
-                      status: isFilled(novelSynopsis) ? "ready" : "missing",
-                    },
-                    {
-                      step: "Character profiles",
-                      requires: ["storyDetails", "novelSynopsis"],
-                      produces: ["characterProfiles"],
-                      status: isFilled(characterProfiles) ? "ready" : "missing",
-                    },
-                    {
-                      step: "Novel plan",
-                      requires: [
-                        "storyDetails",
-                        "novelSynopsis",
-                        "characterProfiles",
-                      ],
-                      produces: ["novelPlan"],
-                      status: isFilled(novelPlan) ? "ready" : "missing",
-                    },
-                    {
-                      step: "Chapter outline",
-                      requires: ["storyDetails", "novelPlan"],
-                      produces: ["chapterOutline"],
-                      status: isFilled(chapterOutline) ? "ready" : "missing",
-                    },
-                    {
-                      step: "Chapter guide",
-                      requires: [
-                        "chapterOutline",
-                        "novelSynopsis",
-                        "characterProfiles",
-                        "novelPlan",
-                      ],
-                      produces: ["chapterGuide"],
-                      status: isFilled(chapterGuide) ? "ready" : "missing",
-                    },
-                    {
-                      step: "Chapter beats",
-                      requires: ["chapterGuide"],
-                      produces: ["chapterBeats"],
-                      status: isFilled(chapterBeats) ? "ready" : "missing",
-                    },
-                    {
-                      step: "Scenes",
-                      requires: ["chapterBeats"],
-                      produces: ["allScenes"],
-                      status: isFilled(allScenes) ? "ready" : "missing",
-                    },
-                    {
-                      step: "Prose",
-                      requires: ["allScenes"],
-                      produces: ["proseScenes"],
-                      status: isFilled(proseScenes) ? "ready" : "missing",
-                    },
-                    {
-                      step: "Exports",
-                      requires: ["proseScenes"],
-                      produces: ["novelFormats"],
-                      status: isFilled(novelFormats) ? "ready" : "missing",
-                    },
-                  ].map((row) => (
+                  {pipelineSteps.map((row) => (
                     <div
                       key={row.step}
                       className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
@@ -2044,6 +2120,13 @@ function StudioContent() {
                           {row.status === "ready" ? "Ready" : "Missing"}
                         </span>
                       </div>
+                      {row.status === "ready" && (
+                        <span className="mt-2 inline-flex rounded-full border border-emerald-400/40 px-2 py-0.5 text-[10px] text-emerald-200">
+                          {row.step === "Exports"
+                            ? "Formats & Exports ready"
+                            : `${row.step} done`}
+                        </span>
+                      )}
                       <p className="mt-2 text-[11px] text-zinc-400">Requires</p>
                       <div className="mt-1 flex flex-wrap gap-2">
                         {row.requires.map((item) => (
@@ -2180,7 +2263,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">1. Story details</h2>
+          <SectionHeading title="1. Story details" step="Story details" />
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <button
               onClick={generateStoryDetails}
@@ -2226,7 +2309,7 @@ function StudioContent() {
           )}
         </section>
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">2. Premises & endings</h2>
+          <SectionHeading title="2. Premises & endings" step="Premises & endings" />
           <Collapsible label="Premises & endings">
             <div className="mt-4 flex flex-wrap gap-3">
             <button
@@ -2364,7 +2447,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">3. Synopsis</h2>
+          <SectionHeading title="3. Synopsis" step="Synopsis" />
           <button
             onClick={generateSynopsis}
             disabled={!premisesAndEndings || !storyDetails?.novel_about || loadingStep === "synopsis"}
@@ -2395,7 +2478,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">4. Character profiles</h2>
+          <SectionHeading title="4. Character profiles" step="Character profiles" />
           <button
             onClick={generateProfiles}
             disabled={!novelSynopsis || !storyDetails?.novel_about || loadingStep === "profiles"}
@@ -2428,7 +2511,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">4a. Book descriptions</h2>
+          <SectionHeading title="4a. Book descriptions" step="Book descriptions" />
           <button
             onClick={generateBookDescriptions}
             disabled={!storyDetails || !storyDetails?.novel_about || loadingStep === "descriptions"}
@@ -2468,7 +2551,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">4b. Novel keywords</h2>
+          <SectionHeading title="4b. Novel keywords" step="Keywords" />
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateKeywords}
@@ -2514,7 +2597,7 @@ function StudioContent() {
           )}
         </section>
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">4c. BISAC categories</h2>
+          <SectionHeading title="4c. BISAC categories" step="BISAC" />
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateBisac}
@@ -2556,7 +2639,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">5. Novel plan</h2>
+          <SectionHeading title="5. Novel plan" step="Novel plan" />
           <button
             onClick={generateNovelPlan}
             disabled={!characterProfiles || !storyDetails?.novel_about || loadingStep === "plan"}
@@ -2584,7 +2667,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">6. Chapter outline</h2>
+          <SectionHeading title="6. Chapter outline" step="Chapter outline" />
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateChapterOutline}
@@ -2626,7 +2709,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">7. Chapter guide</h2>
+          <SectionHeading title="7. Chapter guide" step="Chapter guide" />
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateChapterGuide}
@@ -2666,7 +2749,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">8. Chapter beats</h2>
+          <SectionHeading title="8. Chapter beats" step="Chapter beats" />
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateChapterBeats}
@@ -2718,7 +2801,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">9. Scenes</h2>
+          <SectionHeading title="9. Scenes" step="Scenes" />
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateScenes}
@@ -2772,7 +2855,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">10. Generate Prose</h2>
+          <SectionHeading title="10. Generate Prose" step="Prose" />
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateProse}
@@ -2850,7 +2933,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">11. Formats & exports</h2>
+          <SectionHeading title="11. Formats & exports" step="Exports" />
           <p className="mt-2 text-sm text-zinc-400">
             Export the full novel prose (all scenes stitched together).
           </p>
@@ -2982,7 +3065,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">12. Cover prompt</h2>
+          <SectionHeading title="12. Cover prompt" step="Cover prompt" />
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateCoverPrompt}
@@ -3019,7 +3102,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">13. Quote snippets</h2>
+          <SectionHeading title="13. Quote snippets" step="Quotes" />
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateQuotes}
@@ -3113,7 +3196,7 @@ function StudioContent() {
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-xl font-semibold">Promotional articles</h2>
+            <SectionHeading title="Promotional articles" step="Promotional articles" />
             <p className="text-sm text-zinc-400">
               Generate marketing-ready articles, author letters, and SEO-friendly reviews.
             </p>

@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   try {
     const { storyDetails, model, allScenes } = await request.json();
 
-    if (!storyDetails || !allScenes) {
+    if (!storyDetails || !allScenes || Object.keys(allScenes).length === 0) {
       return NextResponse.json(
         { error: "Story details and scenes are required" },
         { status: 400 }
@@ -97,6 +97,8 @@ Write with an emotionally engaging, fast-paced tone tailored to teen readers, us
         parsed.push(trimmed);
       } else if (trimmed.startsWith("\"") && trimmed.includes(" - ")) {
         parsed.push(trimmed.replace(" - ", " — "));
+      } else if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+        parsed.push(trimmed);
       }
     });
 
