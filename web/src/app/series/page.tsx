@@ -511,27 +511,18 @@ export default function SeriesPage() {
                   <span>{authEmail}</span>
                   <button
                     onClick={async () => {
-                      setSeries(null);
                       setSeriesId(null);
                       setSeriesBooks([]);
-                      setSeriesTitle("");
-                      setSeriesSummary("");
-                      setSeriesGenre("");
-                      setSeriesTheme("");
-                      setSeriesTimePeriod("");
-                      setSeriesTone("");
-                      setSeriesStyle("");
-                      setSeriesGoals("");
-                      setSeriesAudience("");
-                      setSeriesVoice("");
-                      setSeriesHook("");
-                      setSeriesWorld("");
-                      setSeriesCharacters("");
-                      setSeriesConflict("");
-                      setSeriesArc("");
+                      setSuiteThemes("Coming of age, identity, relationships");
+                      setSuiteCoreConflict("");
+                      setSeriesCharacters([]);
+                      setSelectedCharacterId(null);
+                      setSeriesMemory([]);
+                      setSeriesTimeline([]);
+                      setPlotThreads([]);
+                      setSeriesLogs([]);
                       setSeriesNotes("");
                       setSeriesPrompts("");
-                      setSeriesContext(null);
                       setSelectedBookNumber(1);
                       setUserId(null);
                       setAuthEmail(null);
