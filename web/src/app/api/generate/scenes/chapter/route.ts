@@ -4,6 +4,13 @@ import { runChatCompletion } from "@/lib/openaiClient";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+type Beat = {
+  beat_number?: number;
+  action?: string;
+  emotional_impact?: string;
+  tension_hook?: string;
+};
+
 const safeMap = <T, U>(value: unknown, mapper: (item: T) => U): U[] =>
   Array.isArray(value) ? (value as T[]).map(mapper) : [];
 
@@ -175,7 +182,7 @@ Return your scenes ONLY as a JSON array of strings.`;
 
   const beatsList = Array.isArray(beatsForChapter) ? beatsForChapter : [];
   console.info(`Chapter beats count: ${beatsList.length}`);
-  const beatsText = safeMap(beatsList, (beat) =>
+  const beatsText = safeMap<Beat, string>(beatsList, (beat) =>
     `Beat ${beat.beat_number ?? "?"}: ${
       beat.action ?? "No action"
     }\nEmotional Impact: ${
