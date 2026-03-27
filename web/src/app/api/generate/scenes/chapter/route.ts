@@ -175,32 +175,78 @@ Return your scenes ONLY as a JSON array of strings.`;
     }
 
     if (Array.isArray(parsed)) {
-      return parsed as Array<Record<string, unknown>>;
+      return {
+        scenes: parsed as Array<Record<string, unknown>>,
+        sceneRaw: {
+          input: { chapterNumber, chapterTitle, beatsCount: beatsForChapter.length },
+          output: parsed,
+          parsed,
+        },
+      };
     }
 
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       const parsedRecord = parsed as Record<string, unknown>;
       if (Array.isArray(parsedRecord.scenes)) {
-        return parsedRecord.scenes as Array<Record<string, unknown>>;
+        return {
+          scenes: parsedRecord.scenes as Array<Record<string, unknown>>,
+          sceneRaw: {
+            input: { chapterNumber, chapterTitle, beatsCount: beatsForChapter.length },
+            output: parsedRecord.scenes,
+            parsed: parsedRecord.scenes,
+          },
+        };
       }
       const sceneKeys = Object.keys(parsedRecord).filter((key) =>
         key.toLowerCase().startsWith("scene")
       );
       if (sceneKeys.length > 0) {
-        return safeMap<string, unknown>(
+        const scenes = safeMap<string, unknown>(
           sceneKeys.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
           (key) => parsedRecord[key] ?? ""
         );
+        return {
+          scenes: scenes as Array<Record<string, unknown>>,
+          sceneRaw: {
+            input: { chapterNumber, chapterTitle, beatsCount: beatsForChapter.length },
+            output: scenes,
+            parsed: scenes,
+          },
+        };
       }
-      return Object.values(parsedRecord);
+      const scenes = Object.values(parsedRecord);
+      return {
+        scenes: scenes as Array<Record<string, unknown>>,
+        sceneRaw: {
+          input: { chapterNumber, chapterTitle, beatsCount: beatsForChapter.length },
+          output: scenes,
+          parsed: scenes,
+        },
+      };
     }
 
     if (typeof response === "string" && response.trim()) {
       const splitScenes = splitScenesByMarkers(response);
-      return splitScenes.length > 0 ? splitScenes : [response.trim()];
+      const scenes = splitScenes.length > 0 ? splitScenes : [response.trim()];
+      return {
+        scenes: scenes as Array<Record<string, unknown>>,
+        sceneRaw: {
+          input: { chapterNumber, chapterTitle, beatsCount: beatsForChapter.length },
+          output: scenes,
+          parsed: scenes,
+        },
+      };
     }
 
-    return [`Scene for Chapter ${chapterNumber}: ${chapterTitle}`];
+    const scenes = [`Scene for Chapter ${chapterNumber}: ${chapterTitle}`];
+    return {
+      scenes,
+      sceneRaw: {
+        input: { chapterNumber, chapterTitle, beatsCount: beatsForChapter.length },
+        output: scenes,
+        parsed: scenes,
+      },
+    };
   }
 
   const beatsForChapter = (() => {
