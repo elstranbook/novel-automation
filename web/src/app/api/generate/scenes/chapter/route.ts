@@ -87,6 +87,24 @@ const generateScenesForChapter = async ({
   console.info(`Starting scene generation for Chapter ${chapterNumber}: ${chapterTitle}`);
   const chapterInfo = JSON.stringify(chapterInfoRecord, null, 2);
 
+  const beatsForChapter = (() => {
+    if (Array.isArray(chapterBeats)) {
+      return chapterBeats;
+    }
+    if (chapterBeats && typeof chapterBeats === "object") {
+      const beatsRecord = chapterBeats as Record<string, unknown>;
+      const chapterKey = chapterNumber ? String(chapterNumber) : undefined;
+      const directBeats = chapterKey ? beatsRecord[chapterKey] : undefined;
+      if (Array.isArray(directBeats)) {
+        return directBeats;
+      }
+      return Object.values(beatsRecord).flatMap((value) =>
+        Array.isArray(value) ? value : []
+      );
+    }
+    return [];
+  })();
+
   const storyInfoRecord: Record<string, unknown> =
     typeof storyDetails === "object" && storyDetails
       ? (storyDetails as Record<string, unknown>)
