@@ -2064,7 +2064,6 @@ function StudioContent() {
                 </Link>
               </div>
             </div>
-          </header>
           <div>
             <h1 className="text-3xl font-semibold">Studio</h1>
             <p className="text-zinc-300">
@@ -2072,16 +2071,16 @@ function StudioContent() {
               generate everything you need.
             </p>
             <div className="flex flex-wrap items-center gap-4 text-sm text-zinc-400">
-            <span>Steps complete: {stepsCompleted} / 10</span>
-            {userId ? (
-              <span className="rounded-full border border-zinc-700 px-3 py-1">
-                Signed in
-              </span>
-            ) : (
-              <Link href="/login" className="underline">
-                Sign in to save
-              </Link>
-            )}
+              <span>Steps complete: {stepsCompleted} / 10</span>
+              {userId ? (
+                <span className="rounded-full border border-zinc-700 px-3 py-1">
+                  Signed in
+                </span>
+              ) : (
+                <Link href="/login" className="underline">
+                  Sign in to save
+                </Link>
+              )}
             </div>
           </div>
         </header>
