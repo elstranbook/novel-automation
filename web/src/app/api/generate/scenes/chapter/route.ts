@@ -267,24 +267,6 @@ Return your scenes ONLY as a JSON array of strings.`;
     };
   }
 
-  const beatsForChapter = (() => {
-    if (Array.isArray(chapterBeats)) {
-      return chapterBeats;
-    }
-    if (chapterBeats && typeof chapterBeats === "object") {
-      const beatsRecord = chapterBeats as Record<string, unknown>;
-      const chapterKey = chapterNumber ? String(chapterNumber) : undefined;
-      const directBeats = chapterKey ? beatsRecord[chapterKey] : undefined;
-      if (Array.isArray(directBeats)) {
-        return directBeats;
-      }
-      return Object.values(beatsRecord).flatMap((value) =>
-        Array.isArray(value) ? value : []
-      );
-    }
-    return [];
-  })();
-
   const beatsList = Array.isArray(beatsForChapter) ? beatsForChapter : [];
   console.info(`Chapter beats count: ${beatsList.length}`);
   const beatsText = safeMap<Beat, string>(beatsList, (beat) =>
