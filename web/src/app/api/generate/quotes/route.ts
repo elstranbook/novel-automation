@@ -40,8 +40,19 @@ export async function POST(request: Request) {
       );
     }
 
+    const normalizedScenes = Object.fromEntries(
+      Object.entries(allScenes).map(([chapter, scenes]) => [
+        chapter,
+        Array.isArray(scenes)
+          ? scenes.map((scene) =>
+              typeof scene === "string" ? scene : JSON.stringify(scene)
+            )
+          : [typeof scenes === "string" ? scenes : JSON.stringify(scenes)],
+      ])
+    );
+
     const novelTitle = storyDetails.title ?? "Untitled";
-    const scenesText = formatScenesForQuotes(allScenes);
+    const scenesText = formatScenesForQuotes(normalizedScenes);
 
     const prompt = `
 Analyze the following novel content chapter by chapter and extract the most powerful, emotional, or impactful quotes that would work well for marketing and advertisement. For each quote, include:
