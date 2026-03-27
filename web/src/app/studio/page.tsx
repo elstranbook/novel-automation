@@ -2048,7 +2048,7 @@ function StudioContent() {
         </aside>
         <main className="flex flex-1 flex-col gap-8">
           <header className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
             <Link href="/" className="text-sm text-zinc-400">
               ← Back to home
             </Link>
@@ -3706,7 +3706,6 @@ function StudioContent() {
         )}
       </section>
     )}
-  </div>
   </main>
 </div>
 );
