@@ -196,6 +196,7 @@ Using the chapter summary and story beats, expand Chapter ${chapterNumber} of "$
   }" into a detailed, scene-by-scene breakdown.
 
 Guidelines:
+– Generate exactly ${beatsList.length || "the same number of"} scenes, one scene per beat, in the same order as the beats.
 – The breakdown should follow the natural progression of the chapter, with each scene building on the last to maintain flow, momentum, and emotional resonance.
 – Write in first-person past tense, from ${chapter.pov ?? "the POV character"}'s point of view.
 – Focus on show-don't-tell, using a deep point of view to reveal thoughts, feelings, and conflict through action and internal narration.
@@ -239,6 +240,8 @@ For each beat, create a detailed scene using this prompt:
 Begin writing Chapter ${chapterNumber}: ${chapterTitle}, Scene [beat number] of "${
     storyDetails.title ?? ""
   }" using the detailed scene summary provided.
+
+Return the scenes as a JSON array of strings, with the array length matching the number of beats. Each array entry should be the full scene text for that beat.
 
 The writing should naturally reflect the scene's genre, tone, point of view, setting, and key characters—all of which can be inferred from the scene summary provided.
 
