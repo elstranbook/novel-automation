@@ -72,7 +72,7 @@ const generateScenesForChapter = async ({
   minSceneLength: number;
   premisesAndEndings?: Record<string, unknown>;
   characterProfiles?: string;
-}) => {
+}): Promise<{ scenes: Array<Record<string, unknown>>; sceneRaw: Record<string, unknown> }> => {
   const chapterInfoRecord: Record<string, unknown> =
     typeof chapter === "object" && chapter ? (chapter as Record<string, unknown>) : {};
   if (!chapterInfoRecord.number) chapterInfoRecord.number = 1;
