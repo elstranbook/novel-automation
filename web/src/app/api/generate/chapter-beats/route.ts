@@ -1,5 +1,49 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+
+type Beat = {
+  beat_number?: number;
+  action?: string;
+  emotional_impact?: string;
+  tension_hook?: string;
+};
+
+const logGeneration = async (payload: {
+  step: string;
+  attempt: number;
+  success: boolean;
+  usedFallback: boolean;
+}) => {
+  try {
+    await supabaseAdmin.from("generation_logs").insert({
+      step: payload.step,
+      attempt: payload.attempt,
+      success: payload.success,
+      used_fallback: payload.usedFallback,
+    });
+  } catch (error) {
+    console.warn("Failed to write generation log", error);
+  }
+};
+
+const parseJsonArray = (raw: unknown) => {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") {
+    const match = raw.match(/\[[\s\S]*\]/);
+    if (match) {
+      return JSON.parse(match[0]);
+    }
+    return JSON.parse(raw);
+  }
+  return null;
+};
+
+const validateBeats = (beatsList: Beat[], expected: number) => {
+  if (!Array.isArray(beatsList)) return false;
+  if (beatsList.length !== expected) return false;
+  return beatsList.every((beat) => beat.action && beat.emotional_impact);
+};
 
 export async function POST(request: Request) {
   try {
@@ -28,9 +72,7 @@ export async function POST(request: Request) {
 
       console.info(`Generating detailed action beats for Chapter ${chapterNum}: ${chapterTitle}...`);
 
-      const prompt = `
-Take the following chapter summary and generate a list of 5 highly detailed action beats for a prose draft. Use the additional story information provided to fully flesh out the chapter's structure and momentum.
-
+      const baseContext = `
 Chapter: ${chapterNum}: ${chapterTitle}
 Chapter Outline: ${JSON.stringify(chapterRecord, null, 2)}
 Chapter Summary: ${chapterSummary}
@@ -46,52 +88,85 @@ Additional Story Information:
 - Plot Threads: ${storyDetails?.series_context?.plot_threads ? JSON.stringify(storyDetails.series_context.plot_threads).slice(0, 800) : ""}
 - Callbacks: ${storyDetails?.series_context?.callbacks ? JSON.stringify(storyDetails.series_context.callbacks).slice(0, 800) : ""}
 - Chapter Guide: ${JSON.stringify(guideDetails, null, 2)}
+`;
 
-Guidelines:
-– Always use proper nouns (character names, locations, etc.)—avoid vague pronouns.
-– Each beat should reflect clear action, emotional shifts, or key decisions that push the story forward.
-– Beats should show what happens, who does it, and why it matters—emotionally or narratively.
-– Think in terms of cinematic or dramatic moments, whether you're outlining for a screenplay, novel, or graphic narrative.
-– These beats should serve as a scene-by-scene guide to write the full chapter with clarity and purpose.
+      const strictPrompt = `
+Take the chapter summary and produce exactly 5 action beats that progress the chapter from opening to closing.
 
-For each beat, also include:
-* Emotional impact or shift: (How does the character feel before/after this beat?)
-* Beat-ending tension or hook: (What question is left hanging?)
+${baseContext}
 
-Format your response as a JSON array where each item is an object with these fields:
-- "beat_number": (integer)
-- "action": (string describing what happens)
-- "emotional_impact": (string describing the emotional shift)
-- "tension_hook": (string describing the question left hanging)
+Rules:
+– Always use proper nouns (character names, locations, etc.).
+– Each beat must include a clear action, a resulting emotional shift, and a hanging tension/hook.
+– Beats must be sequential and build momentum. No beat may be redundant.
+– Use specific, concrete events that can be written as scenes.
+
+Return ONLY a JSON array of exactly 5 objects with these fields:
+- "beat_number": integer (1-5)
+- "action": string
+- "emotional_impact": string
+- "tension_hook": string
+`;
+
+      const simplifiedPrompt = `
+Create 5 sequential chapter beats using the summary and outline below.
+Return a JSON array of 5 objects with beat_number, action, emotional_impact, tension_hook.
+
+${baseContext}
+`;
+
+      const recoveryPrompt = `
+Write 5 simple beats (1-5) as JSON objects with action, emotional_impact, tension_hook.
+Chapter summary: ${chapterSummary}
 `;
 
       const system = `You are a professional novelist and writing coach creating detailed action beats for a chapter.
-Provide rich, specific guidance for each beat that aligns with the overall narrative and themes.
-Your beats should be concrete and actionable, helping to create a cohesive and engaging story.
-Format your response as a proper JSON array with all the required fields.`;
+Return valid JSON only.`;
 
-      const response = await runChatCompletion({
-        model: model || "gpt-4.1-mini",
-        system,
-        prompt,
-        jsonResponse: false,
-        maxTokens: 4000,
-      });
-
-      let parsed: unknown = response;
-      try {
-        if (typeof response === "string") {
-          const match = response.match(/\[\s*{[\s\S]*}\s*\]/);
-          parsed = match ? JSON.parse(match[0]) : JSON.parse(response);
+      const runAttempt = async (prompt: string, attempt: number) => {
+        console.info("chapter_beats attempt", { chapterNum, attempt });
+        const response = await runChatCompletion({
+          model: model || "gpt-4.1-mini",
+          system,
+          prompt,
+          jsonResponse: false,
+          maxTokens: 4000,
+        });
+        console.info("chapter_beats raw output", { chapterNum, attempt, response });
+        try {
+          const parsed = parseJsonArray(response);
+          console.info("chapter_beats parsed output", { chapterNum, attempt, parsed });
+          if (Array.isArray(parsed) && validateBeats(parsed as Beat[], 5)) {
+            return { parsed, success: true };
+          }
+          return { parsed, success: false };
+        } catch (error) {
+          console.warn("chapter_beats parse error", { chapterNum, attempt, error });
+          return { parsed: null, success: false };
         }
-      } catch {
-        parsed = null;
+      };
+
+      const attempts = [strictPrompt, simplifiedPrompt, recoveryPrompt];
+      let finalParsed: Beat[] | null = null;
+      let usedFallback = false;
+
+      for (let attempt = 0; attempt < attempts.length; attempt += 1) {
+        const { parsed, success } = await runAttempt(attempts[attempt], attempt + 1);
+        if (success && Array.isArray(parsed)) {
+          finalParsed = parsed as Beat[];
+          await logGeneration({
+            step: "beats",
+            attempt: attempt + 1,
+            success: true,
+            usedFallback: false,
+          });
+          break;
+        }
       }
 
-      if (Array.isArray(parsed)) {
-        beats[chapterNum] = parsed as Array<Record<string, unknown>>;
-      } else {
-        beats[chapterNum] = [
+      if (!finalParsed) {
+        usedFallback = true;
+        finalParsed = [
           {
             beat_number: 1,
             action: "Character faces an initial challenge related to the chapter's main conflict",
@@ -123,7 +198,15 @@ Format your response as a proper JSON array with all the required fields.`;
             tension_hook: "How will this apparent victory affect their overall journey?",
           },
         ];
+        await logGeneration({
+          step: "beats",
+          attempt: attempts.length,
+          success: false,
+          usedFallback: true,
+        });
       }
+
+      beats[chapterNum] = finalParsed;
     }
 
     return NextResponse.json({ beats });

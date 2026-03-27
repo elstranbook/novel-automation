@@ -1,5 +1,24 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+
+const logGeneration = async (payload: {
+  step: string;
+  attempt: number;
+  success: boolean;
+  usedFallback: boolean;
+}) => {
+  try {
+    await supabaseAdmin.from("generation_logs").insert({
+      step: payload.step,
+      attempt: payload.attempt,
+      success: payload.success,
+      used_fallback: payload.usedFallback,
+    });
+  } catch (error) {
+    console.warn("Failed to write generation log", error);
+  }
+};
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -92,33 +111,52 @@ Write only the prose for the scene, without any formatting, headers, or scene nu
         maxTokens: 3000,
       });
 
-    let response = await runProse(longDirective);
-    let prose = String(response ?? "");
+    const attempts = [
+      longDirective,
+      `${longDirective}\n\nStrict: Follow all instructions. Must be vivid and detailed.`,
+      `Write the scene in clear, straightforward prose. Keep first-person past tense and emotional truth.\n${scene}`,
+    ];
 
-    if (!validateProse(prose)) {
-      response = await runProse(
-        `${longDirective}\n\nStrict: Follow all instructions. Must be vivid and detailed.`
-      );
+    let prose = "";
+    let usedFallback = false;
+
+    for (let attempt = 0; attempt < attempts.length; attempt += 1) {
+      console.info("prose attempt", { sceneNumber, attempt: attempt + 1 });
+      const response = await runProse(attempts[attempt]);
+      console.info("prose raw output", { sceneNumber, attempt: attempt + 1, response });
       prose = String(response ?? "");
+      console.info("prose parsed output", { sceneNumber, attempt: attempt + 1, prose });
+      if (validateProse(prose)) {
+        await logGeneration({
+          step: "prose",
+          attempt: attempt + 1,
+          success: true,
+          usedFallback: false,
+        });
+        break;
+      }
     }
 
     if (!validateProse(prose)) {
-      response = await runProse(
-        `Write the scene in clear, straightforward prose. Keep first-person past tense and emotional truth.\n${scene}`
-      );
-      prose = String(response ?? "");
-    }
-
-    if (!validateProse(prose)) {
-      response = await runProse(
+      usedFallback = true;
+      const response = await runProse(
         `Recovery mode: Write a simple but complete version of this scene. First-person past tense, 2-4 paragraphs.\n${scene}`
       );
+      console.info("prose raw output", { sceneNumber, attempt: attempts.length + 1, response });
       prose = String(response ?? "");
     }
 
     if (!validateProse(prose)) {
+      usedFallback = true;
       prose = `I moved through the moment with a heavy heart, trying to make sense of what just happened. ${scene}`;
     }
+
+    await logGeneration({
+      step: "prose",
+      attempt: attempts.length + (usedFallback ? 1 : 0),
+      success: validateProse(prose),
+      usedFallback,
+    });
 
     if (typeof previousScene === "string" && previousScene.trim()) {
       const lastParagraph = previousScene.trim().split(/\n\n+/).slice(-1)[0];

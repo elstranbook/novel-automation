@@ -278,6 +278,15 @@ create table if not exists public.series_memory (
   created_at timestamptz default now()
 );
 
+create table if not exists public.generation_logs (
+  id uuid primary key default gen_random_uuid(),
+  step text not null,
+  attempt integer not null,
+  success boolean not null,
+  used_fallback boolean not null,
+  created_at timestamptz default now()
+);
+
 create table if not exists public.series_timeline (
   id uuid primary key default gen_random_uuid(),
   series_id uuid references public.series(id) on delete cascade,
@@ -312,6 +321,7 @@ alter table public.series_characters enable row level security;
 alter table public.series_worlds enable row level security;
 alter table public.series_memory enable row level security;
 alter table public.series_timeline enable row level security;
+alter table public.generation_logs enable row level security;
 alter table public.canon_log enable row level security;
 alter table public.canon_log_entry enable row level security;
 alter table public.relationship_log enable row level security;

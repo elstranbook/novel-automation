@@ -1,5 +1,30 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+
+type SceneSummary = {
+  scene_number?: number;
+  summary?: string;
+  beat_reference?: string;
+};
+
+const logGeneration = async (payload: {
+  step: string;
+  attempt: number;
+  success: boolean;
+  usedFallback: boolean;
+}) => {
+  try {
+    await supabaseAdmin.from("generation_logs").insert({
+      step: payload.step,
+      attempt: payload.attempt,
+      success: payload.success,
+      used_fallback: payload.usedFallback,
+    });
+  } catch (error) {
+    console.warn("Failed to write generation log", error);
+  }
+};
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -13,6 +38,21 @@ type Beat = {
 
 const safeMap = <T, U>(value: unknown, mapper: (item: T) => U): U[] =>
   Array.isArray(value) ? (value as T[]).map(mapper) : [];
+
+const splitScenesByMarkers = (value: string): string[] => {
+  const normalized = value.trim();
+  if (!normalized) return [];
+  const pattern = /(\n|^)(scene\s+\d+[:.)-]?\s*)/gi;
+  const matches = [...normalized.matchAll(pattern)];
+  if (matches.length <= 1) {
+    return [normalized];
+  }
+  const indices = matches.map((match) => match.index ?? 0).concat(normalized.length);
+  return indices.slice(0, -1).map((start, index) => {
+    const end = indices[index + 1];
+    return normalized.slice(start, end).trim();
+  });
+};
 
 const generateScenesForChapter = async ({
   chapter,
@@ -156,7 +196,8 @@ Return your scenes ONLY as a JSON array of strings.`;
     }
 
     if (typeof response === "string" && response.trim()) {
-      return [response.trim()];
+      const splitScenes = splitScenesByMarkers(response);
+      return splitScenes.length > 0 ? splitScenes : [response.trim()];
     }
 
     return [`Scene for Chapter ${chapterNumber}: ${chapterTitle}`];
@@ -190,19 +231,7 @@ Return your scenes ONLY as a JSON array of strings.`;
     \nTension/Hook: ${beat.tension_hook ?? "None"}`
   ).join("\n\n");
 
-  const prompt = `
-Using the chapter summary and story beats, expand Chapter ${chapterNumber} of "${
-    storyDetails.title ?? ""
-  }" into a detailed, scene-by-scene breakdown.
-
-Guidelines:
-– Generate exactly ${beatsList.length || "the same number of"} scenes, one scene per beat, in the same order as the beats.
-– The breakdown should follow the natural progression of the chapter, with each scene building on the last to maintain flow, momentum, and emotional resonance.
-– Write in first-person past tense, from ${chapter.pov ?? "the POV character"}'s point of view.
-– Focus on show-don't-tell, using a deep point of view to reveal thoughts, feelings, and conflict through action and internal narration.
-– Use realistic dialogue with purpose—each exchange should move the story forward or reveal something meaningful.
-– Emphasize strong verbs and avoid overly mushy or sentimental description.
-
+  const baseContext = `
 Chapter Summary:
 ${chapter.summary ?? "No summary available"}
 
@@ -234,91 +263,134 @@ Additional Information:
 - Genre: ${storyDetails.genre ?? "Young Adult Fiction"}
 - Theme: ${storyDetails.story_theme ?? "Coming of age"}
 - Setting: ${storyDetails.setting ?? "Contemporary world"}
-
-For each beat, create a detailed scene using this prompt:
-
-Begin writing Chapter ${chapterNumber}: ${chapterTitle}, Scene [beat number] of "${
-    storyDetails.title ?? ""
-  }" using the detailed scene summary provided.
-
-Return the scenes as a JSON array of strings, with the array length matching the number of beats. Each array entry should be the full scene text for that beat.
-
-The writing should naturally reflect the scene's genre, tone, point of view, setting, and key characters—all of which can be inferred from the scene summary provided.
-
-Writing Guidelines:
-– Focus on a slow, deliberate buildup, allowing the emotional tone and character stakes to deepen gradually.
-– Use intimate, vivid moments to show the emotional toll of the scene and allow readers to connect with the characters.
-– Let dialogue reveal dynamics, tension, or internal struggles. Keep it natural, grounded, and full of subtext.
-– Emphasize "show, don't tell" storytelling. Let physical actions, choices, and setting carry emotional and thematic weight.
-– Use strong verbs, sensory-rich description, and a deep POV (if applicable) to fully immerse the reader.
-– Allow the scene to naturally lead toward its conclusion and, if appropriate, transition smoothly into the next.
-
-Narrative Style:
-* Point of View: First-person for the main character
-* Tense: Past
-
-Write up to ${maxSceneLength} words of character-driven, emotionally layered prose.
-Let the scene summary guide your tone, structure, pacing, and character focus.
-
-Write only the prose for the scene, without any formatting, headers, or scene numbers.
-
-Format your response as a JSON array of scene strings, one scene per beat. Return just the array of scene strings.
 `;
 
-  const system = `You are a professional young adult novelist writing Chapter ${chapterNumber} of '${
+  const strictPrompt = `
+Using the chapter summary and story beats, create structured scene summaries for Chapter ${chapterNumber} of "${
     storyDetails.title ?? ""
-  }' in first-person past tense.
-Create vivid, emotionally resonant scenes from the main character's perspective.
-Include sensory details, realistic dialogue, and deep point-of-view narration.
-Focus on a slow, deliberate buildup, allowing the emotional tone and character stakes to deepen gradually.
-Use intimate, vivid moments to show the emotional toll of the scene and let readers connect with characters.
-Write only the prose for each scene, without any formatting, headers, or scene numbers.
-Return your scenes ONLY as a JSON array of strings.`;
+  }".
 
-  const response = await runChatCompletion({
-    model,
-    system,
-    prompt,
-    jsonResponse: false,
-    maxTokens: 8000,
+Rules:
+– Generate exactly ${beatsList.length || "the same number of"} scenes, one scene per beat, in order.
+– Each scene must be a concise, concrete summary that can be expanded into prose later.
+– Include a beat reference (e.g., "Beat 1").
+
+Return ONLY valid JSON in this format:
+[
+  {"scene_number": 1, "summary": "...", "beat_reference": "Beat 1"}
+]
+
+${baseContext}
+`;
+
+  const simplifiedPrompt = `
+Write ${beatsList.length || ""} short scene summaries from the beats below.
+Return JSON array with scene_number, summary, beat_reference.
+
+${baseContext}
+`;
+
+  const recoveryPrompt = `
+Write ${beatsList.length || 5} simple scene summaries (one per beat).
+Return JSON array with scene_number, summary, beat_reference.
+Chapter summary: ${chapter.summary ?? "No summary available"}
+`;
+
+  const system = `You are a professional story planner creating structured scene summaries.
+Return valid JSON only.`;
+
+  const runAttempt = async (prompt: string, attempt: number) => {
+    console.info("chapter_scenes attempt", { chapterNumber, attempt });
+    const response = await runChatCompletion({
+      model,
+      system,
+      prompt,
+      jsonResponse: false,
+      maxTokens: 4000,
+    });
+    console.info("chapter_scenes raw output", { chapterNumber, attempt, response });
+    let parsed: unknown = response;
+    try {
+      if (typeof response === "string") {
+        const match = response.match(/\[[\s\S]*\]/);
+        parsed = match ? JSON.parse(match[0]) : JSON.parse(response);
+      }
+    } catch (error) {
+      console.warn("chapter_scenes parse error", { chapterNumber, attempt, error });
+      parsed = null;
+    }
+
+    if (Array.isArray(parsed)) {
+      const cleaned = parsed.map((item, index) => {
+        const scene = item as Record<string, unknown>;
+        return {
+          scene_number: Number(scene.scene_number ?? index + 1),
+          summary: String(scene.summary ?? scene.scene ?? ""),
+          beat_reference: String(scene.beat_reference ?? `Beat ${index + 1}`),
+        };
+      });
+      return { parsed: cleaned, success: cleaned.every((scene) => scene.summary) };
+    }
+
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const parsedRecord = parsed as Record<string, unknown>;
+      if (Array.isArray(parsedRecord.scenes)) {
+        return { parsed: parsedRecord.scenes, success: true };
+      }
+      const sceneKeys = Object.keys(parsedRecord).filter((key) =>
+        key.toLowerCase().startsWith("scene")
+      );
+      if (sceneKeys.length > 0) {
+        const scenes = safeMap<string, SceneSummary>(
+          sceneKeys.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+          (key) => ({ summary: String(parsedRecord[key] ?? "") })
+        );
+        return { parsed: scenes, success: scenes.length > 0 };
+      }
+    }
+
+    if (typeof response === "string" && response.trim()) {
+      const splitScenes = splitScenesByMarkers(response);
+      const scenes = splitScenes.map((text, index) => ({
+        scene_number: index + 1,
+        summary: text,
+        beat_reference: `Beat ${index + 1}`,
+      }));
+      return { parsed: scenes, success: scenes.length > 0 };
+    }
+
+    return { parsed: null, success: false };
+  };
+
+  const attempts = [strictPrompt, simplifiedPrompt, recoveryPrompt];
+  for (let attempt = 0; attempt < attempts.length; attempt += 1) {
+    const { parsed, success } = await runAttempt(attempts[attempt], attempt + 1);
+    console.info("chapter_scenes parsed output", { chapterNumber, attempt: attempt + 1, parsed });
+    if (success && parsed) {
+      await logGeneration({
+        step: "scenes",
+        attempt: attempt + 1,
+        success: true,
+        usedFallback: false,
+      });
+      return parsed as Array<Record<string, unknown>>;
+    }
+  }
+
+  await logGeneration({
+    step: "scenes",
+    attempt: attempts.length,
+    success: false,
+    usedFallback: true,
   });
 
-  let parsed: unknown = response;
-  try {
-    if (typeof response === "string") {
-      const match = response.match(/\[[\s\S]*\]/);
-      parsed = match ? JSON.parse(match[0]) : JSON.parse(response);
-    }
-  } catch {
-    parsed = null;
-  }
+  const fallbackScenes = beatsList.map((beat, index) => ({
+    scene_number: index + 1,
+    summary: (beat as Beat).action ?? `Scene for Beat ${index + 1}`,
+    beat_reference: `Beat ${index + 1}`,
+  }));
 
-  if (Array.isArray(parsed)) {
-    return parsed as Array<Record<string, unknown>>;
-  }
-
-  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-    const parsedRecord = parsed as Record<string, unknown>;
-    if (Array.isArray(parsedRecord.scenes)) {
-      return parsedRecord.scenes as Array<Record<string, unknown>>;
-    }
-    const sceneKeys = Object.keys(parsedRecord).filter((key) =>
-      key.toLowerCase().startsWith("scene")
-    );
-    if (sceneKeys.length > 0) {
-      return safeMap<string, unknown>(
-        sceneKeys.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
-        (key) => parsedRecord[key] ?? ""
-      );
-    }
-    return Object.values(parsedRecord);
-  }
-
-  if (typeof response === "string" && response.trim()) {
-    return [response.trim()];
-  }
-
-  return [`Scene for Chapter ${chapterNumber}: ${chapterTitle}`];
+  return fallbackScenes;
 };
 
 export async function POST(request: Request) {
