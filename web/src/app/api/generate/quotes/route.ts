@@ -87,15 +87,23 @@ Extract 10-15 impactful quotes from the novel sections provided, following the f
 Return the quotes as an array of properly formatted strings, not as a numbered list.
 Write with an emotionally engaging, fast-paced tone tailored to teen readers, using hooks, curiosity, and relatable language while avoiding generic phrasing.`;
 
-    const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
-      system,
-      prompt,
-      jsonResponse: false,
-      maxTokens: 2000,
-    });
+    const attempts = [prompt, `${prompt}\n\nReturn only the formatted quotes.`];
+    let response: unknown = null;
+    for (let attempt = 0; attempt < attempts.length; attempt += 1) {
+      console.info("quotes attempt", { attempt: attempt + 1 });
+      response = await runChatCompletion({
+        model: model || "gpt-4.1-mini",
+        system,
+        prompt: attempts[attempt],
+        jsonResponse: false,
+        maxTokens: 2000,
+      });
+      console.info("quotes raw output", { attempt: attempt + 1, response });
+      if (response) break;
+    }
 
     if (Array.isArray(response)) {
+      console.info("quotes parsed output", { quotes: response });
       return NextResponse.json({ quotes: response });
     }
 
@@ -114,9 +122,11 @@ Write with an emotionally engaging, fast-paced tone tailored to teen readers, us
     });
 
     if (parsed.length === 0) {
+      console.info("quotes parsed output", { quotes: [String(response)] });
       return NextResponse.json({ quotes: [String(response)] });
     }
 
+    console.info("quotes parsed output", { quotes: parsed });
     return NextResponse.json({ quotes: parsed });
   } catch (error) {
     console.error(error);
