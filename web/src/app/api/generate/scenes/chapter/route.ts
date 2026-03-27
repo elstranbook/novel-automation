@@ -140,7 +140,7 @@ Return your scenes ONLY as a JSON array of strings.`;
         key.toLowerCase().startsWith("scene")
       );
       if (sceneKeys.length > 0) {
-        return safeMap(
+        return safeMap<string, unknown>(
           sceneKeys.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
           (key) => parsedRecord[key] ?? ""
         );
@@ -296,7 +296,7 @@ Return your scenes ONLY as a JSON array of strings.`;
       key.toLowerCase().startsWith("scene")
     );
     if (sceneKeys.length > 0) {
-      return safeMap(
+      return safeMap<string, unknown>(
         sceneKeys.sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
         (key) => parsedRecord[key] ?? ""
       );
