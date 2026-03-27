@@ -3710,5 +3710,6 @@ function StudioContent() {
     )}
   </main>
 </div>
+</div>
 );
 }
