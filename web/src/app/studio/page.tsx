@@ -2064,6 +2064,7 @@ function StudioContent() {
                 </Link>
               </div>
             </div>
+          </header>
           <div>
             <h1 className="text-3xl font-semibold">Studio</h1>
             <p className="text-zinc-300">
@@ -2083,7 +2084,6 @@ function StudioContent() {
               )}
             </div>
           </div>
-        </header>
 
         {(message || error) && (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-200">
