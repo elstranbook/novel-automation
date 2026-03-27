@@ -520,7 +520,7 @@ export default function SeriesPage() {
                       setSeriesTimeline([]);
                       setPlotThreads([]);
                       setSeriesLogs([]);
-                      setSelectedBookNumber(1);
+                      setSuiteBookNumber(1);
                       setUserId(null);
                       setAuthEmail(null);
                       await supabase.auth.signOut();
