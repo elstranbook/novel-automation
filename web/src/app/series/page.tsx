@@ -520,7 +520,6 @@ export default function SeriesPage() {
                       setSeriesTimeline([]);
                       setPlotThreads([]);
                       setSeriesLogs([]);
-                      setSeriesNotes("");
                       setSeriesPrompts("");
                       setSelectedBookNumber(1);
                       setUserId(null);
