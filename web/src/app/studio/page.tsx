@@ -2049,21 +2049,21 @@ function StudioContent() {
         <main className="flex flex-1 flex-col gap-8">
           <header className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
-            <Link href="/" className="text-sm text-zinc-400">
-              ← Back to home
-            </Link>
-            <div className="flex flex-wrap items-center gap-2">
-              {lastSavedAt && (
-                <span className="text-xs text-zinc-400">Last saved: {lastSavedAt}</span>
-              )}
-              <Link
-                href="/series"
-                className="rounded-full border border-emerald-500/60 px-3 py-1 text-xs text-emerald-200"
-              >
-                Go to Series
+              <Link href="/" className="text-sm text-zinc-400">
+                ← Back to home
               </Link>
+              <div className="flex flex-wrap items-center gap-2">
+                {lastSavedAt && (
+                  <span className="text-xs text-zinc-400">Last saved: {lastSavedAt}</span>
+                )}
+                <Link
+                  href="/series"
+                  className="rounded-full border border-emerald-500/60 px-3 py-1 text-xs text-emerald-200"
+                >
+                  Go to Series
+                </Link>
+              </div>
             </div>
-          </div>
           <h1 className="text-3xl font-semibold">Studio</h1>
           <p className="text-zinc-300">
             Full pipeline studio with Supabase persistence. Use the steps below to
