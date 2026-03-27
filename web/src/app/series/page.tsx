@@ -511,6 +511,30 @@ export default function SeriesPage() {
                   <span>{authEmail}</span>
                   <button
                     onClick={async () => {
+                      setSeries(null);
+                      setSeriesId(null);
+                      setSeriesBooks([]);
+                      setSeriesTitle("");
+                      setSeriesSummary("");
+                      setSeriesGenre("");
+                      setSeriesTheme("");
+                      setSeriesTimePeriod("");
+                      setSeriesTone("");
+                      setSeriesStyle("");
+                      setSeriesGoals("");
+                      setSeriesAudience("");
+                      setSeriesVoice("");
+                      setSeriesHook("");
+                      setSeriesWorld("");
+                      setSeriesCharacters("");
+                      setSeriesConflict("");
+                      setSeriesArc("");
+                      setSeriesNotes("");
+                      setSeriesPrompts("");
+                      setSeriesContext(null);
+                      setSelectedBookNumber(1);
+                      setUserId(null);
+                      setAuthEmail(null);
                       await supabase.auth.signOut();
                       window.location.href = "/login";
                     }}

@@ -2028,6 +2028,7 @@ function StudioContent() {
               <span>{authEmail}</span>
               <button
                 onClick={async () => {
+                  resetPipeline();
                   await supabase.auth.signOut();
                   window.location.href = "/login";
                 }}

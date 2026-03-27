@@ -62,6 +62,10 @@ export async function POST(request: Request) {
       : (chapterOutline?.chapters as Array<Record<string, unknown>>) ?? [];
 
     const beats: Record<string, Array<Record<string, unknown>>> = {};
+    const beatsRaw: { attempts: Array<{ attempt: number; output: unknown }>; final: Beat[] } = {
+      attempts: [],
+      final: [],
+    };
 
     for (const chapter of outlineArray) {
       const chapterRecord = chapter as Record<string, unknown>;
@@ -151,6 +155,7 @@ Return valid JSON only.`;
       let finalParsed: Beat[] | null = null;
       let usedFallback = false;
       const rawAttempts: Array<{ attempt: number; output: unknown }> = [];
+      beatsRaw.attempts = rawAttempts;
 
       for (let attempt = 0; attempt < attempts.length; attempt += 1) {
         const { parsed, success, raw } = await runAttempt(attempts[attempt], attempt + 1);
@@ -213,13 +218,10 @@ Return valid JSON only.`;
 
       beats[chapterNum] = finalParsed;
 
-      const beatsRaw = {
-        attempts: rawAttempts,
-        final: finalParsed,
-      };
+      beatsRaw.final = finalParsed;
     }
 
-    return NextResponse.json({ beats, beatsRaw: { attempts: rawAttempts, final: beats } });
+    return NextResponse.json({ beats, beatsRaw });
   } catch (error) {
     console.error(error);
     return NextResponse.json(
