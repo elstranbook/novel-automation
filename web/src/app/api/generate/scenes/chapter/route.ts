@@ -246,8 +246,9 @@ Return your scenes ONLY as a JSON array of strings.`;
     if (typeof response === "string" && response.trim()) {
       const splitScenes = splitScenesByMarkers(response);
       const scenes = splitScenes.length > 0 ? splitScenes : [response.trim()];
+      const normalizedScenes = scenes.map((scene) => ({ summary: scene }));
       return {
-        scenes: scenes as Array<Record<string, unknown>>,
+        scenes: normalizedScenes,
         sceneRaw: {
           input: { chapterNumber, chapterTitle, beatsCount: beatsForChapter.length },
           output: scenes,
