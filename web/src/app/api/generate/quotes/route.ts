@@ -53,24 +53,68 @@ export async function POST(request: Request) {
     const { storyDetails: requestStory, model, allScenes, novelId } = await request.json();
 
     let storyDetails = requestStory as Record<string, unknown> | null;
-    if (!storyDetails && novelId) {
+    let scenesSource = allScenes as Record<string, unknown> | null;
+
+    if ((!storyDetails || !scenesSource || Object.keys(scenesSource).length === 0) && novelId) {
       const { data: novelRow } = await supabaseAdmin
         .from("novels")
         .select("story_details")
         .eq("id", novelId)
         .maybeSingle();
-      storyDetails = (novelRow?.story_details as Record<string, unknown> | null) ?? null;
+      storyDetails = storyDetails ?? (novelRow?.story_details as Record<string, unknown> | null) ?? null;
+
+      if (!scenesSource || Object.keys(scenesSource).length === 0) {
+        const { data: proseRows } = await supabaseAdmin
+          .from("prose_scenes")
+          .select("chapter_title,scene_content,scene_order")
+          .eq("novel_id", novelId)
+          .order("scene_order", { ascending: true });
+
+        if (proseRows && proseRows.length > 0) {
+          scenesSource = proseRows.reduce<Record<string, string[]>>((acc, row) => {
+            const chapterTitle = row.chapter_title as string;
+            if (!acc[chapterTitle]) acc[chapterTitle] = [];
+            acc[chapterTitle].push(row.scene_content as string);
+            return acc;
+          }, {});
+        }
+      }
+
+      if (!scenesSource || Object.keys(scenesSource).length === 0) {
+        const { data: sceneRows } = await supabaseAdmin
+          .from("scenes")
+          .select("chapter_title,scene_content,scene_order")
+          .eq("novel_id", novelId)
+          .order("scene_order", { ascending: true });
+
+        if (sceneRows && sceneRows.length > 0) {
+          scenesSource = sceneRows.reduce<Record<string, string[]>>((acc, row) => {
+            const chapterTitle = row.chapter_title as string;
+            if (!acc[chapterTitle]) acc[chapterTitle] = [];
+            acc[chapterTitle].push(row.scene_content as string);
+            return acc;
+          }, {});
+        }
+      }
     }
 
-    if (!storyDetails || !allScenes || Object.keys(allScenes).length === 0) {
-      return NextResponse.json(
-        { error: "Story details and scenes are required" },
-        { status: 400 }
-      );
+    if (!storyDetails || !scenesSource || Object.keys(scenesSource).length === 0) {
+      await logGeneration({
+        step: "quotes",
+        attempt: 0,
+        success: false,
+        usedFallback: true,
+      });
+      return NextResponse.json({
+        quotes: [
+          "Some stories don’t begin with answers—only questions.",
+          "I didn’t know it yet, but everything was about to change.",
+        ],
+      });
     }
 
     const normalizedScenes = Object.fromEntries(
-      Object.entries(allScenes).map(([chapter, scenes]) => [
+      Object.entries(scenesSource).map(([chapter, scenes]) => [
         chapter,
         Array.isArray(scenes)
           ? scenes.map((scene) =>
