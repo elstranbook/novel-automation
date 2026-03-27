@@ -299,6 +299,7 @@ function StudioContent() {
 
   const [userId, setUserId] = useState<string | null>(null);
   const [novels, setNovels] = useState<NovelSummary[]>([]);
+  const [showSavedNovels, setShowSavedNovels] = useState(false);
   const [selectedNovelId, setSelectedNovelId] = useState<string | null>(null);
   const [novelId, setNovelId] = useState<string | null>(null);
 
@@ -2011,7 +2012,7 @@ function StudioContent() {
   };
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <div className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-12">
+      <div className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-12 lg:flex-row">
         <header className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Link href="/" className="text-sm text-zinc-400">
@@ -2285,30 +2286,59 @@ function StudioContent() {
         </div>
         </section>
 
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">Saved novels</h2>
-          <p className="text-sm text-zinc-400">
-            Pick a stored novel to reload all generation steps.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            {novels.length === 0 && (
-              <span className="text-sm text-zinc-500">No novels saved yet.</span>
-            )}
-            {novels.map((novel) => (
+        <aside className="order-2 w-full lg:order-1 lg:w-[280px]">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4">
+            <div className="flex items-center justify-between gap-2 lg:hidden">
+              <div>
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                  Saved novels
+                </h2>
+                <p className="text-xs text-zinc-500">
+                  Pick a stored novel to reload all generation steps.
+                </p>
+              </div>
               <button
-                key={novel.id}
-                onClick={() => setSelectedNovelId(novel.id)}
-                className={`rounded-full border px-4 py-2 text-sm ${
-                  novel.id === selectedNovelId
-                    ? "border-white text-white"
-                    : "border-zinc-700 text-zinc-300"
-                }`}
+                onClick={() => setShowSavedNovels((prev) => !prev)}
+                className="rounded-full border border-zinc-700 px-3 py-1 text-[10px] text-zinc-200"
               >
-                {novel.title}
+                {showSavedNovels ? "Hide" : "Show"}
               </button>
-            ))}
+            </div>
+            <div className="hidden flex-col gap-3 lg:flex">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                Saved novels
+              </h2>
+              <p className="text-xs text-zinc-500">
+                Pick a stored novel to reload all generation steps.
+              </p>
+            </div>
+            <div
+              className={`${showSavedNovels ? "flex" : "hidden"} flex-col gap-2 pt-4 lg:flex lg:pt-2`}
+            >
+              {novels.length === 0 && (
+                <span className="text-xs text-zinc-500">No novels saved yet.</span>
+              )}
+              {novels.map((novel) => (
+                <button
+                  key={novel.id}
+                  onClick={() => setSelectedNovelId(novel.id)}
+                  className={`group flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs transition ${
+                    novel.id === selectedNovelId
+                      ? "border-emerald-400/60 bg-emerald-500/10 text-emerald-200"
+                      : "border-zinc-800 text-zinc-300 hover:border-zinc-600"
+                  }`}
+                >
+                  <span className="truncate" title={novel.title}>
+                    {novel.title}
+                  </span>
+                  <span className="text-[10px] text-zinc-500">
+                    {new Date(novel.created_at).toLocaleDateString()}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
-        </section>
+        </aside>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <SectionHeading title="1. Story details" step="Story details" />
