@@ -258,8 +258,9 @@ Return your scenes ONLY as a JSON array of strings.`;
     }
 
     const scenes = [`Scene for Chapter ${chapterNumber}: ${chapterTitle}`];
+    const normalizedScenes = scenes.map((scene) => ({ summary: scene }));
     return {
-      scenes,
+      scenes: normalizedScenes,
       sceneRaw: {
         input: { chapterNumber, chapterTitle, beatsCount: beatsForChapter.length },
         output: scenes,
