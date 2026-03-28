@@ -20,8 +20,8 @@ const getStoryValue = (storyDetails: StoryDetails, key: string, fallback: string
 
 export async function POST(request: Request) {
   try {
-    const { storyDetails, model, articleContent, platform } =
-      (await request.json()) as SocialSnippetsRequest;
+    const { storyDetails, model, articleContent, platform, studioTitle } =
+      (await request.json()) as SocialSnippetsRequest & { studioTitle?: string };
 
     if (!storyDetails) {
       return NextResponse.json(
@@ -30,7 +30,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const title = getStoryValue(storyDetails, "title", "Untitled");
+    const title = getStoryValue(
+      { ...storyDetails, title: storyDetails?.title ?? studioTitle },
+      "title",
+      "Untitled"
+    );
     const theme = getStoryValue(storyDetails, "story_theme", "Coming of age");
     const genre = getStoryValue(storyDetails, "genre", "Young Adult Fiction");
 

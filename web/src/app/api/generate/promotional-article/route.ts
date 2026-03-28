@@ -57,7 +57,8 @@ export async function POST(request: Request) {
       tone = "formal",
       ctaType = "medium",
       includeLinks = false,
-    } = (await request.json()) as PromotionalArticleRequest;
+      studioTitle,
+    } = (await request.json()) as PromotionalArticleRequest & { studioTitle?: string };
 
     if (!storyDetails) {
       return NextResponse.json(
@@ -66,7 +67,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const title = getStoryValue(storyDetails, "title", "Untitled");
+    const title = getStoryValue(
+      { ...storyDetails, title: storyDetails?.title ?? studioTitle },
+      "title",
+      "Untitled"
+    );
     const genre = getStoryValue(storyDetails, "genre", "Young Adult Fiction");
     const theme = getStoryValue(storyDetails, "story_theme", "Coming of age");
     const mainCharacter = getStoryValue(

@@ -1747,6 +1747,7 @@ function StudioContent() {
           tone: options?.tone ?? "formal",
           ctaType: options?.ctaType ?? "medium",
           includeLinks: options?.includeLinks ?? false,
+          studioTitle: title,
         }),
       });
 
@@ -1799,6 +1800,7 @@ function StudioContent() {
           model,
           articleContent,
           platform,
+          studioTitle: title,
         }),
       });
 
