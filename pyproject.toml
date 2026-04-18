@@ -8,4 +8,6 @@ dependencies = [
     "openai>=1.76.0",
     "pathlib>=1.0.1",
     "streamlit>=1.44.1",
+    "supabase>=2.13.0",
+    "requests>=2.31.0",
 ]

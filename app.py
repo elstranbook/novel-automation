@@ -7,6 +7,8 @@ from pathlib import Path
 from novel_generator import NovelAutomationTool
 from utils import create_output_directory
 from db_service import NovelDatabaseService
+from mockup_manager import MockupManager
+from publishing_service import PublishingService
 
 # Set page configuration
 st.set_page_config(
@@ -2196,6 +2198,46 @@ Scene Summary:
                     file_name=f"{settings['title']}_cover_design.txt",
                     mime="text/plain",
                 )
+                
+                # Mockup Integration Section
+                st.markdown("---")
+                st.subheader("🖼️ Create Book Mockup")
+                st.info("Already have a cover image? Use this section to generate professional 3D mockups.")
+                
+                with st.form("mockup_form"):
+                    cover_url = st.text_input("Cover Image URL", placeholder="https://example.com/your-cover.jpg")
+                    
+                    # Fetch templates from MockupManager
+                    try:
+                        templates = MockupManager.get_templates()
+                        template_options = {t['name']: t['id'] for t in templates} if templates else {"Standard Book": "standard-book"}
+                    except:
+                        template_options = {"Standard Book": "standard-book"}
+                    
+                    template_name = st.selectbox("Select Mockup Template", options=list(template_options.keys()))
+                    
+                    submit_mockup = st.form_submit_button("Generate 3D Mockup")
+                    
+                    if submit_mockup:
+                        if not cover_url:
+                            st.error("Please provide a cover image URL.")
+                        else:
+                            with st.spinner("Submitting mockup render job..."):
+                                novel_id = st.session_state.state.get("novel_id")
+                                template_id = template_options.get(template_name)
+                                
+                                result = MockupManager.submit_render(
+                                    novel_id=novel_id,
+                                    cover_id=f"cover_{int(time.time())}",
+                                    cover_url=cover_url,
+                                    template_id=template_id
+                                )
+                                
+                                if result:
+                                    st.success(f"Mockup render job submitted! Job ID: {result}")
+                                    st.info("The render is being processed in the background.")
+                                else:
+                                    st.error("Failed to submit mockup render job. Check your connection to the Mockups app.")
             else:
                 st.info("Generate a professional cover design prompt that could be sent to a designer.")
     
@@ -2253,6 +2295,32 @@ Scene Summary:
     
     # Display cover design prompt if available
     display_cover_design_prompt(st.session_state.state.get("cover_design_prompt"))
+
+    # 12. Finalize & Publish
+    novel_id = st.session_state.state.get("novel_id")
+    if novel_id:
+        st.markdown("---")
+        st.header("🚀 Finalize & Publish")
+        
+        with st.expander("Publishing Controls", expanded=True):
+            st.markdown("""
+            Publishing your novel will promote it from the **Studio** workspace to the **Public** library.
+            This makes it available for the main application and potential readers.
+            """)
+            
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                if st.button("📢 Publish to Public Library", type="primary", key="publish_btn"):
+                    with st.spinner("Promoting novel to public schema..."):
+                        result = PublishingService.publish_novel(novel_id)
+                        if "success" in result:
+                            st.balloons()
+                            st.success(f"Successfully published! New Public ID: {result['public_id']}")
+                        else:
+                            st.error(f"Publishing failed: {result.get('error', 'Unknown error')}")
+            
+            with col2:
+                st.caption("Note: This will copy all chapters, scenes, and marketing materials.")
 
 if __name__ == "__main__":
     main()

@@ -3,6 +3,8 @@ import json
 import os
 import time
 from pathlib import Path
+from supabase import create_client
+from supabase.lib.client_options import ClientOptions
 
 class NovelDatabaseService:
     """
@@ -11,6 +13,17 @@ class NovelDatabaseService:
     """
     DB_PATH = "novels.db"
     
+    @classmethod
+    def get_client(cls, schema="studio"):
+        """Get a Supabase client for the specified schema"""
+        url = os.environ.get("SUPABASE_URL")
+        key = os.environ.get("SUPABASE_KEY")
+        if not url or not key:
+            raise ValueError("SUPABASE_URL and SUPABASE_KEY must be set in environment")
+        
+        options = ClientOptions(schema=schema)
+        return create_client(url, key, options=options)
+
     @classmethod
     def _get_connection(cls):
         """Get a database connection and create tables if they don't exist"""

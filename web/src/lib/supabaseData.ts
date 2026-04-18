@@ -35,6 +35,18 @@ export const createNovel = async ({
   return data;
 };
 
+export const updateNovel = async (
+  novelId: string,
+  updates: Record<string, any>
+) => {
+  const { error } = await supabaseAdmin
+    .from("novels")
+    .update(updates)
+    .eq("id", novelId);
+
+  if (error) throw error;
+};
+
 export const updateNovelStoryDetails = async ({
   novelId,
   storyDetails,

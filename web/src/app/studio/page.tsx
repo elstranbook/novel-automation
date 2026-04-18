@@ -6,7 +6,18 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 
-const modelOptions = ["gpt-4.1-mini", "gpt-4.1", "gpt-4o", "gpt-4"];
+// Mockup App Imports
+import { MockupEditor } from "@/components/editor/MockupEditor";
+import { TemplateCard } from "@/components/gallery/TemplateCard";
+import { CategoryFilter } from "@/components/gallery/CategoryFilter";
+import { AutoPreviewGallery } from "@/components/gallery/AutoPreviewGallery";
+import { useMockupState } from "@/hooks/useMockupState";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ArrowLeft } from "lucide-react";
+import type { Template, Category, TemplatesResponse } from "@/types";
+
+const modelOptions = ["gpt-4o", "gpt-4o-mini", "o3-mini", "o1-preview", "o1-mini"];
 
 type StoryDetails = Record<string, unknown>;
 
@@ -364,14 +375,87 @@ function StudioContent() {
     Record<string, boolean>
   >({});
   const [copiedSnippetKey, setCopiedSnippetKey] = useState<string | null>(null);
+  const [view, setView] = useState<"write" | "cover" | "mockups" | "promotional" | "publish">("write");
   const [activeStudioTab, setActiveStudioTab] = useState<
     "pipeline" | "promotional"
   >("pipeline");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+
   const [showPipelineMap, setShowPipelineMap] = useState(false);
   const [showPromotionalMap, setShowPromotionalMap] = useState(false);
   const [coverPrompt, setCoverPrompt] = useState<string | null>(null);
+  const [imageModel, setImageModel] = useState("dall-e-3");
+  const [generatedCoverUrl, setGeneratedCoverUrl] = useState<string | null>(null);
+  const [isPublished, setIsPublished] = useState(false);
+  const [publishPublicId, setPublishPublicId] = useState<string | null>(null);
   const [proseScenes, setProseScenes] = useState<ScenesMap | null>(null);
+
+  // Mockup App State
+  const {
+    selectedTemplate,
+    activeTab: mockupActiveTab,
+    userImage: mockupUserImage,
+    setSelectedTemplate,
+    setUserImage: setMockupUserImage,
+    setActiveTab: setMockupActiveTab,
+  } = useMockupState();
+
+  const [mockupTemplates, setMockupTemplates] = useState<Template[]>([]);
+  const [filteredTemplates, setFilteredTemplates] = useState<Template[]>([]);
+  const [isMockupLoading, setIsMockupLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedSubcategory, setSelectedSubcategory] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [mockupViewMode, setMockupViewMode] = useState<"gallery" | "smart-preview">("gallery");
+
+  // Keep a legacy coverUrl for compatibility if needed, 
+  // but sync it with mockupUserImage where possible.
+  const [coverUrl, setCoverUrl] = useState("");
+  const [mockupJobId, setMockupJobId] = useState<string | null>(null);
+
+  // Sync generated cover to mockup user image
+  useEffect(() => {
+    if (generatedCoverUrl) {
+      setMockupUserImage(generatedCoverUrl);
+    }
+  }, [generatedCoverUrl, setMockupUserImage]);
+
+  // Fetch mockup templates
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      setIsMockupLoading(true);
+      try {
+        const response = await fetch("/api/templates");
+        const data: TemplatesResponse = await response.json();
+        if (data && Array.isArray(data.templates)) {
+          setMockupTemplates(data.templates);
+          setFilteredTemplates(data.templates);
+        }
+      } catch (error) {
+        console.error("Failed to fetch templates:", error);
+      } finally {
+        setIsMockupLoading(false);
+      }
+    };
+    fetchTemplates();
+  }, []);
+
+  // Filter mockup templates
+  useEffect(() => {
+    let filtered = mockupTemplates;
+    if (selectedCategory !== "all") {
+      filtered = filtered.filter((t) => t.category === selectedCategory);
+    }
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (t) =>
+          t.name.toLowerCase().includes(query) ||
+          t.description?.toLowerCase().includes(query)
+      );
+    }
+    setFilteredTemplates(filtered);
+  }, [mockupTemplates, selectedCategory, searchQuery]);
 
   const [editingText, setEditingText] = useState("");
   const [editingSuggestions, setEditingSuggestions] = useState<Array<Record<string, unknown>>>([]);
@@ -579,8 +663,7 @@ function StudioContent() {
   );
 
   const studioTabs = [
-    { id: "pipeline" as const, label: "Pipeline" },
-    { id: "promotional" as const, label: "Promotional Articles" },
+    { id: "pipeline" as const, label: "Books (Write)" },
   ];
 
   const requireUser = async () => {
@@ -746,6 +829,14 @@ function StudioContent() {
       setMaxSceneLength(novel.max_scene_length ?? 1000);
       setMinSceneLength(novel.min_scene_length ?? 300);
       setStoryDetails(novel.story_details ?? null);
+
+      if (novel.cover_url) {
+        setGeneratedCoverUrl(novel.cover_url);
+        setCoverUrl(novel.cover_url);
+      } else {
+        setGeneratedCoverUrl(null);
+        setCoverUrl("");
+      }
     }
 
     const [{ data: premises }, { data: synopsis }, { data: profiles }] =
@@ -1840,6 +1931,85 @@ function StudioContent() {
     }
   };
 
+  const generateCoverImage = async () => {
+    if (!coverPrompt) return;
+    setLoadingStep("cover-image");
+    setError(null);
+    try {
+      const response = await fetch("/api/generate/cover-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          prompt: coverPrompt, 
+          model: imageModel,
+          novelId: novelId // Pass novel ID for saving
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to generate cover image");
+      const data = await response.json();
+      setGeneratedCoverUrl(data.imageUrl);
+      setCoverUrl(data.imageUrl); // Sync with mockup form
+      setMessage("Cover image generated and saved successfully!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setLoadingStep(null);
+    }
+  };
+
+  const generateMockup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!coverUrl) return;
+    setLoadingStep("mockup");
+    setError(null);
+    try {
+      const response = await fetch("/api/mockup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          novelId,
+          coverUrl,
+          templateId: selectedTemplate,
+          coverId: `cover_${Date.now()}`,
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to submit mockup");
+      const data = await response.json();
+      setMockupJobId(data.jobId);
+      setMessage("Mockup render job submitted successfully!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setLoadingStep(null);
+    }
+  };
+
+  const publishNovelAction = async () => {
+    if (!novelId) return;
+    setLoadingStep("publish");
+    setError(null);
+    try {
+      const response = await fetch("/api/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ novelId }),
+      });
+      if (!response.ok) throw new Error("Failed to publish novel");
+      const data = await response.json();
+      if (data.success) {
+        setIsPublished(true);
+        setPublishPublicId(data.publicId);
+        setMessage("Novel published to public library successfully!");
+      } else {
+        throw new Error(data.error || "Publishing failed");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setLoadingStep(null);
+    }
+  };
+
   const clearSocialSnippets = async () => {
     setError(null);
     try {
@@ -2049,7 +2219,37 @@ function StudioContent() {
           </div>
         </aside>
         <main className="flex flex-1 flex-col gap-8">
-          <header className="flex flex-col gap-3">
+          {/* Persistent Main Menu */}
+          <div className="sticky top-0 z-40 -mx-6 bg-zinc-950/80 px-6 py-4 backdrop-blur-md border-b border-zinc-800">
+            <div className="flex items-center justify-center gap-2 sm:gap-6">
+              {[
+                { id: "write", label: "Write" },
+                { id: "cover", label: "Cover" },
+                { id: "mockups", label: "Mockups" },
+                { id: "promotional", label: "Promotional" },
+                { id: "publish", label: "Publish" }
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    setView(t.id as any);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className={`rounded-full px-5 py-2 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                    view === t.id
+                      ? "bg-white text-zinc-900 shadow-lg shadow-white/5"
+                      : "text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {view === "write" && (
+            <div className="space-y-8 animate-in fade-in duration-700">
+              <header className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <Link href="/" className="text-sm text-zinc-400">
                 ← Back to home
@@ -2098,14 +2298,19 @@ function StudioContent() {
             {studioTabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveStudioTab(tab.id)}
+                onClick={() => {
+                  setActiveStudioTab(tab.id);
+                  if (tab.id === "promotional") {
+                    setView("promotional");
+                  }
+                }}
                 className={`rounded-full border px-4 py-2 text-sm transition ${
                   activeStudioTab === tab.id
                     ? "border-white text-white"
                     : "border-zinc-700 text-zinc-400"
                 }`}
               >
-                {tab.label}
+                {tab.id === "pipeline" ? "Books (Write)" : tab.label}
               </button>
             ))}
           </div>
@@ -3253,9 +3458,12 @@ function StudioContent() {
         </section>
       </>
     )}
+  </div>
+)}
 
-    {activeStudioTab === "promotional" && (
-      <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+{view === "promotional" && (
+  <div className="space-y-8 animate-in fade-in duration-700">
+    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <SectionHeading title="Promotional articles" step="Promotional articles" />
@@ -3709,7 +3917,180 @@ function StudioContent() {
           </div>
         )}
       </section>
+    </div>
+  )}
+
+{view === "cover" && (
+  <div className="space-y-8 animate-in fade-in duration-700">
+    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl">
+      <SectionHeading title="🎨 Cover Design" step="Cover" />
+      <p className="mt-2 text-sm text-zinc-500">Generate a high-quality AI cover image for your novel.</p>
+      
+      <div className="mt-6">
+        <label className="flex flex-col gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+          Generation Model
+          <select 
+            value={imageModel}
+            onChange={(e) => setImageModel(e.target.value)}
+            className="mt-2 max-w-xs rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-100 focus:border-zinc-500 focus:outline-none transition-colors"
+          >
+            <option value="dall-e-3">GPT Image 1.5 (Default)</option>
+            <option value="dall-e-2">GPT Image 1.0 (Standard)</option>
+          </select>
+        </label>
+      </div>
+      
+      <div className="mt-8 grid gap-8 md:grid-cols-2">
+        <div className="space-y-4">
+          <button 
+            onClick={generateCoverPrompt}
+            disabled={!storyDetails || loadingStep === "cover"}
+            className="w-full rounded-2xl bg-zinc-800 py-4 text-sm font-bold uppercase tracking-widest text-white hover:bg-zinc-700 transition-all"
+          >
+            {loadingStep === "cover" ? "Generating Prompt..." : "1. Refresh Design Prompt"}
+          </button>
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6 min-h-[200px]">
+            <pre className="whitespace-pre-wrap text-xs text-zinc-400 leading-relaxed">{coverPrompt || "Generate a prompt in the Write view first..."}</pre>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <button 
+            onClick={generateCoverImage}
+            disabled={!coverPrompt || loadingStep === "cover-image"}
+            className="w-full rounded-2xl bg-white py-4 text-sm font-black uppercase tracking-widest text-zinc-950 hover:bg-zinc-200 transition-all"
+          >
+            {loadingStep === "cover-image" ? "Creating Image..." : "2. Generate AI Cover Image"}
+          </button>
+          <div className="aspect-[2/3] w-full max-w-sm mx-auto overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950 flex items-center justify-center shadow-2xl">
+            {generatedCoverUrl ? (
+              <img src={generatedCoverUrl} alt="Generated Cover" className="h-full w-full object-cover" />
+            ) : (
+              <div className="text-center p-12 opacity-20">
+                <span className="text-6xl">🎨</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+)}
+
+{view === "mockups" && (
+  <div className="space-y-8 animate-in fade-in duration-700 min-h-[800px]">
+    {mockupActiveTab === "gallery" ? (
+      <div className="space-y-8">
+        <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl">
+          <SectionHeading title="🖼️ 3D Mockup Gallery" step="Mockup" />
+          <p className="mt-2 text-sm text-zinc-500">Select a professional template to render your book cover in 3D.</p>
+
+          <div className="mt-8 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex-1 min-w-[200px]">
+                <Input 
+                  placeholder="Search templates..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="rounded-xl border-zinc-800 bg-zinc-950 text-zinc-100"
+                />
+              </div>
+              <div className="flex items-center gap-2 bg-zinc-900/50 p-1 rounded-xl border border-zinc-800">
+                <Button 
+                  variant={mockupViewMode === 'gallery' ? 'secondary' : 'ghost'} 
+                  size="sm"
+                  onClick={() => setMockupViewMode('gallery')}
+                  className="rounded-lg text-[10px] uppercase font-bold tracking-widest"
+                >
+                  Gallery
+                </Button>
+                <Button 
+                  variant={mockupViewMode === 'smart-preview' ? 'secondary' : 'ghost'} 
+                  size="sm"
+                  onClick={() => setMockupViewMode('smart-preview')}
+                  className="rounded-lg text-[10px] uppercase font-bold tracking-widest"
+                >
+                  Smart Preview
+                </Button>
+              </div>
+            </div>
+
+            {mockupViewMode === 'smart-preview' && mockupUserImage ? (
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-950/50 p-6">
+                <AutoPreviewGallery userImage={mockupUserImage} onSelectTemplate={setSelectedTemplate} />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <CategoryFilter 
+                  categories={[
+                    { id: 'all', name: 'All', icon: '🎨' },
+                    { id: 'novel', name: 'Novels', icon: '📚' },
+                    { id: 'tshirt', name: 'Apparel', icon: '👕' },
+                  ]} 
+                  selectedCategory={selectedCategory} 
+                  onSelect={setSelectedCategory} 
+                />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {isMockupLoading ? (
+                    [1,2,3].map(i => <div key={i} className="aspect-[4/3] rounded-2xl bg-zinc-900 animate-pulse border border-zinc-800" />)
+                  ) : filteredTemplates.length > 0 ? (
+                    filteredTemplates.map((template) => (
+                      <TemplateCard key={template.id} template={template} onClick={setSelectedTemplate} />
+                    ))
+                  ) : (
+                    <div className="col-span-full py-12 text-center text-zinc-500 italic">No templates found matching your search.</div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+    ) : (
+      <div className="h-full animate-in zoom-in-95 duration-500">
+        <div className="mb-4">
+          <Button variant="ghost" size="sm" onClick={() => setMockupActiveTab('gallery')} className="text-zinc-500 hover:text-white uppercase text-[10px] font-bold tracking-widest gap-2">
+            <ArrowLeft className="w-3 h-3" /> Back to Gallery
+          </Button>
+        </div>
+        <div className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-1 overflow-hidden shadow-2xl min-h-[700px]">
+          <MockupEditor onBack={() => setMockupActiveTab('gallery')} />
+        </div>
+      </div>
     )}
+  </div>
+)}
+{view === "publish" && (
+  <div className="flex flex-col items-center justify-center py-20 animate-in fade-in zoom-in-95 duration-700">
+    <section className="max-w-2xl w-full rounded-[3rem] border border-zinc-800 bg-zinc-900/20 p-16 text-center backdrop-blur-3xl shadow-2xl">
+      <div className="mx-auto h-20 w-20 text-5xl mb-8 grayscale hover:grayscale-0 transition-all cursor-default">🚀</div>
+      <h2 className="text-4xl font-black tracking-tight text-zinc-100">Finalize & Publish</h2>
+      <p className="mt-6 text-zinc-400 leading-relaxed text-lg">Promote your novel from the Studio to the Public library.</p>
+      
+      <div className="mt-12 space-y-6">
+        <button
+          onClick={publishNovelAction}
+          disabled={!novelId || isPublished || !!loadingStep}
+          className={`w-full max-w-md rounded-full px-10 py-6 text-xl font-black uppercase tracking-widest transition-all shadow-2xl ${
+            isPublished 
+            ? "bg-emerald-500 text-white cursor-default" 
+            : "bg-white text-zinc-900 hover:scale-105 active:scale-95 hover:shadow-white/10"
+          }`}
+        >
+          {loadingStep === "publish" ? "Publishing..." : isPublished ? "✓ Published" : "Publish to Library"}
+        </button>
+        
+        {publishPublicId && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 pt-4">
+            <p className="text-xs font-bold uppercase tracking-widest text-emerald-500">Available in Library</p>
+            <p className="text-[10px] text-zinc-600 mt-2 font-mono">{publishPublicId}</p>
+          </div>
+        )}
+      </div>
+    </section>
+  </div>
+)}
   </main>
 </div>
 </div>
