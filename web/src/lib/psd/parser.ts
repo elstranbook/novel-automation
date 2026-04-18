@@ -94,7 +94,7 @@ export async function parsePSD(buffer: Buffer): Promise<ParsedPSD> {
     await setupCanvas();
     
     // 2. Read PSD metadata (skipping images for speed and memory efficiency)
-    const psd: Psd = readPsd(buffer, { skipThumbnail: true, skipLayerImages: true });
+    const psd: Psd = readPsd(buffer, { skipThumbnail: true, skipLayerImageData: true });
     
     const width = psd.width || 0;
     const height = psd.height || 0;

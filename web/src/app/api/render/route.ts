@@ -202,24 +202,26 @@ export async function POST(request: NextRequest) {
           outputHeight: exportHeight || 2048,
         });
         
-        // Save rendered image locally (fallback)
-        const rendersDir = path.join(process.cwd(), 'public', 'renders');
-        if (!existsSync(rendersDir)) {
-          await mkdir(rendersDir, { recursive: true });
-        }
-        
-        const filename = `${render.id}.png`;
-        const filepath = path.join(rendersDir, filename);
-        await writeFile(filepath, imageBuffer);
-        
-        // Try to upload to CDN
-        let resultUrl = `/renders/${filename}`;
+        // Try to upload to CDN (works on Vercel)
+        let resultUrl = '';
         try {
           const key = generateRenderKey(templateId);
           const uploadResult = await uploadToStorage(imageBuffer, key, 'image/png');
           resultUrl = uploadResult.url;
         } catch {
-          // Use local path if CDN upload fails
+          // Fallback: save locally (only works locally, not on Vercel)
+          try {
+            const rendersDir = path.join(process.cwd(), 'public', 'renders');
+            if (!existsSync(rendersDir)) {
+              await mkdir(rendersDir, { recursive: true });
+            }
+            const filename = `${render.id}.png`;
+            const filepath = path.join(rendersDir, filename);
+            await writeFile(filepath, imageBuffer);
+            resultUrl = `/renders/${filename}`;
+          } catch {
+            // No storage available, will return without URL
+          }
         }
         
         // Update render status

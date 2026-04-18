@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     let thumbnailUrl = '';
     
     try {
-      const psdForImage = new PSD(buffer);
+      const psdForImage = new PSD(buffer.buffer);
       await psdForImage.parse();
       const psdLayers = psdForImage.tree().descendants();
       
@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
             boundsY: layer.bounds?.y || null,
             boundsWidth: layer.bounds?.width || null,
             boundsHeight: layer.bounds?.height || null,
-            warpData: layer.warpData || null,
+            warpData: layer.warpData as any || null,
             perspectiveData: (layer.perspectiveTransform as any) || null,
             isColorable: layer.isColorable,
             defaultColor: layer.defaultColor,

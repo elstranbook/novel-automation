@@ -31,21 +31,22 @@ export interface TemplateLayer {
   transformScaleX: number | null;
   transformScaleY: number | null;
   transformRotation: number | null;
-  warpData: string | null;
+  boundsX: number | null;
+  boundsY: number | null;
+  boundsWidth: number | null;
+  boundsHeight: number | null;
+  bounds?: { x: number; y: number; width: number; height: number } | null;
+  warpData: any | null;
+  perspectiveData: any | null;
+  perspectiveTransform?: any | null;
   maskPath: string | null;
   blendMode: string;
   opacity: number;
   defaultColor: string | null;
   isColorable: boolean;
-  layerPart?: string | null; // "front", "spine", "back", "pages"
-  perspectiveTransform?: PerspectiveTransform | null;
-  // Bounds for smart objects (pixel coordinates from PSD)
-  bounds?: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  } | null;
+  layerPart: string | null;
+  compositeUrl: string | null;
+  createdAt: Date;
 }
 
 export interface ColorOption {

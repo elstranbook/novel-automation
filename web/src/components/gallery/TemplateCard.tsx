@@ -27,6 +27,13 @@ const categoryNames: Record<string, string> = {
 };
 
 export function TemplateCard({ template, onClick, priority = false }: TemplateCardProps) {
+  // Validate thumbnail URL - must be a valid non-empty string
+  // Handle: http://, https://, //cdn.url, /local/path
+  const rawThumbnail = template.thumbnail;
+  const hasValidThumbnail = rawThumbnail && 
+    rawThumbnail.length > 0 && 
+    (rawThumbnail.startsWith('http') || rawThumbnail.startsWith('https') || rawThumbnail.startsWith('//') || rawThumbnail.startsWith('/'));
+
   return (
     <motion.div
       whileHover={{ y: -4 }}
@@ -38,15 +45,21 @@ export function TemplateCard({ template, onClick, priority = false }: TemplateCa
         onClick={() => onClick(template)}
       >
         <div className="relative aspect-square overflow-hidden bg-gray-100 dark:bg-gray-800">
-          <Image
-            src={template.thumbnail}
-            alt={template.name}
-            fill
-            priority={priority}
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          {hasValidThumbnail ? (
+            <Image
+              src={template.thumbnail}
+              alt={template.name}
+              fill
+              priority={priority}
+              className="object-cover transition-transform duration-500 group-hover:scale-105"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-200 dark:bg-gray-800">
+              <span className="text-4xl">📚</span>
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
           <div className="absolute bottom-0 left-0 right-0 p-4 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
             <p className="text-white text-sm line-clamp-2">{template.description}</p>
           </div>

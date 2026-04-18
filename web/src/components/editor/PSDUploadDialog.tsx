@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Dialog,
@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import type { Template } from '@/types';
 import {
   Upload,
   FileImage,
@@ -53,11 +54,26 @@ interface PSDParseResult {
 }
 
 interface PSDUploadDialogProps {
-  onTemplateCreated?: (templateId: string) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onTemplateCreated?: (template: Template) => void;
 }
 
-export function PSDUploadDialog({ onTemplateCreated }: PSDUploadDialogProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function PSDUploadDialog({ open, onOpenChange, onTemplateCreated }: PSDUploadDialogProps) {
+  const [isOpen, setIsOpen] = useState(open ?? false);
+
+  // Sync controlled open state
+  useEffect(() => {
+    if (open !== undefined) {
+      setIsOpen(open);
+    }
+  }, [open]);
+
+  // Handle open change
+  const handleOpenChange = (newOpen: boolean) => {
+    setIsOpen(newOpen);
+    onOpenChange?.(newOpen);
+  };
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -185,7 +201,52 @@ export function PSDUploadDialog({ onTemplateCreated }: PSDUploadDialogProps) {
 
         // Notify parent if template was created
         if (result.templateId && onTemplateCreated) {
-          onTemplateCreated(result.templateId);
+          // Fetch the full template to pass back
+          try {
+            const res = await fetch(`/api/templates?id=${result.templateId}`);
+            const data = await res.json();
+            if (data.templates?.[0]) {
+              onTemplateCreated(data.templates[0]);
+            } else {
+              // Fallback: construct minimal template object
+              onTemplateCreated({
+                id: result.templateId,
+                name: file.name.replace(/\.psd$/i, ''),
+                slug: result.templateId,
+                description: null,
+                category: 'custom',
+                thumbnail: '',
+                baseImage: '',
+                width: result.width || 0,
+                height: result.height || 0,
+                isActive: true,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                layers: result.layers || [],
+                colorOptions: [],
+              });
+            }
+          } catch {
+            // Fallback with minimal data
+            onTemplateCreated({
+                id: result.templateId,
+                name: file.name.replace(/\.psd$/i, ''),
+                slug: result.templateId,
+                description: null,
+                category: 'custom',
+                thumbnail: '',
+                baseImage: '',
+                width: result.width || 0,
+                height: result.height || 0,
+                isActive: true,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                layers: result.layers || [],
+                colorOptions: [],
+              });
+          }
+          // Close the dialog
+          handleOpenChange(false);
         }
       } else {
         setError(result.error || 'Failed to parse PSD file');

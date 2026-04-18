@@ -205,6 +205,7 @@ export async function generateMockupWithColors(
     const colorLayerPath = path.join(process.cwd(), 'public', colorLayerImage.replace(/^\//, ''));
     if (fs.existsSync(colorLayerPath)) {
       const colorLayerBuffer = fs.readFileSync(colorLayerPath);
+      // @ts-ignore
       resultBuffer = await applyBlendMode(baseBuffer, colorLayerBuffer, 'color', 1.0);
     }
   }

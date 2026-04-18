@@ -58,7 +58,7 @@ export async function uploadToStorage(
         ContentType: contentType,
       }));
       
-      const cdnUrl = process.env.R2_CDN_URL || `${process.env.R2_ENDPOINT}/${process.env.R2_BUCKET}`;
+      const cdnUrl = process.env.R2_PUBLIC_BASE_URL || `${process.env.R2_ENDPOINT}/${process.env.R2_BUCKET}`;
       return {
         url: `${cdnUrl}/${key}`,
         storageType: 'r2',
@@ -183,8 +183,8 @@ export function isStorageAvailable(): { available: boolean; type: 'r2' | 'local'
  * Get the public URL for a stored file
  */
 export function getPublicUrl(key: string): string {
-  if (R2_CONFIGURED && process.env.R2_CDN_URL) {
-    return `${process.env.R2_CDN_URL}/${key}`;
+  if (R2_CONFIGURED && process.env.R2_PUBLIC_BASE_URL) {
+    return `${process.env.R2_PUBLIC_BASE_URL}/${key}`;
   }
   
   return `/renders/${key}`;

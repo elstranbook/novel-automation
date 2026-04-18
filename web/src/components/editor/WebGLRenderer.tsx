@@ -223,7 +223,7 @@ return () => {
         const corners = smartObjectLayer.perspectiveTransform.corners;
         geometry = new THREE.PlaneGeometry(1, 1, 3, 3); // 4x4 grid of vertices
         // Interpolate grid points based on 4 corners
-        for (let y = 0; j <= 3; j++) {
+        for (let j = 0; j <= 3; j++) {
           for (let i = 0; i <= 3; i++) {
             const u = i / 3;
             const v = j / 3;

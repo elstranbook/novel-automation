@@ -556,7 +556,8 @@ export function warpToBookCover(
     if (pagesCtx) {
       pagesCtx.fillStyle = options.pagesColor;
       pagesCtx.fillRect(0, 0, pagesCanvas.width, pagesCanvas.height);
-      applyCylindricalWarp(ctx, pagesCanvas, warp.pages);
+      const pagesImageData = pagesCtx.getImageData(0, 0, pagesCanvas.width, pagesCanvas.height);
+      applyCylindricalWarp(ctx, pagesImageData, warp.pages);
     }
   }
 }

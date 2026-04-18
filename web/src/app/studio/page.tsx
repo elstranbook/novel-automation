@@ -11,10 +11,11 @@ import { MockupEditor } from "@/components/editor/MockupEditor";
 import { TemplateCard } from "@/components/gallery/TemplateCard";
 import { CategoryFilter } from "@/components/gallery/CategoryFilter";
 import { AutoPreviewGallery } from "@/components/gallery/AutoPreviewGallery";
+import { PSDUploadDialog } from "@/components/editor/PSDUploadDialog";
 import { useMockupState } from "@/hooks/useMockupState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import type { Template, Category, TemplatesResponse } from "@/types";
 
 const modelOptions = ["gpt-4o", "gpt-4o-mini", "o3-mini", "o1-preview", "o1-mini"];
@@ -407,6 +408,7 @@ function StudioContent() {
   const [selectedSubcategory, setSelectedSubcategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [mockupViewMode, setMockupViewMode] = useState<"gallery" | "smart-preview">("gallery");
+  const [showPSDDialog, setShowPSDDialog] = useState(false);
 
   // Keep a legacy coverUrl for compatibility if needed, 
   // but sync it with mockupUserImage where possible.
@@ -664,6 +666,7 @@ function StudioContent() {
 
   const studioTabs = [
     { id: "pipeline" as const, label: "Books (Write)" },
+    { id: "promotional" as const, label: "Promotional" },
   ];
 
   const requireUser = async () => {
@@ -4031,6 +4034,12 @@ function StudioContent() {
                   onSelect={setSelectedCategory} 
                 />
 
+                <div className="flex justify-end">
+                  <Button onClick={() => setShowPSDDialog(true)} className="gap-2">
+                    <Plus className="w-4 h-4" /> Upload PSD Template
+                  </Button>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {isMockupLoading ? (
                     [1,2,3].map(i => <div key={i} className="aspect-[4/3] rounded-2xl bg-zinc-900 animate-pulse border border-zinc-800" />)
@@ -4044,6 +4053,16 @@ function StudioContent() {
                 </div>
               </div>
             )}
+
+            <PSDUploadDialog 
+              open={showPSDDialog} 
+              onOpenChange={setShowPSDDialog}
+              onTemplateCreated={(template) => {
+                setMockupTemplates(prev => [template, ...prev]);
+                setFilteredTemplates(prev => [template, ...prev]);
+                setShowPSDDialog(false);
+              }} 
+            />
           </div>
         </section>
       </div>
