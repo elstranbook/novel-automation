@@ -169,7 +169,7 @@ export async function generatePresignedUploadUrl(
     });
 
     const publicUrl = process.env.R2_PUBLIC_BASE_URL 
-      ? `${process.env.R2_PUBLIC_BASE_URL}/${key}`
+      ? `${process.env.R2_PUBLIC_BASE_URL.replace(/\/$/, '')}/${key}`
       : `${process.env.R2_ENDPOINT}/${process.env.R2_BUCKET}/${key}`;
 
     return { uploadUrl, key, publicUrl };
