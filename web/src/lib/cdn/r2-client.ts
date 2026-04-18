@@ -59,7 +59,7 @@ export async function uploadToStorage(
         ContentType: contentType,
       }));
       
-      const cdnUrl = process.env.R2_PUBLIC_BASE_URL || `${process.env.R2_ENDPOINT}/${process.env.R2_BUCKET}`;
+      const cdnUrl = (process.env.R2_PUBLIC_BASE_URL || `${process.env.R2_ENDPOINT}/${process.env.R2_BUCKET}`).replace(/\/$/, '');
       return {
         url: `${cdnUrl}/${key}`,
         storageType: 'r2',

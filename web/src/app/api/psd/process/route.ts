@@ -16,17 +16,8 @@ export async function POST(request: NextRequest) {
     
     if (!psdKey) return NextResponse.json({ error: 'No PSD key provided' }, { status: 400 });
     
-    console.log('Processing PSD with key:', psdKey);
-    console.log('R2 vars:', {
-      hasEndpoint: !!process.env.R2_ENDPOINT,
-      hasAccessKey: !!process.env.R2_ACCESS_KEY_ID,
-      hasSecret: !!process.env.R2_SECRET_ACCESS_KEY,
-      hasBucket: !!process.env.R2_BUCKET,
-    });
-    
     // 1. Download PSD from R2
     const buffer = await getFromStorage(psdKey);
-    console.log('Got buffer:', buffer?.length);
     if (!buffer) {
       return NextResponse.json({ error: 'PSD not found in storage' }, { status: 404 });
     }
@@ -34,9 +25,7 @@ export async function POST(request: NextRequest) {
     const psdId = uuidv4();
     
     // 2. Parse PSD locally
-    console.log('Parsing PSD...');
     const parsed = await parsePSD(buffer);
-    console.log('Parsed layers:', parsed.layers.length);
     const validation = validatePSDStructure(parsed);
     if (!validation.valid) {
       return NextResponse.json({ 
@@ -45,51 +34,9 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
     
-    // 3. Create template in database
-    const publicUrl = process.env.R2_PUBLIC_BASE_URL 
-      ? `${process.env.R2_PUBLIC_BASE_URL}/${psdKey}`
-      : `${process.env.R2_ENDPOINT}/${process.env.R2_BUCKET}/${psdKey}`;
-    
-    // Try to extract thumbnail/base image
-    let thumbnailUrl = '';
-    let baseImageUrl = '';
-    
-    try {
-      const sharp = (await import('sharp')).default;
-      const psd = await import('psd.js');
-      const psdFile = new psd.default(buffer.buffer as ArrayBuffer);
-      await psdFile.parse();
-      const image = psdFile.image as any;
-      
-      if (image && image.pixelData) {
-        const w = Number(image.width);
-        const h = Number(image.height);
-        
-        // Create thumbnail
-        const thumbBuffer = await sharp(Buffer.from(image.pixelData), {
-          raw: { width: w, height: h, channels: 4 }
-        }).resize(400, 400, { fit: 'inside' }).png().toBuffer();
-        
-        const thumbUpload = await (await import('@/lib/cdn/r2-client')).uploadToStorage(
-          thumbBuffer, 
-          `thumbnails/${psdId}.png`
-        );
-        thumbnailUrl = thumbUpload.url;
-        
-        // Create base image
-        const baseBuffer = await sharp(Buffer.from(image.pixelData), {
-          raw: { width: w, height: h, channels: 4 }
-        }).resize(2048, 2048, { fit: 'inside' }).png().toBuffer();
-        
-        const baseUpload = await (await import('@/lib/cdn/r2-client')).uploadToStorage(
-          baseBuffer, 
-          `bases/${psdId}.png`
-        );
-        baseImageUrl = baseUpload.url;
-      }
-    } catch (e) {
-      console.warn('Image extraction failed:', e);
-    }
+    // 3. Create template - use PSD URL as thumbnail for now
+    const baseUrl = (process.env.R2_PUBLIC_BASE_URL || '').replace(/\/$/, '');
+    const psdPublicUrl = baseUrl ? `${baseUrl}/${psdKey}` : '';
     
     // 4. Save template
     const template = await db.template.create({
@@ -98,8 +45,8 @@ export async function POST(request: NextRequest) {
         name: name || 'Uploaded Template',
         slug: `${psdId}-${Date.now()}`,
         category: category || 'custom',
-        thumbnail: thumbnailUrl,
-        baseImage: baseImageUrl || publicUrl,
+        thumbnail: psdPublicUrl,
+        baseImage: psdPublicUrl,
         width: parsed.width,
         height: parsed.height,
         isActive: true,
