@@ -1,0 +1,132 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/db';
+import { parsePSD, validatePSDStructure, createTemplateConfig } from '@/lib/psd/parser';
+import { getFromStorage } from '@/lib/cdn/r2-client';
+import { v4 as uuidv4 } from 'uuid';
+import PSD from 'psd.js';
+
+export const runtime = 'nodejs';
+export const maxDuration = 300;
+export const dynamic = 'force-dynamic';
+
+// POST /api/psd/process - Process a PSD that was uploaded to R2
+export async function POST(request: NextRequest) {
+  try {
+    const sharp = (await import('sharp')).default;
+    const body = await request.json();
+    const { psdKey, name, category } = body;
+    
+    if (!psdKey) return NextResponse.json({ error: 'No PSD key provided' }, { status: 400 });
+    
+    // 1. Download PSD from R2
+    const buffer = await getFromStorage(psdKey);
+    if (!buffer) {
+      return NextResponse.json({ error: 'PSD not found in storage' }, { status: 404 });
+    }
+    
+    const psdId = uuidv4();
+    
+    // 2. Parse PSD locally (now we have the full file in memory)
+    const parsed = await parsePSD(buffer);
+    const validation = validatePSDStructure(parsed);
+    if (!validation.valid) {
+      return NextResponse.json({ 
+        error: 'Invalid PSD structure', 
+        details: validation.errors 
+      }, { status: 400 });
+    }
+    
+    // 3. Create template in database with the R2 URL as the source
+    const publicUrl = process.env.R2_PUBLIC_BASE_URL 
+      ? `${process.env.R2_PUBLIC_BASE_URL}/${psdKey}`
+      : `${process.env.R2_ENDPOINT}/${process.env.R2_BUCKET}/${psdKey}`;
+    
+    // Extract composite/thumbnail if possible
+    let baseImageUrl = '';
+    let thumbnailUrl = '';
+    
+    try {
+      const psdForImage = new PSD(buffer.buffer);
+      await psdForImage.parse();
+      const image = psdForImage.image;
+      
+      if (image) {
+        // Create thumbnail
+        const thumbBuffer = await sharp(Buffer.from(image.pixelData), {
+          raw: { width: image.width, height: image.height, channels: 4 }
+        }).resize(400, 400, { fit: 'inside' }).png().toBuffer();
+        
+        const thumbUpload = await (await import('@/lib/cdn/r2-client')).uploadToStorage(
+          thumbBuffer, 
+          `thumbnails/${psdId}.png`
+        );
+        thumbnailUrl = thumbUpload.url;
+        
+        // Create base image for mockups
+        const baseBuffer = await sharp(Buffer.from(image.pixelData), {
+          raw: { width: image.width, height: image.height, channels: 4 }
+        }).resize(2048, 2048, { fit: 'inside' }).png().toBuffer();
+        
+        const baseUpload = await (await import('@/lib/cdn/r2-client')).uploadToStorage(
+          baseBuffer, 
+          `bases/${psdId}.png`
+        );
+        baseImageUrl = baseUpload.url;
+      }
+    } catch (e) {
+      console.warn('Image extraction failed:', e);
+    }
+    
+    // 4. Save template
+    const template = await db.template.create({
+      data: {
+        id: psdId,
+        name: name || 'Uploaded Template',
+        slug: `${psdId}-${Date.now()}`,
+        category: category || 'custom',
+        thumbnail: thumbnailUrl,
+        baseImage: baseImageUrl || publicUrl,
+        width: parsed.width,
+        height: parsed.height,
+        isActive: true,
+        layers: {
+          create: parsed.layers.map((layer, idx) => ({
+            name: layer.name,
+            type: layer.type,
+            zIndex: idx,
+            blendMode: layer.blendMode,
+            opacity: layer.opacity,
+            boundsX: layer.bounds?.x,
+            boundsY: layer.bounds?.y,
+            boundsWidth: layer.bounds?.width,
+            boundsHeight: layer.bounds?.height,
+            defaultColor: layer.color,
+            isColorable: layer.type === 'color_layer',
+          })),
+        },
+        colorOptions: {
+          create: parsed.colorLayers.map(cl => ({
+            name: cl.name,
+            layerName: cl.name,
+            colors: cl.colors.map(c => ({ name: c.name, hex: c.hex })),
+          })),
+        },
+      },
+      include: {
+        layers: true,
+        colorOptions: true,
+      },
+    });
+    
+    return NextResponse.json({ 
+      success: true, 
+      templateId: template.id,
+      template,
+      layers: parsed.layers.length,
+      colorLayers: parsed.colorLayers.length,
+    });
+  } catch (error) {
+    console.error('PSD Process Error:', error);
+    return NextResponse.json({ error: 'Failed to process PSD' }, { status: 500 });
+  }
+}

@@ -5,7 +5,8 @@
  * Falls back to local storage if R2 credentials are not configured.
  */
 
-import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand } from '@aws-sdk/client-s3';
+import { createPresignedPut } from '@aws-sdk/s3-request-presigner';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 
@@ -140,6 +141,42 @@ export async function listStorage(prefix: string = ''): Promise<string[]> {
   ensureLocalStorage();
   const files = readdirSync(LOCAL_STORAGE_PATH, { recursive: true, encoding: 'utf-8' });
   return files.filter(file => file.startsWith(prefix));
+}
+
+/**
+ * Generate a presigned PUT URL for direct uploads to R2
+ * This allows the client to upload directly without going through the server
+ */
+export async function generatePresignedUploadUrl(
+  key: string,
+  contentType: string,
+  expiresIn: number = 3600 // 1 hour default
+): Promise<{ uploadUrl: string; key: string; publicUrl: string } | null> {
+  if (!R2_CONFIGURED || !r2Client) {
+    console.warn('R2 not configured, cannot generate presigned URL');
+    return null;
+  }
+
+  try {
+    const command = new PutObjectCommand({
+      Bucket: process.env.R2_BUCKET!,
+      Key: key,
+      ContentType: contentType,
+    });
+
+    const uploadUrl = await createPresignedPut(r2Client, command, {
+      expiresIn,
+    });
+
+    const publicUrl = process.env.R2_PUBLIC_BASE_URL 
+      ? `${process.env.R2_PUBLIC_BASE_URL}/${key}`
+      : `${process.env.R2_ENDPOINT}/${process.env.R2_BUCKET}/${key}`;
+
+    return { uploadUrl, key, publicUrl };
+  } catch (error) {
+    console.error('Failed to generate presigned URL:', error);
+    return null;
+  }
 }
 
 /**

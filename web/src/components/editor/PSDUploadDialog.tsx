@@ -109,41 +109,27 @@ export function PSDUploadDialog({ open, onOpenChange, onTemplateCreated }: PSDUp
   }, []);
 
   const handleFileUpload = async (file: File) => {
-    // Validate file type - check extension OR file signature
-    const isPsdExtension = file.name.toLowerCase().endsWith('.psd');
-    
-    // Check file signature (magic bytes) for PSD files
-    // PSD files start with "8BPS" (0x38 0x42 0x50 0x53)
-    let isPsdFile = isPsdExtension;
-    
-    if (!isPsdExtension) {
+    // Validate file type
+    if (!file.name.toLowerCase().endsWith('.psd')) {
+      // Check signature as fallback
       try {
         const arrayBuffer = await file.slice(0, 4).arrayBuffer();
         const bytes = new Uint8Array(arrayBuffer);
         const signature = String.fromCharCode(...bytes);
-        if (signature === '8BPS') {
-          isPsdFile = true;
+        if (signature !== '8BPS') {
+          setError('Please upload a valid PSD file. The file must be an Adobe Photoshop document (.psd)');
+          return;
         }
       } catch (e) {
-        console.error('Error checking file signature:', e);
+        setError('Please upload a valid PSD file');
+        return;
       }
     }
-    
-    if (!isPsdFile) {
-      setError('Please upload a valid PSD file. The file must be an Adobe Photoshop document (.psd)');
-      return;
-    }
 
-    // Validate file size (max 500MB for larger files)
-    const maxSize = 500 * 1024 * 1024; // 500MB
-    if (file.size > maxSize) {
+    // Validate file size (max 500MB)
+    if (file.size > 500 * 1024 * 1024) {
       setError('File size must be less than 500MB');
       return;
-    }
-
-    // Warn about large files
-    if (file.size > 20 * 1024 * 1024) {
-      console.log('Large file detected:', (file.size / 1024 / 1024).toFixed(1), 'MB - this may take a while to process');
     }
 
     setIsUploading(true);
@@ -152,49 +138,71 @@ export function PSDUploadDialog({ open, onOpenChange, onTemplateCreated }: PSDUp
     setUploadProgress(0);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('name', file.name.replace(/\.[^/.]+$/, '')); // Remove extension
-      formData.append('category', 'novel');
+      // Step 1: Get presigned URL for direct upload to R2
+      setUploadProgress(5);
+      
+      const presignRes = await fetch(`/api/psd/presign?filename=${encodeURIComponent(file.name)}`, {
+        method: 'GET',
+      });
+      
+      if (!presignRes.ok) {
+        const err = await presignRes.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to get upload URL');
+      }
+      
+      const { uploadUrl, key, psdId } = await presignRes.json();
+      setUploadProgress(15);
 
-      // Simulate progress for better UX
-      let progressValue = 0;
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev) => {
-          if (prev >= 90) return prev;
-          progressValue = prev + Math.random() * 5;
-          return Math.min(90, progressValue);
-        });
-      }, 500);
-
-      // Use AbortController for timeout handling (15 minutes for very large files)
+      // Step 2: Upload directly to R2 (bypasses serverless limit)
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15 * 60 * 1000);
-
-      const response = await fetch('/api/psd/upload', {
-        method: 'POST',
-        body: formData,
+      
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': 'application/x-photoshop' },
         signal: controller.signal,
       });
-
+      
       clearTimeout(timeoutId);
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server error: ${response.status}`);
+      
+      if (!uploadResponse.ok) {
+        throw new Error(`Upload failed: ${uploadResponse.status}`);
       }
+      
+      setUploadProgress(30);
+      console.log('PSD uploaded to R2, now processing...');
 
-      const result = await response.json();
+      // Step 3: Process the PSD on the server
+      setUploadProgress(40);
+      
+      const processRes = await fetch('/api/psd/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          psdKey: key,
+          name: file.name.replace(/\.psd$/i, ''),
+          category: 'novel',
+        }),
+      });
+      
+      setUploadProgress(80);
+      
+      if (!processRes.ok) {
+        const err = await processRes.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to process PSD');
+      }
+      
+      const result = await processRes.json();
+      setUploadProgress(100);
 
       if (result.success) {
         setParseResult({
           success: true,
-          width: result.width,
-          height: result.height,
-          layers: result.layers || [],
-          smartObjects: result.smartObjects || 0,
+          width: result.template?.width || result.width,
+          height: result.template?.height || result.height,
+          layers: result.template?.layers || [],
+          smartObjects: result.layers || 0,
           colorLayers: result.colorLayers || 0,
           templateId: result.templateId,
         });
