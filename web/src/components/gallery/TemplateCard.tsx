@@ -27,18 +27,18 @@ const categoryNames: Record<string, string> = {
 };
 
 export function TemplateCard({ template, onClick, priority = false }: TemplateCardProps) {
-  // Only show thumbnail for actual image files (not PSDs)
+  // Only use actual image URLs - skip PSD files, non-images, etc.
   const rawThumbnail = template.thumbnail;
-  const isImageFile = rawThumbnail && (
-    rawThumbnail.endsWith('.png') || 
-    rawThumbnail.endsWith('.jpg') || 
-    rawThumbnail.endsWith('.jpeg') ||
-    rawThumbnail.endsWith('.webp') ||
-    rawThumbnail.endsWith('.gif')
-  );
-  const hasValidThumbnail = isImageFile && 
+  const isValidImage = !rawThumbnail?.includes('.psd') && 
+    !rawThumbnail?.includes('.psb') &&
+    (rawThumbnail?.endsWith('.png') || 
+    rawThumbnail?.endsWith('.jpg') || 
+    rawThumbnail?.endsWith('.jpeg') ||
+    rawThumbnail?.endsWith('.webp') ||
+    rawThumbnail?.endsWith('.gif'));
+  const hasValidThumbnail = isValidImage && 
     rawThumbnail.length > 0 && 
-    (rawThumbnail.startsWith('http') || rawThumbnail.startsWith('https') || rawThumbnail.startsWith('//'));
+    (rawThumbnail.startsWith('http') || rawThumbnail.startsWith('https'));
 
   return (
     <motion.div

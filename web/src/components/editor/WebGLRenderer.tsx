@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from 'react';
+import { useEffect, useRef, useImperativeHandle, forwardRef, useCallback, useState } from 'react';
 import * as THREE from 'three';
 import type { Template, DesignState, TemplateLayer } from '@/types';
 
@@ -85,10 +85,21 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
   
   const texturesCache = useRef<Map<string, THREE.Texture>>(new Map());
   const meshesRef = useRef<THREE.Group>(new THREE.Group());
+  const [webGLError, setWebGLError] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Check WebGL support before initializing
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    if (!gl) {
+      console.warn('WebGL not supported in this browser');
+      setWebGLError(true);
+      return;
+    }
+
+    try {
     const renderer = new THREE.WebGLRenderer({ 
       antialias: true, 
       alpha: true,
@@ -99,6 +110,11 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
     renderer.setClearColor(0x000000, 0);
     containerRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
+    } catch (err) {
+      console.error('WebGL initialization failed:', err);
+      setWebGLError(true);
+      return;
+    }
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
@@ -144,7 +160,11 @@ return () => {
   window.removeEventListener('pointermove', onPointerMove);
   if (rendererRef.current) {
         rendererRef.current.dispose();
-        if (containerRef.current) containerRef.current.removeChild(renderer.domElement);
+        if (containerRef.current && rendererRef.current.domElement) {
+          try {
+            containerRef.current.removeChild(rendererRef.current.domElement);
+          } catch (e) {}
+        }
       }
       texturesCache.current.forEach(t => t.dispose());
       texturesCache.current.clear();
@@ -336,6 +356,22 @@ return () => {
       return dataUrl;
     }
   }));
+
+  // Show error fallback if WebGL failed to initialize
+  if (webGLError) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-900 rounded-lg">
+        <div className="text-center p-8">
+          <p className="text-gray-500 dark:text-gray-400 mb-2">
+            3D preview requires WebGL support
+          </p>
+          <p className="text-xs text-gray-400">
+            Your browser or device may not support WebGL
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return <div ref={containerRef} className="w-full h-full" style={{ overflow: 'hidden' }} />;
 });
