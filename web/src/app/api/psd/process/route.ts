@@ -16,8 +16,17 @@ export async function POST(request: NextRequest) {
     
     if (!psdKey) return NextResponse.json({ error: 'No PSD key provided' }, { status: 400 });
     
+    console.log('Processing PSD with key:', psdKey);
+    console.log('R2 vars:', {
+      hasEndpoint: !!process.env.R2_ENDPOINT,
+      hasAccessKey: !!process.env.R2_ACCESS_KEY_ID,
+      hasSecret: !!process.env.R2_SECRET_ACCESS_KEY,
+      hasBucket: !!process.env.R2_BUCKET,
+    });
+    
     // 1. Download PSD from R2
     const buffer = await getFromStorage(psdKey);
+    console.log('Got buffer:', buffer?.length);
     if (!buffer) {
       return NextResponse.json({ error: 'PSD not found in storage' }, { status: 404 });
     }
@@ -25,7 +34,9 @@ export async function POST(request: NextRequest) {
     const psdId = uuidv4();
     
     // 2. Parse PSD locally
+    console.log('Parsing PSD...');
     const parsed = await parsePSD(buffer);
+    console.log('Parsed layers:', parsed.layers.length);
     const validation = validatePSDStructure(parsed);
     if (!validation.valid) {
       return NextResponse.json({ 
