@@ -5,8 +5,8 @@
  * Falls back to local storage if R2 credentials are not configured.
  */
 
-import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand } from '@aws-sdk/client-s3';
-import { createPresignedPut } from '@aws-sdk/s3-request-presigner';
+import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 
@@ -164,7 +164,7 @@ export async function generatePresignedUploadUrl(
       ContentType: contentType,
     });
 
-    const uploadUrl = await createPresignedPut(r2Client, command, {
+    const uploadUrl = await getSignedUrl(r2Client, command, {
       expiresIn,
     });
 

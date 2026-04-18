@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { parsePSD, validatePSDStructure, createTemplateConfig } from '@/lib/psd/parser';
+import { parsePSD, validatePSDStructure } from '@/lib/psd/parser';
 import { getFromStorage } from '@/lib/cdn/r2-client';
 import { v4 as uuidv4 } from 'uuid';
-import PSD from 'psd.js';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -12,7 +11,6 @@ export const dynamic = 'force-dynamic';
 // POST /api/psd/process - Process a PSD that was uploaded to R2
 export async function POST(request: NextRequest) {
   try {
-    const sharp = (await import('sharp')).default;
     const body = await request.json();
     const { psdKey, name, category } = body;
     
@@ -26,7 +24,7 @@ export async function POST(request: NextRequest) {
     
     const psdId = uuidv4();
     
-    // 2. Parse PSD locally (now we have the full file in memory)
+    // 2. Parse PSD locally
     const parsed = await parsePSD(buffer);
     const validation = validatePSDStructure(parsed);
     if (!validation.valid) {
@@ -36,24 +34,29 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
     
-    // 3. Create template in database with the R2 URL as the source
+    // 3. Create template in database
     const publicUrl = process.env.R2_PUBLIC_BASE_URL 
       ? `${process.env.R2_PUBLIC_BASE_URL}/${psdKey}`
       : `${process.env.R2_ENDPOINT}/${process.env.R2_BUCKET}/${psdKey}`;
     
-    // Extract composite/thumbnail if possible
-    let baseImageUrl = '';
+    // Try to extract thumbnail/base image
     let thumbnailUrl = '';
+    let baseImageUrl = '';
     
     try {
-      const psdForImage = new PSD(buffer.buffer);
-      await psdForImage.parse();
-      const image = psdForImage.image;
+      const sharp = (await import('sharp')).default;
+      const psd = await import('psd.js');
+      const psdFile = new psd.default(buffer.buffer as ArrayBuffer);
+      await psdFile.parse();
+      const image = psdFile.image as any;
       
-      if (image) {
+      if (image && image.pixelData) {
+        const w = Number(image.width);
+        const h = Number(image.height);
+        
         // Create thumbnail
         const thumbBuffer = await sharp(Buffer.from(image.pixelData), {
-          raw: { width: image.width, height: image.height, channels: 4 }
+          raw: { width: w, height: h, channels: 4 }
         }).resize(400, 400, { fit: 'inside' }).png().toBuffer();
         
         const thumbUpload = await (await import('@/lib/cdn/r2-client')).uploadToStorage(
@@ -62,9 +65,9 @@ export async function POST(request: NextRequest) {
         );
         thumbnailUrl = thumbUpload.url;
         
-        // Create base image for mockups
+        // Create base image
         const baseBuffer = await sharp(Buffer.from(image.pixelData), {
-          raw: { width: image.width, height: image.height, channels: 4 }
+          raw: { width: w, height: h, channels: 4 }
         }).resize(2048, 2048, { fit: 'inside' }).png().toBuffer();
         
         const baseUpload = await (await import('@/lib/cdn/r2-client')).uploadToStorage(
@@ -90,7 +93,7 @@ export async function POST(request: NextRequest) {
         height: parsed.height,
         isActive: true,
         layers: {
-          create: parsed.layers.map((layer, idx) => ({
+          create: parsed.layers.map((layer: any, idx: number) => ({
             name: layer.name,
             type: layer.type,
             zIndex: idx,
@@ -100,15 +103,14 @@ export async function POST(request: NextRequest) {
             boundsY: layer.bounds?.y,
             boundsWidth: layer.bounds?.width,
             boundsHeight: layer.bounds?.height,
-            defaultColor: layer.color,
-            isColorable: layer.type === 'color_layer',
+            isColorable: layer.isColorable || layer.type === 'color_layer',
           })),
         },
         colorOptions: {
-          create: parsed.colorLayers.map(cl => ({
+          create: parsed.colorLayers.map((cl: any) => ({
             name: cl.name,
             layerName: cl.name,
-            colors: cl.colors.map(c => ({ name: c.name, hex: c.hex })),
+            colors: cl.color ? [{ name: cl.name, hex: cl.color }] : [],
           })),
         },
       },
