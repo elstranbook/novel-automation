@@ -7,7 +7,7 @@ import PSD from 'psd.js';
 
 // Configure API route for large file uploads
 export const runtime = 'nodejs';
-export const maxDuration = 300; // 5 minutes timeout (max for Vercel Hobby plan)
+export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
 // POST /api/psd/upload - Upload and parse a PSD file
