@@ -834,37 +834,16 @@ function StudioContent() {
       setMinSceneLength(novel.min_scene_length ?? 300);
       setStoryDetails(novel.story_details ?? null);
 
-      console.log("Novel cover_url:", novel.cover_url);
-      if (novel.cover_url) {
-        setGeneratedCoverUrl(novel.cover_url);
-        setCoverUrl(novel.cover_url);
+      // Set cover from novel data
+      const coverUrl = (novel as Record<string, unknown>).cover_url as string | null;
+      console.log("Cover from novel:", coverUrl);
+      if (coverUrl) {
+        setGeneratedCoverUrl(coverUrl);
+        setCoverUrl(coverUrl);
+        setGeneratedCovers([{ url: coverUrl, createdAt: novel.created_at }]);
       } else {
         setGeneratedCoverUrl(null);
         setCoverUrl("");
-      }
-      
-      // Load all generated covers from CoverDesign table
-      try {
-        console.log("Loading covers for novel:", novelIdValue);
-        const coversRes = await fetch(`/api/novel/covers?novelId=${novelIdValue}`);
-        const coversData = await coversRes.json();
-        console.log("Covers response:", coversData);
-        
-        if (coversData.covers?.length > 0) {
-          setGeneratedCovers(coversData.covers.map((c: { url: string; createdAt: string }) => ({ url: c.url, createdAt: c.createdAt })));
-        } else if (novel.cover_url) {
-          // Fallback to the saved cover_url from novels table
-          console.log("Using fallback cover_url:", novel.cover_url);
-          setGeneratedCovers([{ url: novel.cover_url, createdAt: novel.created_at }]);
-        } else {
-          console.log("No cover found, cover_url:", novel.cover_url);
-        }
-      } catch (e) {
-        console.error("Failed to load covers:", e);
-        // Fallback to cover_url on error
-        if (novel.cover_url) {
-          setGeneratedCovers([{ url: novel.cover_url, createdAt: novel.created_at }]);
-        }
       }
     }
 

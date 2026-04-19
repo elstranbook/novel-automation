@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function GET(req: Request) {
-  const prisma = globalForPrisma.prisma || new PrismaClient();
-  
   try {
     const { searchParams } = new URL(req.url);
     const novelId = searchParams.get("novelId");
@@ -14,13 +10,16 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "novelId required" }, { status: 400 });
     }
 
-    const covers = await prisma.coverDesign.findMany({
-      where: { novelId },
-      orderBy: { createdAt: "desc" }
-    });
+    // Get novel's cover_url from Supabase
+    const { data: novel } = await supabaseAdmin
+      .from("novels")
+      .select("cover_url, created_at")
+      .eq("id", novelId)
+      .maybeSingle();
+    
+    console.log("Novel cover_url:", novel?.cover_url);
 
-    console.log("Found covers:", covers.length);
-    return NextResponse.json({ covers });
+    return NextResponse.json({ coverUrl: novel?.cover_url || null });
   } catch (error) {
     console.error("Error fetching covers:", error);
     return NextResponse.json({ error: "Failed to fetch covers" }, { status: 500 });
