@@ -844,8 +844,10 @@ function StudioContent() {
       
       // Load all generated covers from CoverDesign table
       try {
+        console.log("Loading covers for novel:", novelIdValue);
         const coversRes = await fetch(`/api/novel/covers?novelId=${novelIdValue}`);
         const coversData = await coversRes.json();
+        console.log("Covers response:", coversData);
         if (coversData.covers?.length > 0) {
           setGeneratedCovers(coversData.covers.map((c: { url: string; createdAt: string }) => ({ url: c.url, createdAt: c.createdAt })));
         }
