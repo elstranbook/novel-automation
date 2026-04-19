@@ -844,7 +844,9 @@ function StudioContent() {
       } else {
         setGeneratedCoverUrl(null);
         setCoverUrl("");
+        setGeneratedCovers([]);
       }
+    }
     }
 
     const [{ data: premises }, { data: synopsis }, { data: profiles }] =
