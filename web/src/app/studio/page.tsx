@@ -856,7 +856,7 @@ function StudioContent() {
 const { data, error } = await supabase
            .from("cover_design_prompts")
            .select("url, created_at")
-           .eq("novelId", novelIdValue)
+           .eq("novel_id", novelIdValue)
            .order("created_at", { ascending: false });
           
         if (!error) {
@@ -867,7 +867,7 @@ const { data, error } = await supabase
 const { data: data2, error: error2 } = await supabase
              .from("cover_design_prompts")
              .select("url, created_at")
-             .eq("novelId", novelIdValue)
+             .eq("novel_id", novelIdValue)
              .order("created_at", { ascending: false });
             
           if (!error2) {

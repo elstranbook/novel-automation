@@ -176,7 +176,7 @@ model CoverDesign {
   novelId     String
   url         String
   model       String?  // "gpt-image-1", "gpt-image-1-mini"
-  prompt     String?
+  prompt      String?
   isActive    Boolean  @default(false) // Currently selected cover
   createdAt   DateTime @default(now())
 }

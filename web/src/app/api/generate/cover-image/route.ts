@@ -119,13 +119,13 @@ export async function POST(req: Request) {
 
             
           // 4. Deactivate existing covers for this novel
-await prisma.coverDesignPrompts.updateMany({
+await prisma.coverDesign.updateMany({
              where: { novelId: novelId },
              data: { isActive: false }
            });
             
           // 5. Save new cover to CoverDesign table
-await prisma.coverDesignPrompts.create({
+await prisma.coverDesign.create({
              data: {
                novelId,
                url: finalUrl,
