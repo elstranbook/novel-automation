@@ -848,11 +848,19 @@ function StudioContent() {
         const coversRes = await fetch(`/api/novel/covers?novelId=${novelIdValue}`);
         const coversData = await coversRes.json();
         console.log("Covers response:", coversData);
+        
         if (coversData.covers?.length > 0) {
           setGeneratedCovers(coversData.covers.map((c: { url: string; createdAt: string }) => ({ url: c.url, createdAt: c.createdAt })));
+        } else if (novel.cover_url) {
+          // Fallback to the saved cover_url from novels table
+          setGeneratedCovers([{ url: novel.cover_url, createdAt: novel.created_at }]);
         }
       } catch (e) {
         console.error("Failed to load covers:", e);
+        // Fallback to cover_url on error
+        if (novel.cover_url) {
+          setGeneratedCovers([{ url: novel.cover_url, createdAt: novel.created_at }]);
+        }
       }
     }
 
