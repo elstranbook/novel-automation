@@ -17,20 +17,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "OpenAI API Key not configured" }, { status: 500 });
     }
 
-    // 1. Generate Image from OpenAI
+    // 1. Generate Image from OpenAI GPT Image API
+    const isGptImage = model.startsWith("gpt-image-1");
+    
+    const requestBody = isGptImage ? {
+      model: model,
+      prompt: prompt,
+      response_format: "url",
+      size: "auto",
+      quality: "medium"
+    } : {
+      model: model,
+      prompt: prompt,
+      n: 1,
+      size: size,
+      quality: "standard"
+    };
+    
+    console.log("GPT Image request:", { isGptImage, model, promptLength: prompt?.length });
+    
     const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`
       },
-      body: JSON.stringify({
-        model: model,
-        prompt: prompt,
-        n: 1,
-        size: size,
-        quality: "standard"
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
@@ -40,7 +52,20 @@ export async function POST(req: Request) {
     }
 
     const data = await response.json();
-    const tempUrl = data.data[0].url;
+    
+    // GPT Image returns b64_json by default, need to handle both formats
+    let tempUrl: string;
+    if (data.data[0].url) {
+      tempUrl = data.data[0].url;
+    } else if (data.data[0].b64_json) {
+      // Convert base64 to URL by uploading to a temporary place or return the data
+      const imageBuffer = Buffer.from(data.data[0].b64_json, "base64");
+      const blob = new Blob([imageBuffer], { type: "image/png" });
+      const url = URL.createObjectURL(blob);
+      tempUrl = url;
+    } else {
+      return NextResponse.json({ error: "No image returned" }, { status: 500 });
+    }
 
     // 2. Download the image and upload to Supabase Storage if novelId is provided
     let finalUrl = tempUrl;
