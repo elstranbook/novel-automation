@@ -116,10 +116,7 @@ export async function POST(req: Request) {
           finalUrl = publicUrl;
 
           // 3. Update database
-          await supabaseAdmin
-            .from("novels")
-            .update({ cover_url: finalUrl })
-            .eq("id", novelId);
+
             
           // 4. Deactivate existing covers for this novel
           await prisma.coverDesign.updateMany({

@@ -838,8 +838,7 @@ function StudioContent() {
       setStoryDetails(novel.story_details ?? null);
 
       // Set cover from novel data
-      const coverUrl = (novel as Record<string, unknown>).cover_url as string | null;
-      console.log("📋 Cover from novel database:", coverUrl);
+
       if (coverUrl) {
         setGeneratedCoverUrl(coverUrl);
         setCoverUrl(coverUrl);
@@ -868,7 +867,7 @@ function StudioContent() {
           const { data: data2, error: error2 } = await supabase
             .from("CoverDesign")
             .select("url, created_at")
-            .eq("novelId", novelIdValue)
+.eq("novel_id", novelIdValue)
             .order("created_at", { ascending: false });
             
           if (!error2) {
