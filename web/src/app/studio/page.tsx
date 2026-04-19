@@ -847,7 +847,6 @@ function StudioContent() {
         setGeneratedCovers([]);
       }
     }
-    }
 
     const [{ data: premises }, { data: synopsis }, { data: profiles }] =
       await Promise.all([
