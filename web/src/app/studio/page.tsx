@@ -835,7 +835,7 @@ function StudioContent() {
       setStoryDetails(novel.story_details ?? null);
 
       // Set cover from novel data
-      const coverUrl = (novel as Record<<stringstring, unknown>).cover_url as string | null;
+      const coverUrl = (novel as Record<string, unknown>).cover_url as string | null;
       console.log("Cover from novel:", coverUrl);
       if (coverUrl) {
         setGeneratedCoverUrl(coverUrl);
