@@ -139,6 +139,7 @@ export async function POST(req: Request) {
           });
             
           console.log("Cover saved to database:", finalUrl);
+          console.log("CoverDesign record created for novel:", novelId);
         }
       } catch (saveError) {
         console.error("Error saving image to storage:", saveError);
