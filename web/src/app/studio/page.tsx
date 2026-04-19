@@ -385,7 +385,7 @@ function StudioContent() {
   const [showPipelineMap, setShowPipelineMap] = useState(false);
   const [showPromotionalMap, setShowPromotionalMap] = useState(false);
   const [coverPrompt, setCoverPrompt] = useState<string | null>(null);
-  const [imageModel, setImageModel] = useState("dall-e-3");
+  const [imageModel, setImageModel] = useState("gpt-image-1-mini");
   const [generatedCoverUrl, setGeneratedCoverUrl] = useState<string | null>(null);
   const [isPublished, setIsPublished] = useState(false);
   const [publishPublicId, setPublishPublicId] = useState<string | null>(null);
@@ -3937,8 +3937,8 @@ function StudioContent() {
             onChange={(e) => setImageModel(e.target.value)}
             className="mt-2 max-w-xs rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-100 focus:border-zinc-500 focus:outline-none transition-colors"
           >
-            <option value="dall-e-3">GPT Image 1.5 (Default)</option>
-            <option value="dall-e-2">GPT Image 1.0 (Standard)</option>
+            <option value="gpt-image-1-mini">GPT Image 1 Mini (Default)</option>
+            <option value="gpt-image-1">GPT Image 1.5</option>
           </select>
         </label>
       </div>

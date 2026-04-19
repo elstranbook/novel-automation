@@ -4,9 +4,9 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { prompt, model = "dall-e-3", size = "1024x1792", novelId } = body;
+    const { prompt, model = "gpt-image-1-mini", size = "1024x1792", novelId } = body;
 
-    console.log("Generating image with direct fetch:", { model, size, promptLength: prompt?.length, novelId });
+    console.log("Generating image with GPT Image:", { model, size, promptLength: prompt?.length, novelId });
 
     if (!prompt) {
       return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
@@ -87,7 +87,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ imageUrl: finalUrl });
   } catch (error) {
-    console.error("DALL-E Fetch Route Error:", error);
+    console.error("GPT Image Fetch Route Error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to generate image" },
       { status: 500 }
