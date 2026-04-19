@@ -24,13 +24,11 @@ export async function POST(req: Request) {
     let requestBody: Record<string, unknown>;
     
     if (model.includes("gpt-image-1")) {
-      // GPT Image models
+      // GPT Image models - no response_format, no size, quality is low/medium/high
       requestBody = {
         model: model,
         prompt: prompt,
-        response_format: "url",
-        quality: "medium",
-        size: "auto"
+        quality: "medium"
       };
     } else {
       // DALL-E legacy models
@@ -39,8 +37,7 @@ export async function POST(req: Request) {
         prompt: prompt,
         n: 1,
         size: "1024x1024",
-        quality: "standard",
-        response_format: "url"
+        quality: "standard"
       };
     }
     
@@ -63,27 +60,35 @@ export async function POST(req: Request) {
 
     const data = await response.json();
     
-    // GPT Image returns b64_json by default, need to handle both formats
-    let tempUrl: string;
+    // GPT Image returns b64_json, DALL-E returns url
+    let imageBase64: string;
+    let imageUrl: string;
+    
     if (data.data[0].url) {
-      tempUrl = data.data[0].url;
+      imageUrl = data.data[0].url;
     } else if (data.data[0].b64_json) {
-      // Convert base64 to URL by uploading to a temporary place or return the data
-      const imageBuffer = Buffer.from(data.data[0].b64_json, "base64");
-      const blob = new Blob([imageBuffer], { type: "image/png" });
-      const url = URL.createObjectURL(blob);
-      tempUrl = url;
+      imageBase64 = data.data[0].b64_json;
     } else {
       return NextResponse.json({ error: "No image returned" }, { status: 500 });
     }
 
     // 2. Download the image and upload to Supabase Storage if novelId is provided
-    let finalUrl = tempUrl;
+    let finalUrl = imageUrl || `data:image/png;base64,${imageBase64}`;
+    
     if (novelId) {
       try {
-        const imageRes = await fetch(tempUrl);
-        const imageBlob = await imageRes.blob();
-        const arrayBuffer = await imageBlob.arrayBuffer();
+        let arrayBuffer: ArrayBuffer;
+        
+        if (imageBase64) {
+          // Use base64 directly
+          const buffer = Buffer.from(imageBase64, "base64");
+          arrayBuffer = buffer.buffer;
+        } else {
+          // Download from URL
+          const imageRes = await fetch(imageUrl);
+          const imageBlob = await imageRes.blob();
+          arrayBuffer = await imageBlob.arrayBuffer();
+        }
         
         const fileName = `${novelId}/cover_${Date.now()}.png`;
         
@@ -116,7 +121,7 @@ export async function POST(req: Request) {
         }
       } catch (saveError) {
         console.error("Error saving image to storage:", saveError);
-        // Fallback to tempUrl if saving fails
+        // Fallback to data URL if saving fails
       }
     }
 
