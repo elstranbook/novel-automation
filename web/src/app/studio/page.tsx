@@ -387,6 +387,7 @@ function StudioContent() {
   const [coverPrompt, setCoverPrompt] = useState<string | null>(null);
   const [imageModel, setImageModel] = useState("gpt-image-1-mini");
   const [generatedCoverUrl, setGeneratedCoverUrl] = useState<string | null>(null);
+  const [generatedCovers, setGeneratedCovers] = useState<Array<{ url: string; createdAt: string }>>([]);
   const [isPublished, setIsPublished] = useState(false);
   const [publishPublicId, setPublishPublicId] = useState<string | null>(null);
   const [proseScenes, setProseScenes] = useState<ScenesMap | null>(null);
@@ -1955,6 +1956,7 @@ function StudioContent() {
       const data = await response.json();
       setGeneratedCoverUrl(data.imageUrl);
       setCoverUrl(data.imageUrl);
+      setGeneratedCovers((prev) => [{ url: data.imageUrl, createdAt: new Date().toISOString() }, ...prev]);
       setMessage("Cover image generated and saved successfully!");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
@@ -3977,6 +3979,47 @@ function StudioContent() {
               </div>
             )}
           </div>
+          
+          {generatedCovers.length > 0 && (
+            <div className="mt-8">
+              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-4">Generated Covers</h3>
+              <div className="grid grid-cols-3 gap-3">
+                {generatedCovers.map((cover, index) => (
+                  <div key={index} className="relative group aspect-[2/3] rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950">
+                    <img src={cover.url} alt={`Cover ${index + 1}`} className="h-full w-full object-cover" />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <button
+                        onClick={() => {
+                          const link = document.createElement("a");
+                          link.href = cover.url;
+                          link.download = `cover_${index + 1}.png`;
+                          link.click();
+                        }}
+                        className="p-2 bg-white rounded-lg text-zinc-900 hover:bg-zinc-200"
+                        title="Download"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M12 12.75l-3-3m0 0l-3 3m3-3v5.25" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setGeneratedCoverUrl(cover.url);
+                          setCoverUrl(cover.url);
+                        }}
+                        className="p-2 bg-emerald-500 rounded-lg text-white hover:bg-emerald-600"
+                        title="Use as cover"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 12l4.5-4.5m0 0l4.5 4.5m-4.5-4.5V21" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </section>
