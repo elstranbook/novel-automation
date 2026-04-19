@@ -855,7 +855,7 @@ function StudioContent() {
         .from("CoverDesign")
         .select("url, created_at")
         .eq("novelId", novelIdValue)
-        .order("createdAt", { ascending: false });
+        .order("created_at", { ascending: false });
 
       if (coversData && coversData.length > 0) {
         const covers = coversData.map((c: any) => ({
@@ -863,6 +863,14 @@ function StudioContent() {
           createdAt: c.created_at,
         }));
         setGeneratedCovers(covers);
+        
+        // Set the most recent cover as the active one
+        const latestCover = coversData[0];
+        if (latestCover && latestCover.url) {
+          setGeneratedCoverUrl(latestCover.url);
+          setCoverUrl(latestCover.url);
+          console.log("✅ Set active cover from CoverDesign table:", latestCover.url.substring(0, 60) + "...");
+        }
       } else {
         setGeneratedCovers([]);
       }
