@@ -851,11 +851,33 @@ function StudioContent() {
       }
 
       // Fetch all generated covers from cover_designs table
-      const { data: coversData } = await supabase
-        .from("CoverDesign")
-        .select("url, created_at")
-        .eq("novelId", novelIdValue)
-        .order("created_at", { ascending: false });
+      // Try with the snake_case table name that matches standard Prisma naming
+      let coversData = null;
+      try {
+        const { data, error } = await supabase
+          .from("cover_design")
+          .select("url, created_at")
+          .eq("novelId", novelIdValue)
+          .order("created_at", { ascending: false });
+          
+        if (!error) {
+          coversData = data;
+        } else {
+          console.log("cover_design table not found, trying alternative...");
+          // If that fails, try with the original table name (might be PascalCase in DB)
+          const { data: data2, error: error2 } = await supabase
+            .from("CoverDesign")
+            .select("url, created_at")
+            .eq("novelId", novelIdValue)
+            .order("created_at", { ascending: false });
+            
+          if (!error2) {
+            coversData = data2;
+          }
+        }
+      } catch (error) {
+        console.log("Error querying cover design table:", error);
+      }
 
       if (coversData && coversData.length > 0) {
         const covers = coversData.map((c: any) => ({
@@ -869,7 +891,7 @@ function StudioContent() {
         if (latestCover && latestCover.url) {
           setGeneratedCoverUrl(latestCover.url);
           setCoverUrl(latestCover.url);
-          console.log("✅ Set active cover from CoverDesign table:", latestCover.url.substring(0, 60) + "...");
+          console.log("✅ Set active cover from cover_design table:", latestCover.url.substring(0, 60) + "...");
         }
       } else {
         setGeneratedCovers([]);
