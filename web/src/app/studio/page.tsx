@@ -1948,10 +1948,13 @@ function StudioContent() {
           novelId: novelId // Pass novel ID for saving
         }),
       });
-      if (!response.ok) throw new Error("Failed to generate cover image");
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Failed to generate cover image");
+      }
       const data = await response.json();
       setGeneratedCoverUrl(data.imageUrl);
-      setCoverUrl(data.imageUrl); // Sync with mockup form
+      setCoverUrl(data.imageUrl);
       setMessage("Cover image generated and saved successfully!");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");

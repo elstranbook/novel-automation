@@ -18,23 +18,33 @@ export async function POST(req: Request) {
     }
 
     // 1. Generate Image from OpenAI GPT Image API
-    const isGptImage = model.startsWith("gpt-image-1");
+    const isGptImage = model.includes("gpt-image-1");
     
-    const requestBody = isGptImage ? {
-      model: model,
-      prompt: prompt,
-      response_format: "url",
-      size: "auto",
-      quality: "medium"
-    } : {
-      model: model,
-      prompt: prompt,
-      n: 1,
-      size: size,
-      quality: "standard"
-    };
+    // Build request based on model type
+    let requestBody: Record<string, unknown>;
     
-    console.log("GPT Image request:", { isGptImage, model, promptLength: prompt?.length });
+    if (model.includes("gpt-image-1")) {
+      // GPT Image models
+      requestBody = {
+        model: model,
+        prompt: prompt,
+        response_format: "url",
+        quality: "medium",
+        size: "auto"
+      };
+    } else {
+      // DALL-E legacy models
+      requestBody = {
+        model: model,
+        prompt: prompt,
+        n: 1,
+        size: "1024x1024",
+        quality: "standard",
+        response_format: "url"
+      };
+    }
+    
+    console.log("Image request:", { model, promptLength: prompt?.length });
     
     const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
@@ -48,7 +58,7 @@ export async function POST(req: Request) {
     if (!response.ok) {
       const errorData = await response.text();
       console.error("OpenAI API error:", errorData);
-      return NextResponse.json({ error: "Failed to generate image" }, { status: response.status });
+      return NextResponse.json({ error: `OpenAI error: ${errorData}` }, { status: response.status });
     }
 
     const data = await response.json();
