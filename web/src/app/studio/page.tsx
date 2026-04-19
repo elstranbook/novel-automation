@@ -847,10 +847,10 @@ function StudioContent() {
 
       // Fetch all generated covers from cover_designs table
       const { data: coversData } = await supabase
-        .from("cover_designs")
+        .from("CoverDesign")
         .select("url, created_at")
-        .eq("novel_id", novelIdValue)
-        .order("created_at", { ascending: false });
+        .eq("novelId", novelIdValue)
+        .order("createdAt", { ascending: false });
 
       if (coversData && coversData.length > 0) {
         const covers = coversData.map((c: any) => ({
