@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { prompt, model = "gpt-image-1-mini", size = "1024x1792", novelId } = body;
+    const { prompt, model = "gpt-image-1", size = "1024x1792", novelId } = body;
 
     console.log("Generating image with GPT Image:", { model, size, promptLength: prompt?.length, novelId });
 
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       requestBody = {
         model: model,
         prompt: prompt,
-        quality: "medium"
+        quality: "high"
       };
     } else {
       // DALL-E legacy models
