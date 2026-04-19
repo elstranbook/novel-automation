@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
 
 export async function POST(req: Request) {
   try {
@@ -117,7 +120,24 @@ export async function POST(req: Request) {
             .update({ cover_url: finalUrl })
             .eq("id", novelId);
             
-          console.log("Cover saved and database updated:", finalUrl);
+          // 4. Deactivate existing covers for this novel
+          await prisma.coverDesign.updateMany({
+            where: { novelId },
+            data: { isActive: false }
+          });
+            
+          // 5. Save new cover to CoverDesign table
+          await prisma.coverDesign.create({
+            data: {
+              novelId,
+              url: finalUrl,
+              model: model,
+              prompt: prompt,
+              isActive: true
+            }
+          });
+            
+          console.log("Cover saved to database:", finalUrl);
         }
       } catch (saveError) {
         console.error("Error saving image to storage:", saveError);

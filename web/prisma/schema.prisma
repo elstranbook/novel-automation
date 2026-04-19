@@ -170,3 +170,13 @@ model BookTemplate {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
+
+model CoverDesign {
+  id          String   @id @default(cuid())
+  novelId     String
+  url         String
+  model       String?  // "gpt-image-1", "gpt-image-1-mini"
+  prompt     String?
+  isActive    Boolean  @default(false) // Currently selected cover
+  createdAt   DateTime @default(now())
+}

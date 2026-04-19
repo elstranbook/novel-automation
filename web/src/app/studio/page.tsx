@@ -841,6 +841,17 @@ function StudioContent() {
         setGeneratedCoverUrl(null);
         setCoverUrl("");
       }
+      
+      // Load all generated covers from CoverDesign table
+      try {
+        const coversRes = await fetch(`/api/novel/covers?novelId=${novelIdValue}`);
+        const coversData = await coversRes.json();
+        if (coversData.covers?.length > 0) {
+          setGeneratedCovers(coversData.covers.map((c: { url: string; createdAt: string }) => ({ url: c.url, createdAt: c.createdAt })));
+        }
+      } catch (e) {
+        console.error("Failed to load covers:", e);
+      }
     }
 
     const [{ data: premises }, { data: synopsis }, { data: profiles }] =
