@@ -856,8 +856,8 @@ function StudioContent() {
         const { data, error } = await supabase
           .from("cover_design")
           .select("url, created_at")
-          .eq("novel_id", novelIdValue)
-          .order("created_at", { ascending: false });
+.eq("novelId", novelIdValue)
+           .order("created_at", { ascending: false });
           
         if (!error) {
           coversData = data;
@@ -867,8 +867,8 @@ function StudioContent() {
           const { data: data2, error: error2 } = await supabase
             .from("CoverDesign")
             .select("url, created_at")
-.eq("novel_id", novelIdValue)
-            .order("created_at", { ascending: false });
+.eq("novelId", novelIdValue)
+           .order("created_at", { ascending: false });
             
           if (!error2) {
             coversData = data2;
