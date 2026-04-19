@@ -853,10 +853,10 @@ function StudioContent() {
       // Try with the snake_case table name that matches standard Prisma naming
       let coversData = null;
       try {
-        const { data, error } = await supabase
-          .from("cover_design")
-          .select("url, created_at")
-.eq("novelId", novelIdValue)
+const { data, error } = await supabase
+           .from("cover_design_prompts")
+           .select("url, created_at")
+           .eq("novelId", novelIdValue)
            .order("created_at", { ascending: false });
           
         if (!error) {
@@ -864,11 +864,11 @@ function StudioContent() {
         } else {
           console.log("cover_design table not found, trying alternative...");
           // If that fails, try with the original table name (might be PascalCase in DB)
-          const { data: data2, error: error2 } = await supabase
-            .from("CoverDesign")
-            .select("url, created_at")
-.eq("novelId", novelIdValue)
-           .order("created_at", { ascending: false });
+const { data: data2, error: error2 } = await supabase
+             .from("cover_design_prompts")
+             .select("url, created_at")
+             .eq("novelId", novelIdValue)
+             .order("created_at", { ascending: false });
             
           if (!error2) {
             coversData = data2;
