@@ -61,31 +61,31 @@ export async function POST(req: Request) {
     const data = await response.json();
     
     // GPT Image returns b64_json, DALL-E returns url
-    let imageBase64: string;
-    let imageUrl: string;
+    const imageData = data.data[0];
+    const hasUrl = !!imageData.url;
+    const hasBase64 = !!imageData.b64_json;
     
-    if (data.data[0].url) {
-      imageUrl = data.data[0].url;
-    } else if (data.data[0].b64_json) {
-      imageBase64 = data.data[0].b64_json;
-    } else {
+    if (!hasUrl && !hasBase64) {
       return NextResponse.json({ error: "No image returned" }, { status: 500 });
     }
 
+    const rawBase64 = imageData.b64_json || "";
+    const rawUrl = imageData.url || "";
+
     // 2. Download the image and upload to Supabase Storage if novelId is provided
-    let finalUrl = imageUrl || `data:image/png;base64,${imageBase64}`;
+    let finalUrl = rawUrl || `data:image/png;base64,${rawBase64}`;
     
     if (novelId) {
       try {
         let arrayBuffer: ArrayBuffer;
         
-        if (imageBase64) {
+        if (hasBase64) {
           // Use base64 directly
-          const buffer = Buffer.from(imageBase64, "base64");
+          const buffer = Buffer.from(rawBase64, "base64");
           arrayBuffer = buffer.buffer;
         } else {
           // Download from URL
-          const imageRes = await fetch(imageUrl);
+          const imageRes = await fetch(rawUrl);
           const imageBlob = await imageRes.blob();
           arrayBuffer = await imageBlob.arrayBuffer();
         }
