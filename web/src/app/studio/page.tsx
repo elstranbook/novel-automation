@@ -861,7 +861,6 @@ function StudioContent() {
       } else {
         setGeneratedCovers([]);
       }
-    }
 
     }
 
