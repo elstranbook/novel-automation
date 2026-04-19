@@ -75,6 +75,7 @@ export const useMockupState = create<MockupStore>((set, get) => ({
   },
   
   setUserImage: (image, width, height) => {
+    console.log("📦 setUserImage called with:", image ? image.substring(0, 50) + "..." : "null");
     set({
       userImage: image,
       userImageWidth: width ?? null,

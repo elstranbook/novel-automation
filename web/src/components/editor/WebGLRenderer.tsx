@@ -197,18 +197,28 @@ return () => {
     const scaleY = height / template.height;
 
     const getTexture = (url: string): Promise<THREE.Texture> => {
+      console.log("/loading texture from URL:", url.substring(0, 60) + "...");
       if (texturesCache.current.has(url)) return Promise.resolve(texturesCache.current.get(url)!);
       return new Promise((resolve, reject) => {
-        loader.load(url, (t) => {
-          t.minFilter = THREE.LinearFilter;
-          t.magFilter = THREE.LinearFilter;
-          // Enable Anisotropy for sharp angles (Realism Anchor #3)
-          if (rendererRef.current) {
-            t.anisotropy = rendererRef.current.capabilities.getMaxAnisotropy();
+        loader.load(
+          url,
+          (t) => {
+            console.log("✅ Texture loaded successfully:", url.substring(0, 60) + "...");
+            t.minFilter = THREE.LinearFilter;
+            t.magFilter = THREE.LinearFilter;
+            // Enable Anisotropy for sharp angles (Realism Anchor #3)
+            if (rendererRef.current) {
+              t.anisotropy = rendererRef.current.capabilities.getMaxAnisotropy();
+            }
+            texturesCache.current.set(url, t);
+            resolve(t);
+          },
+          undefined,
+          (err) => {
+            console.error("❌ TextureLoader error for URL:", url.substring(0, 60) + "...", err);
+            reject(err);
           }
-          texturesCache.current.set(url, t);
-          resolve(t);
-        }, undefined, reject);
+        );
       });
     };
 
@@ -225,6 +235,7 @@ return () => {
     // 2. Integrated Smart Object Layer
     const smartObjectLayer = template.layers.find(l => l.type === 'smart_object');
     if (smartObjectLayer && userImage) {
+      console.log("🎨 Loading user image with WebGL:", userImage.substring(0, 60) + "...");
       const designTexture = await getTexture(userImage);
       
       // Look for realism maps (extracted shadow/highlight layers from the same area)

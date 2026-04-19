@@ -419,7 +419,10 @@ function StudioContent() {
   // Sync generated cover to mockup user image
   useEffect(() => {
     if (generatedCoverUrl) {
+      console.log("🔄 Syncing cover URL to mockup state:", generatedCoverUrl);
       setMockupUserImage(generatedCoverUrl);
+    } else {
+      console.log("⚠️ Generated cover URL is null/not set");
     }
   }, [generatedCoverUrl, setMockupUserImage]);
 
@@ -836,13 +839,15 @@ function StudioContent() {
 
       // Set cover from novel data
       const coverUrl = (novel as Record<string, unknown>).cover_url as string | null;
-      console.log("Cover from novel:", coverUrl);
+      console.log("📋 Cover from novel database:", coverUrl);
       if (coverUrl) {
         setGeneratedCoverUrl(coverUrl);
         setCoverUrl(coverUrl);
+        console.log("✅ Set cover URL and mockup image to:", coverUrl);
       } else {
         setGeneratedCoverUrl(null);
         setCoverUrl("");
+        console.log("❌ No cover URL found");
       }
 
       // Fetch all generated covers from cover_designs table
