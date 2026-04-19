@@ -835,17 +835,34 @@ function StudioContent() {
       setStoryDetails(novel.story_details ?? null);
 
       // Set cover from novel data
-      const coverUrl = (novel as Record<string, unknown>).cover_url as string | null;
+      const coverUrl = (novel as Record<<stringstring, unknown>).cover_url as string | null;
       console.log("Cover from novel:", coverUrl);
       if (coverUrl) {
         setGeneratedCoverUrl(coverUrl);
         setCoverUrl(coverUrl);
-        setGeneratedCovers([{ url: coverUrl, createdAt: novel.created_at }]);
       } else {
         setGeneratedCoverUrl(null);
         setCoverUrl("");
+      }
+
+      // Fetch all generated covers from cover_designs table
+      const { data: coversData } = await supabase
+        .from("cover_designs")
+        .select("url, created_at")
+        .eq("novel_id", novelIdValue)
+        .order("created_at", { ascending: false });
+
+      if (coversData && coversData.length > 0) {
+        const covers = coversData.map((c: any) => ({
+          url: c.url,
+          createdAt: c.created_at,
+        }));
+        setGeneratedCovers(covers);
+      } else {
         setGeneratedCovers([]);
       }
+    }
+
     }
 
     const [{ data: premises }, { data: synopsis }, { data: profiles }] =
