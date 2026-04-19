@@ -856,7 +856,7 @@ function StudioContent() {
         const { data, error } = await supabase
           .from("cover_design")
           .select("url, created_at")
-          .eq("novelId", novelIdValue)
+          .eq("novel_id", novelIdValue)
           .order("created_at", { ascending: false });
           
         if (!error) {
