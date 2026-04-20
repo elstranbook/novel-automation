@@ -913,3 +913,32 @@ create policy "generation log owner" on public.generation_log for all using (
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
+
+-- =============================================
+-- Storage: novel-covers bucket for cover images
+-- =============================================
+-- Note: Storage buckets are managed via the Supabase API, not SQL.
+-- The cover-image API route auto-creates the bucket if missing.
+-- If you prefer to create it manually, go to:
+--   Supabase Dashboard → Storage → New Bucket → name: "novel-covers", Public: Yes
+-- Then set the storage policy to allow authenticated uploads:
+--
+-- INSERT INTO storage.objects (bucket_id, name, owner)
+-- VALUES ('novel-covers', 'test.txt', 'system');
+--
+-- Policy: Allow authenticated users to upload covers for their novels
+CREATE POLICY "Authenticated users can upload covers" ON storage.objects
+  FOR INSERT TO authenticated
+  WITH CHECK (bucket_id = 'novel-covers' AND auth.role() = 'authenticated');
+
+CREATE POLICY "Anyone can view covers" ON storage.objects
+  FOR SELECT TO public
+  USING (bucket_id = 'novel-covers');
+
+CREATE POLICY "Authenticated users can update their covers" ON storage.objects
+  FOR UPDATE TO authenticated
+  USING (bucket_id = 'novel-covers' AND auth.role() = 'authenticated');
+
+CREATE POLICY "Authenticated users can delete their covers" ON storage.objects
+  FOR DELETE TO authenticated
+  USING (bucket_id = 'novel-covers' AND auth.role() = 'authenticated');

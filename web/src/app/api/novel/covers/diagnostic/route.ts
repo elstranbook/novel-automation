@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 /**
- * Diagnostic endpoint to check cover_design_prompts table structure and data.
+ * Diagnostic endpoint to check cover infrastructure.
  * Call with ?novelId=<id> to check covers for a specific novel.
- * Call without params to check table structure only.
+ * Call without params to check table and bucket structure only.
  */
 export async function GET(req: Request) {
   try {
@@ -22,7 +22,7 @@ export async function GET(req: Request) {
     if (tableError) {
       result.tableAccessible = false;
       result.tableError = tableError.message;
-      result.hint = "The cover_design_prompts table may be missing the url, model, or is_active columns. Run the migration SQL in your Supabase SQL editor.";
+      result.tableHint = "The cover_design_prompts table may be missing the url, model, or is_active columns. Run the migration SQL in your Supabase SQL editor.";
     } else {
       result.tableAccessible = true;
       result.totalRows = tableCheck?.length ?? 0;
@@ -40,7 +40,26 @@ export async function GET(req: Request) {
       }));
     }
 
-    // 2. If novelId provided, check covers for that specific novel
+    // 2. ALWAYS check storage bucket status (not just when novelId is provided)
+    const { data: buckets, error: bucketError } = await supabaseAdmin
+      .storage
+      .listBuckets();
+
+    if (bucketError) {
+      result.storageError = bucketError.message;
+      result.storageHint = "Could not list storage buckets. Check your SUPABASE_SERVICE_ROLE_KEY.";
+    } else {
+      const novelCoversBucket = buckets?.find((b) => b.name === "novel-covers");
+      result.novelCoversBucketExists = !!novelCoversBucket;
+      result.novelCoversBucketPublic = novelCoversBucket?.public ?? false;
+      result.allBucketNames = buckets?.map((b) => b.name);
+
+      if (!novelCoversBucket) {
+        result.storageHint = "CRITICAL: The 'novel-covers' storage bucket does NOT exist. Cover images cannot be uploaded or persisted. Fix: Go to Supabase Dashboard → Storage → New Bucket → name: 'novel-covers', toggle 'Public bucket' ON. The API will also attempt to auto-create this bucket on the next cover generation.";
+      }
+    }
+
+    // 3. If novelId provided, check covers for that specific novel
     if (novelId) {
       const { data: novelCovers, error: novelError } = await supabaseAdmin
         .from("cover_design_prompts")
@@ -63,19 +82,6 @@ export async function GET(req: Request) {
         result.novelCoverCount = novelCovers?.length ?? 0;
         result.activeCoverCount = novelCovers?.filter((c) => c.is_active).length ?? 0;
         result.coversWithUrl = novelCovers?.filter((c) => c.url).length ?? 0;
-      }
-
-      // Also check if the novel-covers storage bucket is accessible
-      const { data: buckets, error: bucketError } = await supabaseAdmin
-        .storage
-        .listBuckets();
-
-      if (bucketError) {
-        result.storageError = bucketError.message;
-      } else {
-        const novelCoversBucket = buckets?.find((b) => b.name === "novel-covers");
-        result.novelCoversBucketExists = !!novelCoversBucket;
-        result.novelCoversBucketPublic = novelCoversBucket?.public ?? false;
       }
     }
 
