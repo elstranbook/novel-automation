@@ -10,16 +10,32 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "novelId required" }, { status: 400 });
     }
 
-    // Get novel's cover_url from Supabase
-    const { data: novel } = await supabaseAdmin
-      .from("novels")
-      .select("cover_url, created_at")
-      .eq("id", novelId)
-      .maybeSingle();
-    
-    console.log("Novel cover_url:", novel?.cover_url);
+    // Get cover URLs from cover_design_prompts table (not from novels table)
+    const { data: covers, error } = await supabaseAdmin
+      .from("cover_design_prompts")
+      .select("url, model, is_active, created_at")
+      .eq("novel_id", novelId)
+      .order("created_at", { ascending: false });
 
-    return NextResponse.json({ coverUrl: novel?.cover_url || null });
+    if (error) {
+      console.error("Error fetching covers:", error);
+      return NextResponse.json({ error: "Failed to fetch covers" }, { status: 500 });
+    }
+
+    // Prefer the active cover, otherwise the most recent one with a URL
+    const activeCover = covers?.find((c) => c.is_active && c.url);
+    const latestCoverWithUrl = covers?.find((c) => c.url);
+    const coverUrl = activeCover?.url || latestCoverWithUrl?.url || null;
+
+    return NextResponse.json({
+      coverUrl,
+      covers: covers?.filter((c) => c.url).map((c) => ({
+        url: c.url,
+        model: c.model,
+        isActive: c.is_active,
+        createdAt: c.created_at,
+      })) ?? [],
+    });
   } catch (error) {
     console.error("Error fetching covers:", error);
     return NextResponse.json({ error: "Failed to fetch covers" }, { status: 500 });

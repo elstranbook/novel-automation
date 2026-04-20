@@ -837,60 +837,46 @@ function StudioContent() {
       setMinSceneLength(novel.min_scene_length ?? 300);
       setStoryDetails(novel.story_details ?? null);
 
-      // Set cover from novel data
+      // Reset cover state — will be set from cover_design_prompts query below
+      setGeneratedCoverUrl(null);
+      setCoverUrl("");
 
-      if (coverUrl) {
-        setGeneratedCoverUrl(coverUrl);
-        setCoverUrl(coverUrl);
-        console.log("✅ Set cover URL and mockup image to:", coverUrl);
-      } else {
-        setGeneratedCoverUrl(null);
-        setCoverUrl("");
-        console.log("❌ No cover URL found");
-      }
-
-      // Fetch all generated covers from cover_designs table
-      // Try with the snake_case table name that matches standard Prisma naming
+      // Fetch all generated covers from cover_design_prompts table
       let coversData = null;
       try {
-const { data, error } = await supabase
-           .from("cover_design_prompts")
-           .select("url,created_at")
-           .eq("novel_id", novelIdValue)
-           .order("created_at", { ascending: false });
-          
-        if (!error) {
-          coversData = data;
+        const { data, error } = await supabase
+          .from("cover_design_prompts")
+          .select("url,model,is_active,created_at")
+          .eq("novel_id", novelIdValue)
+          .order("created_at", { ascending: false });
+
+        if (error) {
+          console.error("Error querying cover_design_prompts table:", error);
         } else {
-          console.log("cover_design table not found, trying alternative...");
-          // If that fails, try with the original table name (might be PascalCase in DB)
-const { data: data2, error: error2 } = await supabase
-             .from("cover_design_prompts")
-             .select("url,created_at")
-             .eq("novel_id", novelIdValue)
-             .order("created_at", { ascending: false });
-            
-          if (!error2) {
-            coversData = data2;
-          }
+          coversData = data;
         }
       } catch (error) {
-        console.log("Error querying cover design table:", error);
+        console.error("Error querying cover design table:", error);
       }
 
       if (coversData && coversData.length > 0) {
-        const covers = coversData.map((c: any) => ({
-          url: c.url,
-          createdAt: c.created_at,
-        }));
+        const covers = coversData
+          .filter((c: any) => c.url) // Only include records that have a URL
+          .map((c: any) => ({
+            url: c.url,
+            createdAt: c.created_at,
+          }));
         setGeneratedCovers(covers);
-        
-        // Set the most recent cover as the active one
-        const latestCover = coversData[0];
-        if (latestCover && latestCover.url) {
-          setGeneratedCoverUrl(latestCover.url);
-          setCoverUrl(latestCover.url);
-          console.log("✅ Set active cover from cover_design table:", latestCover.url.substring(0, 60) + "...");
+
+        // Prefer the active cover, otherwise use the most recent one with a URL
+        const activeCover = coversData.find((c: any) => c.is_active && c.url);
+        const latestCoverWithUrl = coversData.find((c: any) => c.url);
+        const coverToUse = activeCover || latestCoverWithUrl;
+
+        if (coverToUse) {
+          setGeneratedCoverUrl(coverToUse.url);
+          setCoverUrl(coverToUse.url);
+          console.log("✅ Set active cover from cover_design_prompts table:", coverToUse.url.substring(0, 60) + "...");
         }
       } else {
         setGeneratedCovers([]);
@@ -1783,12 +1769,35 @@ const { data: data2, error: error2 } = await supabase
       if (!response.ok) throw new Error("Failed to generate cover prompt");
       const data = await response.json();
       setCoverPrompt(data.prompt);
-      await saveSingleRow(
-        "cover_design_prompts",
-        { prompt: data.prompt ?? "", title: data.title ?? title },
-        novelIdValue,
-        user.id
-      );
+      // Save cover prompt WITHOUT deleting rows that may have cover image URLs.
+      // Use upsert pattern: find an existing prompt-only row to update, or insert a new one.
+      const { data: existingRows } = await supabase
+        .from("cover_design_prompts")
+        .select("id, url")
+        .eq("novel_id", novelIdValue)
+        .is("url", null) // Only target rows without a cover image URL
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingRows) {
+        // Update the existing prompt-only row
+        await supabase
+          .from("cover_design_prompts")
+          .update({ prompt: data.prompt ?? "", title: data.title ?? title })
+          .eq("id", existingRows.id);
+      } else {
+        // Insert a new row for the prompt
+        await supabase
+          .from("cover_design_prompts")
+          .insert({
+            novel_id: novelIdValue,
+            user_id: user.id,
+            prompt: data.prompt ?? "",
+            title: data.title ?? title,
+          });
+      }
+      setLastSavedAt(new Date().toLocaleString());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {

@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { PrismaClient } from "@prisma/client";
-
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
-const prisma = globalForPrisma.prisma || new PrismaClient();
 
 export async function POST(req: Request) {
   try {
@@ -115,28 +111,45 @@ export async function POST(req: Request) {
           
           finalUrl = publicUrl;
 
-          // 3. Update database
+          // 3. Update database — use Supabase cover_design_prompts table
 
-            
-          // 4. Deactivate existing covers for this novel
-await prisma.coverDesign.updateMany({
-             where: { novelId: novelId },
-             data: { isActive: false }
-           });
-            
-          // 5. Save new cover to CoverDesign table
-await prisma.coverDesign.create({
-             data: {
-               novelId,
-               url: finalUrl,
-               model: model,
-               prompt: prompt,
-               isActive: true
-             }
-           });
-            
-          console.log("Cover saved to database:", finalUrl);
-          console.log("CoverDesign record created for novel:", novelId);
+          // Get user_id from the novels table for the cover record
+          const { data: novelRow } = await supabaseAdmin
+            .from("novels")
+            .select("user_id")
+            .eq("id", novelId)
+            .maybeSingle();
+
+          const userId = novelRow?.user_id;
+
+          if (userId) {
+            // 4. Deactivate existing covers for this novel
+            await supabaseAdmin
+              .from("cover_design_prompts")
+              .update({ is_active: false })
+              .eq("novel_id", novelId);
+
+            // 5. Save new cover to cover_design_prompts table
+            const { error: insertError } = await supabaseAdmin
+              .from("cover_design_prompts")
+              .insert({
+                novel_id: novelId,
+                user_id: userId,
+                url: finalUrl,
+                model: model,
+                prompt: prompt,
+                is_active: true,
+              });
+
+            if (insertError) {
+              console.error("Error inserting cover record:", insertError);
+            } else {
+              console.log("Cover saved to database:", finalUrl);
+              console.log("cover_design_prompts record created for novel:", novelId);
+            }
+          } else {
+            console.warn("Could not determine user_id for novel, skipping cover DB record");
+          }
         }
       } catch (saveError) {
         console.error("Error saving image to storage:", saveError);

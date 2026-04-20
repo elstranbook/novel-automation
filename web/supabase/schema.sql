@@ -140,6 +140,9 @@ create table if not exists public.cover_design_prompts (
   novel_id uuid references public.novels(id) on delete cascade,
   title text,
   prompt text not null,
+  url text,
+  model text,
+  is_active boolean not null default false,
   created_at timestamptz default now()
 );
 
