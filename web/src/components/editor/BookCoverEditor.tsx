@@ -18,7 +18,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CanvasEngine } from './CanvasEngine';
+import { CanvasEngine, CanvasEngineHandle } from './CanvasEngine';
 import { useMockupState } from '@/hooks/useMockupState';
 import type { Template } from '@/types';
 
@@ -55,7 +55,7 @@ export function BookCoverEditor({ onBack }: BookCoverEditorProps) {
   } = useMockupState();
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const webglRef = useRef<any>(null);
+  const engineRef = useRef<CanvasEngineHandle>(null);
   const [isRendering, setIsRendering] = useState(false);
   
   // Book-specific state
@@ -83,14 +83,14 @@ export function BookCoverEditor({ onBack }: BookCoverEditorProps) {
   };
   
   const handleDownload = async () => {
-    if (!webglRef.current || !selectedTemplate) return;
+    if (!engineRef.current || !selectedTemplate) return;
     
     setIsRendering(true);
     setIsLoading(true);
     
     try {
-      // 1. Capture 4K image from WebGL (3840px)
-      const dataUrl = await webglRef.current.capture(3840, 3840);
+      // 1. Capture 4K image (3840px) — works with both WebGL and canvas 2D
+      const dataUrl = await engineRef.current.capture(3840, 3840);
       
       if (!dataUrl) throw new Error('Capture failed');
 
@@ -192,12 +192,12 @@ export function BookCoverEditor({ onBack }: BookCoverEditorProps) {
         {/* Canvas */}
         <div className="flex-1 min-h-0">
           <CanvasEngine
+            ref={engineRef}
             template={selectedTemplate}
             userImage={userImage}
             design={design}
             colorSelections={colorSelections}
             finish={bookFinish}
-            onWebGLReady={(handle) => (webglRef.current = handle)}
             onDesignChange={updateDesign}
           />
         </div>

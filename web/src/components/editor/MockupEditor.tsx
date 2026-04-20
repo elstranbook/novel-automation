@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { CanvasEngine } from './CanvasEngine';
+import { CanvasEngine, CanvasEngineHandle } from './CanvasEngine';
 import { DesignControls } from './DesignControls';
 import { ColorPicker } from './ColorPicker';
 import { BookCoverEditor } from './BookCoverEditor';
@@ -36,7 +36,7 @@ export function MockupEditor({ onBack }: MockupEditorProps) {
   
   // Hooks must be called before any conditional returns
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const webglRef = useRef<any>(null);
+  const engineRef = useRef<CanvasEngineHandle>(null);
   const [isRendering, setIsRendering] = useState(false);
   
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -59,18 +59,18 @@ export function MockupEditor({ onBack }: MockupEditorProps) {
   }, [setUserImage]);
   
   const handleDownload = useCallback(async () => {
-    if (!webglRef.current || !selectedTemplate) return;
+    if (!engineRef.current || !selectedTemplate) return;
     
     setIsRendering(true);
     setIsLoading(true);
     
     try {
-      // 1. Capture 4K image from WebGL (3840px)
-      const dataUrl = await webglRef.current.capture(3840, 3840);
+      // Capture 4K image — works with both WebGL and canvas 2D
+      const dataUrl = await engineRef.current.capture(3840, 3840);
       
       if (!dataUrl) throw new Error('Capture failed');
       
-      // 2. Trigger Download
+      // Trigger Download
       const link = document.createElement('a');
       link.download = `${selectedTemplate.slug}-mockup-${Date.now()}.png`;
       link.href = dataUrl;
@@ -180,11 +180,11 @@ export function MockupEditor({ onBack }: MockupEditorProps) {
         {/* Canvas */}
         <div className="flex-1 min-h-0">
           <CanvasEngine
+            ref={engineRef}
             template={selectedTemplate}
             userImage={userImage}
             design={design}
             colorSelections={colorSelections}
-            onWebGLReady={(handle) => (webglRef.current = handle)}
             onDesignChange={updateDesign}
           />
         </div>

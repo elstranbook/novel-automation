@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { WebGLRenderer } from '../editor/WebGLRenderer';
+import { CanvasEngine } from '../editor/CanvasEngine';
 import type { Template, DesignState } from '@/types';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -71,7 +71,7 @@ export function AutoPreviewGallery({ userImage, onSelectTemplate }: AutoPreviewG
             {/* The Real-Time Preview Engine */}
             <div className="aspect-square relative overflow-hidden bg-gray-100 dark:bg-gray-800">
               {userImage ? (
-                <WebGLRenderer
+                <CanvasEngine
                   template={template}
                   userImage={userImage}
                   design={defaultDesign}

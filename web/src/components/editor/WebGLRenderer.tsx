@@ -61,6 +61,8 @@ interface WebGLRendererProps {
   width: number;
   height: number;
   finish?: 'matte' | 'glossy' | 'soft_touch';
+  onWebGLError?: () => void;
+  onWebGLReady?: (handle: WebGLRendererHandle) => void;
 }
 
 export interface WebGLRendererHandle {
@@ -76,6 +78,8 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
   width,
   height,
   finish = 'matte',
+  onWebGLError,
+  onWebGLReady,
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -96,6 +100,7 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
     if (!gl) {
       console.warn('WebGL not supported in this browser');
       setWebGLError(true);
+      onWebGLError?.();
       return;
     }
 
@@ -113,6 +118,7 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
     } catch (err) {
       console.error('WebGL initialization failed:', err);
       setWebGLError(true);
+      onWebGLError?.();
       return;
     }
 
@@ -367,6 +373,16 @@ return () => {
       return dataUrl;
     }
   }));
+
+  // Notify parent when the handle is ready (fixes the race condition)
+  useEffect(() => {
+    if (!webGLError && ref && onWebGLReady) {
+      // The handle is available via the ref after useImperativeHandle runs
+      // We read it through the forwarded ref
+      const handle = (ref as any).current as WebGLRendererHandle | null;
+      if (handle) onWebGLReady(handle);
+    }
+  }, [webGLError, onWebGLReady, ref]);
 
   // Show error fallback if WebGL failed to initialize
   if (webGLError) {

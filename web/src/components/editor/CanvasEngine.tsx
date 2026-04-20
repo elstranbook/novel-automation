@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
 import type { Template, DesignState } from '@/types';
 import { hexToRgb } from '@/lib/canvas/color-utils';
 import { 
@@ -23,23 +23,31 @@ interface CanvasEngineProps {
   onDesignChange?: (updates: Partial<DesignState>) => void;
 }
 
-export function CanvasEngine({
+export interface CanvasEngineHandle {
+  capture: (width?: number, height?: number) => Promise<string>;
+  getCanvas: () => HTMLCanvasElement | null;
+}
+
+export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
   template,
   userImage,
   design,
   colorSelections,
   finish = 'matte',
-  engine = 'webgl',
+  engine: engineProp = 'webgl',
   onCanvasReady,
   onWebGLReady,
   onDesignChange,
-}: CanvasEngineProps) {
+}, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const webglRef = useRef<WebGLRendererHandle>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [canvasSize, setCanvasSize] = useState({ width: 600, height: 600 });
+  
+  // Auto-fallback: start with the prop, switch to canvas if WebGL fails
+  const [activeEngine, setActiveEngine] = useState<'canvas' | 'webgl'>(engineProp);
   
   // Track loaded images
   const baseImageRef = useRef<HTMLImageElement | null>(null);
@@ -95,7 +103,7 @@ export function CanvasEngine({
 
   // Render canvas function (Legacy 2D)
   const renderCanvas = useCallback(() => {
-    if (engine !== 'canvas') return;
+    if (activeEngine !== 'canvas') return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -225,7 +233,7 @@ export function CanvasEngine({
         });
       }
     }
-  }, [template, userImage, design, colorSelections, getSmartObjectLayer, engine]);
+  }, [template, userImage, design, colorSelections, getSmartObjectLayer, activeEngine]);
 
   // Load images
   useEffect(() => {
@@ -253,11 +261,63 @@ export function CanvasEngine({
 
   useEffect(() => { renderCanvas(); }, [renderCanvas, design, colorSelections]);
 
-  // Notify ready
+  // Handle WebGL ready — use a callback pattern that works with timing
+  const handleWebGLReady = useCallback((handle: WebGLRendererHandle) => {
+    webglRef.current = handle;
+    onWebGLReady?.(handle);
+  }, [onWebGLReady]);
+
+  // Handle WebGL error — auto-fallback to canvas 2D
+  const handleWebGLError = useCallback(() => {
+    console.log('🔄 WebGL unavailable — falling back to canvas 2D rendering');
+    setActiveEngine('canvas');
+  }, []);
+
+  // Notify canvas ready
   useEffect(() => {
-    if (canvasRef.current && onCanvasReady) onCanvasReady(canvasRef.current);
-    if (webglRef.current && onWebGLReady) onWebGLReady(webglRef.current);
-  }, [onCanvasReady, onWebGLReady, engine]);
+    if (activeEngine === 'canvas' && canvasRef.current && onCanvasReady) {
+      onCanvasReady(canvasRef.current);
+    }
+  }, [activeEngine, onCanvasReady]);
+
+  // Expose unified capture method via ref
+  useImperativeHandle(ref, () => ({
+    capture: async (capWidth = 3840, capHeight = 3840): Promise<string> => {
+      // Try WebGL capture first
+      if (activeEngine === 'webgl' && webglRef.current) {
+        try {
+          const dataUrl = await webglRef.current.capture(capWidth, capHeight);
+          if (dataUrl) return dataUrl;
+        } catch (err) {
+          console.warn('WebGL capture failed, trying canvas fallback:', err);
+        }
+      }
+
+      // Canvas 2D fallback capture
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        console.error('No canvas available for capture');
+        return '';
+      }
+
+      // For canvas 2D, we can scale up by drawing to a larger offscreen canvas
+      const offscreen = document.createElement('canvas');
+      offscreen.width = capWidth;
+      offscreen.height = capHeight;
+      const ctx = offscreen.getContext('2d');
+      if (!ctx) return '';
+
+      // Draw scaled version
+      ctx.drawImage(canvas, 0, 0, capWidth, capHeight);
+      return offscreen.toDataURL('image/png', 1.0);
+    },
+    getCanvas: () => {
+      if (activeEngine === 'webgl') {
+        return webglRef.current?.getCanvas() || null;
+      }
+      return canvasRef.current;
+    },
+  }), [activeEngine]);
 
   // Interaction (Simple drag fallback)
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -283,7 +343,7 @@ export function CanvasEngine({
       onPointerMove={handlePointerMove}
       onPointerUp={() => setIsDragging(false)}
     >
-      {engine === 'webgl' ? (
+      {activeEngine === 'webgl' ? (
         <WebGLRenderer
           ref={webglRef}
           template={template}
@@ -293,6 +353,8 @@ export function CanvasEngine({
           width={canvasSize.width}
           height={canvasSize.height}
           finish={finish}
+          onWebGLError={handleWebGLError}
+          onWebGLReady={handleWebGLReady}
         />
       ) : (
         <canvas
@@ -310,7 +372,9 @@ export function CanvasEngine({
       )}
     </div>
   );
-}
+});
+
+CanvasEngine.displayName = 'CanvasEngine';
 
 function drawCheckerboard(ctx: CanvasRenderingContext2D, width: number, height: number) {
   const size = 10;
