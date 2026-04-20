@@ -4096,11 +4096,24 @@ function StudioContent() {
                         </svg>
                       </button>
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           setGeneratedCoverUrl(cover.url);
                           setCoverUrl(cover.url);
+                          // Persist the selection in the database
+                          if (novelId) {
+                            try {
+                              await fetch("/api/novel/covers/activate", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ novelId, coverUrl: cover.url }),
+                              });
+                              console.log("✅ Cover selection persisted");
+                            } catch (err) {
+                              console.error("❌ Failed to persist cover selection:", err);
+                            }
+                          }
                         }}
-                        className="p-2 bg-emerald-500 rounded-lg text-white hover:bg-emerald-600"
+                        className={`p-2 rounded-lg text-white ${generatedCoverUrl === cover.url ? 'bg-emerald-600 ring-2 ring-emerald-400' : 'bg-emerald-500 hover:bg-emerald-600'}`}
                         title="Use as cover"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
@@ -4121,6 +4134,47 @@ function StudioContent() {
 
 {view === "mockups" && (
   <div className="space-y-8 animate-in fade-in duration-700 min-h-[800px]">
+    {/* Cover Image Picker */}
+    {generatedCovers.length > 0 && (
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+        <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-3">Select Cover Image for Mockup</h3>
+        <div className="flex gap-3 overflow-x-auto pb-2">
+          {generatedCovers.map((cover, index) => (
+            <button
+              key={index}
+              onClick={() => {
+                setGeneratedCoverUrl(cover.url);
+                setCoverUrl(cover.url);
+                // Persist the selection in the database
+                if (novelId) {
+                  fetch("/api/novel/covers/activate", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ novelId, coverUrl: cover.url }),
+                  }).catch((err) => console.error("❌ Failed to persist cover selection:", err));
+                }
+              }}
+              className={`relative flex-shrink-0 w-20 h-30 rounded-lg overflow-hidden border-2 transition-all ${
+                generatedCoverUrl === cover.url
+                  ? "border-emerald-500 ring-2 ring-emerald-500/50 scale-105"
+                  : "border-zinc-700 hover:border-zinc-500 hover:scale-105"
+              }`}
+              title={`Use Cover ${index + 1}`}
+            >
+              <img src={cover.url} alt={`Cover ${index + 1}`} className="h-full w-full object-cover" />
+              {generatedCoverUrl === cover.url && (
+                <div className="absolute top-0.5 right-0.5 bg-emerald-500 rounded-full w-4 h-4 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="white" className="w-3 h-3">
+                    <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      </section>
+    )}
+
     {mockupActiveTab === "gallery" ? (
       <div className="space-y-8">
         <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl">
