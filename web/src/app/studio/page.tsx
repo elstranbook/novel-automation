@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { ArrowLeft, Plus } from "lucide-react";
 import type { Template, Category, TemplatesResponse } from "@/types";
 
-const modelOptions = ["gpt-4o", "gpt-4o-mini", "o3-mini", "o1-preview", "o1-mini"];
+const modelOptions = ["gpt-4.1-mini", "gpt-4.1", "gpt-4o", "gpt-4"];
 
 type StoryDetails = Record<string, unknown>;
 
