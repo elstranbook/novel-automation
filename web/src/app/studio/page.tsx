@@ -865,8 +865,7 @@ function StudioContent() {
             console.error("❌ Fallback query also failed:", fallbackError.message);
           } else {
             console.log("⚠️ Fallback query succeeded. Rows:", fallbackData?.length ?? 0);
-            coversData = fallbackData;
-            // Load the most recent non-empty prompt from fallback data
+            // No URL data available without the migration, but still load the prompt
             const latestPromptRow = fallbackData?.find((row: any) => row.prompt);
             if (latestPromptRow?.prompt) {
               setCoverPrompt(latestPromptRow.prompt);
