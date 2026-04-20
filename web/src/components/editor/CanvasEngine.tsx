@@ -46,13 +46,32 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [canvasSize, setCanvasSize] = useState({ width: 600, height: 600 });
   
-  // Auto-fallback: start with the prop, switch to canvas if WebGL fails
-  const [activeEngine, setActiveEngine] = useState<'canvas' | 'webgl'>(engineProp);
+  // Auto-fallback: start with canvas, upgrade to WebGL if available
+  // This prevents the ugly "WebGL not supported" error flash
+  const [activeEngine, setActiveEngine] = useState<'canvas' | 'webgl'>('canvas');
+  const [webglChecked, setWebglChecked] = useState(false);
   
   // Track loaded images
   const baseImageRef = useRef<HTMLImageElement | null>(null);
   const userImageRef = useRef<HTMLImageElement | null>(null);
   const realismLayersRef = useRef<Record<string, HTMLImageElement>>({});
+
+  // Try to upgrade to WebGL after mount
+  useEffect(() => {
+    if (engineProp === 'webgl' && !webglChecked) {
+      try {
+        const testCanvas = document.createElement('canvas');
+        const gl = testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl');
+        if (gl) {
+          // WebGL is supported, upgrade to WebGL engine
+          setActiveEngine('webgl');
+        }
+      } catch (e) {
+        // Stay on canvas 2D
+      }
+      setWebglChecked(true);
+    }
+  }, [engineProp, webglChecked]);
 
   // Handle canvas resize
   useEffect(() => {
@@ -211,11 +230,52 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
           }
         }
         
-        // 3. Realism Layers (Shadows/Highlights)
+        // 3. Fallback: Draw user image within smart object bounds without warping
+        if (!warped) {
+          const boundsX = (smartObjectLayer as any).boundsX || 0;
+          const boundsY = (smartObjectLayer as any).boundsY || 0;
+          const boundsW = (smartObjectLayer as any).boundsWidth || template.width;
+          const boundsH = (smartObjectLayer as any).boundsHeight || template.height;
+          
+          ctx.save();
+          // Clip to smart object bounds
+          ctx.beginPath();
+          ctx.rect(boundsX * scaleX, boundsY * scaleY, boundsW * scaleX, boundsH * scaleY);
+          ctx.clip();
+          
+          // Draw image centered and scaled within bounds
+          const imgAspect = img.width / img.height;
+          const boundsAspect = boundsW / boundsH;
+          let drawW, drawH, drawX, drawY;
+          
+          if (imgAspect > boundsAspect) {
+            drawH = boundsH * scaleY * design.scale;
+            drawW = drawH * imgAspect;
+          } else {
+            drawW = boundsW * scaleX * design.scale;
+            drawH = drawW / imgAspect;
+          }
+          
+          drawX = (boundsX + boundsW * design.x) * scaleX - drawW / 2;
+          drawY = (boundsY + boundsH * design.y) * scaleY - drawH / 2;
+          
+          if (design.rotation) {
+            const centerX = (boundsX + boundsW / 2) * scaleX;
+            const centerY = (boundsY + boundsH / 2) * scaleY;
+            ctx.translate(centerX, centerY);
+            ctx.rotate(design.rotation * Math.PI / 180);
+            ctx.translate(-centerX, -centerY);
+          }
+          
+          ctx.drawImage(img, drawX, drawY, drawW, drawH);
+          ctx.restore();
+        }
+        
+        // 4. Realism Layers (Shadows/Highlights)
         const realismLayers = template.layers.filter(l => l.compositeUrl);
         realismLayers.forEach(layer => {
-          const img = realismLayersRef.current[layer.id];
-          if (img) {
+          const rlImg = realismLayersRef.current[layer.id];
+          if (rlImg) {
             ctx.save();
             const bm = (layer.blendMode || 'normal').toLowerCase();
             if (bm.includes('multiply')) ctx.globalCompositeOperation = 'multiply';
@@ -227,10 +287,36 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
             const ly = ((layer as any).boundsY || 0) * scaleY;
             const lw = ((layer as any).boundsWidth || template.width) * scaleX;
             const lh = ((layer as any).boundsHeight || template.height) * scaleY;
-            ctx.drawImage(img, lx, ly, lw, lh);
+            ctx.drawImage(rlImg, lx, ly, lw, lh);
             ctx.restore();
           }
         });
+      } else {
+        // No smart object layer — draw user image as overlay on the full canvas
+        ctx.save();
+        const imgAspect = img.width / img.height;
+        const canvasAspect = canvas.width / canvas.height;
+        let drawW, drawH;
+        
+        if (imgAspect > canvasAspect) {
+          drawH = canvas.height * design.scale;
+          drawW = drawH * imgAspect;
+        } else {
+          drawW = canvas.width * design.scale;
+          drawH = drawW / imgAspect;
+        }
+        
+        const drawX = canvas.width * design.x - drawW / 2;
+        const drawY = canvas.height * design.y - drawH / 2;
+        
+        if (design.rotation) {
+          ctx.translate(canvas.width * design.x, canvas.height * design.y);
+          ctx.rotate(design.rotation * Math.PI / 180);
+          ctx.translate(-canvas.width * design.x, -canvas.height * design.y);
+        }
+        
+        ctx.drawImage(img, drawX, drawY, drawW, drawH);
+        ctx.restore();
       }
     }
   }, [template, userImage, design, colorSelections, getSmartObjectLayer, activeEngine]);
@@ -271,6 +357,7 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
   const handleWebGLError = useCallback(() => {
     console.log('🔄 WebGL unavailable — falling back to canvas 2D rendering');
     setActiveEngine('canvas');
+    setWebglChecked(true);
   }, []);
 
   // Notify canvas ready
@@ -300,15 +387,96 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
         return '';
       }
 
-      // For canvas 2D, we can scale up by drawing to a larger offscreen canvas
+      // For canvas 2D, we render at high resolution using the offscreen canvas
       const offscreen = document.createElement('canvas');
       offscreen.width = capWidth;
       offscreen.height = capHeight;
       const ctx = offscreen.getContext('2d');
       if (!ctx) return '';
 
-      // Draw scaled version
-      ctx.drawImage(canvas, 0, 0, capWidth, capHeight);
+      // If we have template data, re-render at high resolution for better quality
+      if (template && baseImageRef.current) {
+        const hiScaleX = capWidth / template.width;
+        const hiScaleY = capHeight / template.height;
+
+        // Draw base image at high res
+        ctx.drawImage(baseImageRef.current, 0, 0, capWidth, capHeight);
+
+        // Draw user image at high res if available
+        if (userImageRef.current && userImage) {
+          const img = userImageRef.current;
+          const smartObjectLayer = getSmartObjectLayer();
+          
+          if (smartObjectLayer) {
+            const boundsX = (smartObjectLayer as any).boundsX || 0;
+            const boundsY = (smartObjectLayer as any).boundsY || 0;
+            const boundsW = (smartObjectLayer as any).boundsWidth || template.width;
+            const boundsH = (smartObjectLayer as any).boundsHeight || template.height;
+            
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(boundsX * hiScaleX, boundsY * hiScaleY, boundsW * hiScaleX, boundsH * hiScaleY);
+            ctx.clip();
+            
+            const imgAspect = img.width / img.height;
+            const boundsAspect = boundsW / boundsH;
+            let drawW, drawH, drawX, drawY;
+            
+            if (imgAspect > boundsAspect) {
+              drawH = boundsH * hiScaleY * design.scale;
+              drawW = drawH * imgAspect;
+            } else {
+              drawW = boundsW * hiScaleX * design.scale;
+              drawH = drawW / imgAspect;
+            }
+            
+            drawX = (boundsX + boundsW * design.x) * hiScaleX - drawW / 2;
+            drawY = (boundsY + boundsH * design.y) * hiScaleY - drawH / 2;
+            
+            ctx.drawImage(img, drawX, drawY, drawW, drawH);
+            ctx.restore();
+          } else {
+            // No smart object — draw full canvas overlay
+            const imgAspect = img.width / img.height;
+            const canvasAspect = capWidth / capHeight;
+            let drawW, drawH;
+            
+            if (imgAspect > canvasAspect) {
+              drawH = capHeight * design.scale;
+              drawW = drawH * imgAspect;
+            } else {
+              drawW = capWidth * design.scale;
+              drawH = drawW / imgAspect;
+            }
+            
+            ctx.drawImage(img, capWidth * design.x - drawW / 2, capHeight * design.y - drawH / 2, drawW, drawH);
+          }
+        }
+
+        // Draw realism layers at high res
+        const realismLayers = template.layers.filter(l => l.compositeUrl);
+        realismLayers.forEach(layer => {
+          const rlImg = realismLayersRef.current[layer.id];
+          if (rlImg) {
+            ctx.save();
+            const bm = (layer.blendMode || 'normal').toLowerCase();
+            if (bm.includes('multiply')) ctx.globalCompositeOperation = 'multiply';
+            else if (bm.includes('screen')) ctx.globalCompositeOperation = 'screen';
+            else if (bm.includes('overlay')) ctx.globalCompositeOperation = 'overlay';
+            ctx.globalAlpha = layer.opacity || 1;
+            const lx = ((layer as any).boundsX || 0) * hiScaleX;
+            const ly = ((layer as any).boundsY || 0) * hiScaleY;
+            const lw = ((layer as any).boundsWidth || template.width) * hiScaleX;
+            const lh = ((layer as any).boundsHeight || template.height) * hiScaleY;
+            ctx.drawImage(rlImg, lx, ly, lw, lh);
+            ctx.restore();
+          }
+        });
+      } else {
+        // No template — just scale up the existing canvas
+        ctx.drawImage(canvas, 0, 0, capWidth, capHeight);
+      }
+      
       return offscreen.toDataURL('image/png', 1.0);
     },
     getCanvas: () => {

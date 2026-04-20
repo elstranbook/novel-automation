@@ -76,8 +76,6 @@ export function AutoPreviewGallery({ userImage, onSelectTemplate }: AutoPreviewG
                   userImage={userImage}
                   design={defaultDesign}
                   colorSelections={{}}
-                  width={400}
-                  height={400}
                 />
               ) : (
                 <img 

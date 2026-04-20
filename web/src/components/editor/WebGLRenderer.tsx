@@ -384,20 +384,9 @@ return () => {
     }
   }, [webGLError, onWebGLReady, ref]);
 
-  // Show error fallback if WebGL failed to initialize
+  // If WebGL failed, render nothing — the parent CanvasEngine will fall back to canvas 2D
   if (webGLError) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-900 rounded-lg">
-        <div className="text-center p-8">
-          <p className="text-gray-500 dark:text-gray-400 mb-2">
-            3D preview requires WebGL support
-          </p>
-          <p className="text-xs text-gray-400">
-            Your browser or device may not support WebGL
-          </p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return <div ref={containerRef} className="w-full h-full" style={{ overflow: 'hidden' }} />;
