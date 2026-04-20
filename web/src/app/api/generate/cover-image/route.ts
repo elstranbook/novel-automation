@@ -6,7 +6,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { prompt, model = "gpt-image-1", size = "1024x1792", novelId } = body;
 
-    console.log("Generating image with GPT Image:", { model, size, promptLength: prompt?.length, novelId });
+    console.log("🖼️ Generating image with GPT Image:", { model, size, promptLength: prompt?.length, novelId });
 
     if (!prompt) {
       return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
@@ -24,14 +24,12 @@ export async function POST(req: Request) {
     let requestBody: Record<string, unknown>;
     
     if (model.includes("gpt-image-1")) {
-      // GPT Image models - no response_format, no size, quality is low/medium/high
       requestBody = {
         model: model,
         prompt: prompt,
         quality: "high"
       };
     } else {
-      // DALL-E legacy models
       requestBody = {
         model: model,
         prompt: prompt,
@@ -60,7 +58,6 @@ export async function POST(req: Request) {
 
     const data = await response.json();
     
-    // GPT Image returns b64_json, DALL-E returns url
     const imageData = data.data[0];
     const hasUrl = !!imageData.url;
     const hasBase64 = !!imageData.b64_json;
@@ -72,19 +69,18 @@ export async function POST(req: Request) {
     const rawBase64 = imageData.b64_json || "";
     const rawUrl = imageData.url || "";
 
-    // 2. Download the image and upload to Supabase Storage if novelId is provided
+    // 2. Upload to Supabase Storage (if novelId provided)
     let finalUrl = rawUrl || `data:image/png;base64,${rawBase64}`;
+    let storageUploadSucceeded = false;
     
     if (novelId) {
       try {
         let arrayBuffer: ArrayBuffer;
         
         if (hasBase64) {
-          // Use base64 directly
           const buffer = Buffer.from(rawBase64, "base64");
           arrayBuffer = buffer.buffer;
         } else {
-          // Download from URL
           const imageRes = await fetch(rawUrl);
           const imageBlob = await imageRes.blob();
           arrayBuffer = await imageBlob.arrayBuffer();
@@ -101,63 +97,79 @@ export async function POST(req: Request) {
           });
 
         if (uploadError) {
-          console.error("Storage upload error:", uploadError);
+          console.error("❌ Storage upload error:", uploadError.message);
         } else {
-          // Get public URL
           const { data: { publicUrl } } = supabaseAdmin
             .storage
             .from("novel-covers")
             .getPublicUrl(fileName);
           
           finalUrl = publicUrl;
-
-          // 3. Update database — use Supabase cover_design_prompts table
-
-          // Get user_id from the novels table for the cover record
-          const { data: novelRow } = await supabaseAdmin
-            .from("novels")
-            .select("user_id")
-            .eq("id", novelId)
-            .maybeSingle();
-
-          const userId = novelRow?.user_id;
-
-          if (userId) {
-            // 4. Deactivate existing covers for this novel
-            await supabaseAdmin
-              .from("cover_design_prompts")
-              .update({ is_active: false })
-              .eq("novel_id", novelId);
-
-            // 5. Save new cover to cover_design_prompts table
-            const { error: insertError } = await supabaseAdmin
-              .from("cover_design_prompts")
-              .insert({
-                novel_id: novelId,
-                user_id: userId,
-                url: finalUrl,
-                model: model,
-                prompt: prompt,
-                is_active: true,
-              });
-
-            if (insertError) {
-              console.error("Error inserting cover record:", insertError);
-            } else {
-              console.log("Cover saved to database:", finalUrl);
-              console.log("cover_design_prompts record created for novel:", novelId);
-            }
-          } else {
-            console.warn("Could not determine user_id for novel, skipping cover DB record");
-          }
+          storageUploadSucceeded = true;
+          console.log("✅ Storage upload succeeded. Public URL:", publicUrl);
         }
-      } catch (saveError) {
-        console.error("Error saving image to storage:", saveError);
-        // Fallback to data URL if saving fails
+      } catch (storageError) {
+        console.error("❌ Storage upload exception:", storageError);
+      }
+
+      // 3. ALWAYS save cover record to database — even if storage upload failed
+      //    If storage failed, finalUrl will be the temporary OpenAI URL or base64 data URL
+      try {
+        // Get user_id from the novels table
+        const { data: novelRow, error: novelError } = await supabaseAdmin
+          .from("novels")
+          .select("user_id")
+          .eq("id", novelId)
+          .maybeSingle();
+
+        if (novelError) {
+          console.error("❌ Error fetching novel for user_id:", novelError.message);
+        }
+
+        const userId = novelRow?.user_id;
+
+        if (userId) {
+          // Deactivate existing covers for this novel (best-effort, won't fail if column doesn't exist)
+          const { error: deactivateError } = await supabaseAdmin
+            .from("cover_design_prompts")
+            .update({ is_active: false })
+            .eq("novel_id", novelId);
+
+          if (deactivateError) {
+            console.warn("⚠️ Could not deactivate existing covers (may need migration):", deactivateError.message);
+          }
+
+          // Save new cover to cover_design_prompts table
+          const { error: insertError } = await supabaseAdmin
+            .from("cover_design_prompts")
+            .insert({
+              novel_id: novelId,
+              user_id: userId,
+              url: finalUrl,
+              model: model,
+              prompt: prompt,
+              is_active: true,
+            });
+
+          if (insertError) {
+            console.error("❌ Error inserting cover record:", insertError.message);
+            console.error("❌ Full insert error:", JSON.stringify(insertError));
+          } else {
+            console.log("✅ Cover record saved to database for novel:", novelId);
+            console.log("✅ Cover URL:", finalUrl.substring(0, 80) + "...");
+          }
+        } else {
+          console.warn("⚠️ Could not determine user_id for novel:", novelId, "- skipping cover DB record");
+        }
+      } catch (dbError) {
+        console.error("❌ Database save exception:", dbError);
       }
     }
 
-    return NextResponse.json({ imageUrl: finalUrl });
+    return NextResponse.json({ 
+      imageUrl: finalUrl,
+      saved: storageUploadSucceeded,
+    });
   } catch (error) {
     console.error("GPT Image Fetch Route Error:", error);
     return NextResponse.json(

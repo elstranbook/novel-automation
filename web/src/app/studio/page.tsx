@@ -844,6 +844,7 @@ function StudioContent() {
       // Fetch all generated covers from cover_design_prompts table
       let coversData = null;
       try {
+        // First try with new columns (url, model, is_active)
         const { data, error } = await supabase
           .from("cover_design_prompts")
           .select("url,model,is_active,created_at")
@@ -851,12 +852,32 @@ function StudioContent() {
           .order("created_at", { ascending: false });
 
         if (error) {
-          console.error("Error querying cover_design_prompts table:", error);
+          console.error("❌ Error querying cover_design_prompts with url column:", error.message);
+          // Fallback: try without the new columns (migration may not have been applied)
+          console.log("🔄 Trying fallback query without url/model/is_active columns...");
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from("cover_design_prompts")
+            .select("prompt,created_at")
+            .eq("novel_id", novelIdValue)
+            .order("created_at", { ascending: false });
+
+          if (fallbackError) {
+            console.error("❌ Fallback query also failed:", fallbackError.message);
+          } else {
+            console.log("⚠️ Fallback query succeeded but no cover URLs available (migration needed). Rows:", fallbackData?.length ?? 0);
+            coversData = null; // No URL data available without the migration
+          }
         } else {
           coversData = data;
+          console.log("📋 Found", data?.length ?? 0, "cover_design_prompts rows for novel", novelIdValue);
+          if (data && data.length > 0) {
+            data.forEach((row: any, i: number) => {
+              console.log(`  Row ${i}: url=${row.url ? row.url.substring(0, 50) + '...' : 'null'}, is_active=${row.is_active}, model=${row.model}`);
+            });
+          }
         }
       } catch (error) {
-        console.error("Error querying cover design table:", error);
+        console.error("❌ Exception querying cover_design_prompts:", error);
       }
 
       if (coversData && coversData.length > 0) {
@@ -867,6 +888,7 @@ function StudioContent() {
             createdAt: c.created_at,
           }));
         setGeneratedCovers(covers);
+        console.log("🖼️ Covers with URLs:", covers.length);
 
         // Prefer the active cover, otherwise use the most recent one with a URL
         const activeCover = coversData.find((c: any) => c.is_active && c.url);
@@ -877,9 +899,12 @@ function StudioContent() {
           setGeneratedCoverUrl(coverToUse.url);
           setCoverUrl(coverToUse.url);
           console.log("✅ Set active cover from cover_design_prompts table:", coverToUse.url.substring(0, 60) + "...");
+        } else {
+          console.log("⚠️ No cover with URL found in cover_design_prompts rows");
         }
       } else {
         setGeneratedCovers([]);
+        console.log("ℹ️ No cover data found for novel", novelIdValue);
       }
 
     }
