@@ -855,7 +855,7 @@ function StudioContent() {
       try {
 const { data, error } = await supabase
            .from("cover_design_prompts")
-           .select("url, created_at")
+           .select("url,created_at")
            .eq("novel_id", novelIdValue)
            .order("created_at", { ascending: false });
           
@@ -866,7 +866,7 @@ const { data, error } = await supabase
           // If that fails, try with the original table name (might be PascalCase in DB)
 const { data: data2, error: error2 } = await supabase
              .from("cover_design_prompts")
-             .select("url, created_at")
+             .select("url,created_at")
              .eq("novel_id", novelIdValue)
              .order("created_at", { ascending: false });
             
