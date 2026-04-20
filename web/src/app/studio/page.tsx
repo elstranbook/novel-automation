@@ -844,16 +844,16 @@ function StudioContent() {
       // Fetch all generated covers from cover_design_prompts table
       let coversData = null;
       try {
-        // First try with new columns (url, model, is_active)
+        // First try with all columns including prompt
         const { data, error } = await supabase
           .from("cover_design_prompts")
-          .select("url,model,is_active,created_at")
+          .select("prompt,url,model,is_active,created_at")
           .eq("novel_id", novelIdValue)
           .order("created_at", { ascending: false });
 
         if (error) {
-          console.error("❌ Error querying cover_design_prompts with url column:", error.message);
-          // Fallback: try without the new columns (migration may not have been applied)
+          console.error("❌ Error querying cover_design_prompts:", error.message);
+          // Fallback: try without the newer columns (migration may not have been applied)
           console.log("🔄 Trying fallback query without url/model/is_active columns...");
           const { data: fallbackData, error: fallbackError } = await supabase
             .from("cover_design_prompts")
@@ -864,16 +864,28 @@ function StudioContent() {
           if (fallbackError) {
             console.error("❌ Fallback query also failed:", fallbackError.message);
           } else {
-            console.log("⚠️ Fallback query succeeded but no cover URLs available (migration needed). Rows:", fallbackData?.length ?? 0);
-            coversData = null; // No URL data available without the migration
+            console.log("⚠️ Fallback query succeeded. Rows:", fallbackData?.length ?? 0);
+            coversData = fallbackData;
+            // Load the most recent non-empty prompt from fallback data
+            const latestPromptRow = fallbackData?.find((row: any) => row.prompt);
+            if (latestPromptRow?.prompt) {
+              setCoverPrompt(latestPromptRow.prompt);
+              console.log("✅ Loaded saved cover prompt from fallback query");
+            }
           }
         } else {
           coversData = data;
           console.log("📋 Found", data?.length ?? 0, "cover_design_prompts rows for novel", novelIdValue);
           if (data && data.length > 0) {
             data.forEach((row: any, i: number) => {
-              console.log(`  Row ${i}: url=${row.url ? row.url.substring(0, 50) + '...' : 'null'}, is_active=${row.is_active}, model=${row.model}`);
+              console.log(`  Row ${i}: url=${row.url ? row.url.substring(0, 50) + '...' : 'null'}, is_active=${row.is_active}, model=${row.model}, has_prompt=${!!row.prompt}`);
             });
+          }
+          // Load the most recent non-empty prompt
+          const latestPromptRow = data?.find((row: any) => row.prompt);
+          if (latestPromptRow?.prompt) {
+            setCoverPrompt(latestPromptRow.prompt);
+            console.log("✅ Loaded saved cover prompt");
           }
         }
       } catch (error) {
@@ -1102,13 +1114,6 @@ function StudioContent() {
       });
       setNovelFormats(formatted);
     }
-
-    const { data: cover } = await supabase
-      .from("cover_design_prompts")
-      .select("prompt")
-      .eq("novel_id", novelIdValue)
-      .maybeSingle();
-    if (cover?.prompt) setCoverPrompt(cover.prompt);
   };
 
   const loadSeriesContext = async (seriesIdValue: string, bookNumber: number) => {
