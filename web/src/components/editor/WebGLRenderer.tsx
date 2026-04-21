@@ -70,6 +70,22 @@ export interface WebGLRendererHandle {
 }
 
 /**
+ * Create a 1x1 white pixel texture as a fallback placeholder.
+ * Used when realism layer textures (shadow/highlight) fail to load.
+ */
+function createWhitePlaceholderTexture(): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1;
+  canvas.height = 1;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 1, 1);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
  * Compute pixel bounds for a smart object layer.
  */
 function getSmartObjectBounds(
@@ -364,8 +380,16 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
         // Look for realism maps
         const shadowLayer = template.layers.find(l => l.compositeUrl && l.blendMode.toLowerCase().includes('multiply'));
         const highlightLayer = template.layers.find(l => l.compositeUrl && (l.blendMode.toLowerCase().includes('screen') || l.blendMode.toLowerCase().includes('linear dodge')));
-        const shadowTexture = shadowLayer ? await getTexture(shadowLayer.compositeUrl!).catch(() => null) : null;
-        const highlightTexture = highlightLayer ? await getTexture(highlightLayer.compositeUrl!).catch(() => null) : null;
+        const shadowTexture = shadowLayer ? await getTexture(shadowLayer.compositeUrl!) : null;
+        const highlightTexture = highlightLayer ? await getTexture(highlightLayer.compositeUrl!) : null;
+
+        // If both realism textures failed AND base image failed, use simple material
+        const hasAnyRealism = shadowTexture || highlightTexture;
+
+        // Create placeholder white textures for any missing realism maps
+        // (the shader will multiply by white = no change, screen with white = no change)
+        const shadowTex = shadowTexture || createWhitePlaceholderTexture();
+        const highlightTex = highlightTexture || createWhitePlaceholderTexture();
 
         // Shader material with realism
         const material = new THREE.ShaderMaterial({
@@ -377,11 +401,11 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
         });
 
         material.uniforms.tDiffuse.value = designTexture;
-        material.uniforms.tShadow.value = shadowTexture;
-        material.uniforms.tHighlight.value = highlightTexture;
+        material.uniforms.tShadow.value = shadowTex;
+        material.uniforms.tHighlight.value = highlightTex;
         
-        const shadowBase = shadowLayer?.opacity || 0.8;
-        const highlightBase = highlightLayer?.opacity || 0.5;
+        const shadowBase = shadowTexture ? (shadowLayer?.opacity || 0.8) : 0;
+        const highlightBase = highlightTexture ? (highlightLayer?.opacity || 0.5) : 0;
 
         switch (finish) {
           case 'glossy':
