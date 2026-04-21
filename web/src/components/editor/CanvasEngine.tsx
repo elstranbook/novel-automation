@@ -406,18 +406,30 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
     }
   }, [template, userImage, design, colorSelections, getSmartObjectLayer, activeEngine]);
 
+  // Track base image load failure
+  const baseImageFailedRef = useRef(false);
+
   // Load images
   useEffect(() => {
     if (!template) return;
+    baseImageFailedRef.current = false;
+
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = () => { baseImageRef.current = img; renderCanvas(); };
+    img.onload = () => { baseImageRef.current = img; baseImageFailedRef.current = false; renderCanvas(); };
+    img.onerror = () => {
+      console.warn('[CanvasEngine] Base image failed to load:', (template.baseImage || '').substring(0, 80));
+      baseImageFailedRef.current = true;
+      baseImageRef.current = null;
+      renderCanvas();
+    };
     img.src = proxyImageUrl(template.baseImage) || template.baseImage;
 
     template.layers.filter(l => l.compositeUrl).forEach(layer => {
       const lImg = new Image();
       lImg.crossOrigin = 'anonymous';
       lImg.onload = () => { realismLayersRef.current[layer.id] = lImg; renderCanvas(); };
+      lImg.onerror = () => { console.warn('[CanvasEngine] Realism layer failed to load:', layer.name); };
       lImg.src = proxyImageUrl(layer.compositeUrl!) || layer.compositeUrl!;
     });
   }, [template, renderCanvas]);
@@ -427,6 +439,7 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => { userImageRef.current = img; renderCanvas(); };
+    img.onerror = () => { console.warn('[CanvasEngine] User image failed to load:', (userImage || '').substring(0, 80)); };
     img.src = proxyImageUrl(userImage) || userImage;
   }, [userImage, renderCanvas]);
 

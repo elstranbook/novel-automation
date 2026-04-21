@@ -30,26 +30,38 @@ function isAllowedUrl(url: string): boolean {
   }
 }
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   const url = request.nextUrl.searchParams.get('url');
 
   if (!url) {
+    console.warn('[image-proxy] Missing url parameter');
     return NextResponse.json({ error: 'Missing url parameter' }, { status: 400 });
   }
 
   if (!isAllowedUrl(url)) {
+    console.warn('[image-proxy] Hostname not allowed:', new URL(url).hostname);
     return NextResponse.json({ error: 'Hostname not allowed' }, { status: 403 });
   }
 
   try {
+    console.log('[image-proxy] Fetching:', url.substring(0, 120));
+
     const upstream = await fetch(url, {
       headers: {
-        // Some CDNs require a User-Agent
-        'User-Agent': 'NovelAutomation-ImageProxy/1.0',
+        // Some CDNs require a User-Agent and Accept header
+        'User-Agent': 'Mozilla/5.0 (compatible; NovelAutomation/1.0)',
+        'Accept': 'image/*,*/*;q=0.8',
       },
+      // Don't follow redirects automatically for security — but allow for CDN
+      redirect: 'follow',
     });
 
+    console.log('[image-proxy] Upstream status:', upstream.status, 'Content-Type:', upstream.headers.get('content-type'));
+
     if (!upstream.ok) {
+      console.error('[image-proxy] Upstream error:', upstream.status, url.substring(0, 100));
       return NextResponse.json(
         { error: `Upstream returned ${upstream.status}` },
         { status: upstream.status },
@@ -57,7 +69,24 @@ export async function GET(request: NextRequest) {
     }
 
     const contentType = upstream.headers.get('content-type') || 'image/png';
+
+    // Validate that the response is actually an image
+    if (!contentType.startsWith('image/') && !contentType.startsWith('application/octet-stream')) {
+      console.error('[image-proxy] Non-image response:', contentType, url.substring(0, 100));
+      return NextResponse.json(
+        { error: `Expected image but got ${contentType}` },
+        { status: 502 },
+      );
+    }
+
     const body = await upstream.arrayBuffer();
+
+    if (body.byteLength === 0) {
+      console.error('[image-proxy] Empty response body for:', url.substring(0, 100));
+      return NextResponse.json({ error: 'Empty image response' }, { status: 502 });
+    }
+
+    console.log('[image-proxy] Success:', url.substring(0, 80), body.byteLength, 'bytes');
 
     return new NextResponse(body, {
       status: 200,
@@ -70,7 +99,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Image proxy fetch failed:', error);
+    console.error('[image-proxy] Fetch failed:', error);
     return NextResponse.json({ error: 'Failed to fetch image' }, { status: 502 });
   }
 }
