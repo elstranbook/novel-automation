@@ -80,7 +80,25 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // 6. Fallback: if no composite was extracted, use PSD URL as base (still not ideal but better than nothing)
+    // 6. Fallback: if no composite was extracted, try to use convertPsdToPng
+    if (!baseImageUrl) {
+      try {
+        console.log('[PSD Process] No composite from extractLayerImages, trying convertPsdToPng...');
+        const { convertPsdToPng } = await import('@/lib/psd/parser');
+        const pngBuffer = await convertPsdToPng(buffer);
+        if (pngBuffer) {
+          const compositeKey = `psd/${psdId}/composite.png`;
+          const result = await uploadToStorage(pngBuffer, compositeKey, 'image/png');
+          baseImageUrl = result.url;
+          thumbnailUrl = result.url;
+          console.log(`[PSD Process] Uploaded composite via convertPsdToPng: ${result.url}`);
+        }
+      } catch (e) {
+        console.warn('[PSD Process] convertPsdToPng fallback also failed:', e);
+      }
+    }
+    
+    // 7. Last resort: use PSD URL as base
     if (!baseImageUrl) {
       const baseUrl = (process.env.R2_PUBLIC_BASE_URL || '').replace(/\/$/, '');
       baseImageUrl = baseUrl ? `${baseUrl}/${psdKey}` : '';
@@ -88,7 +106,7 @@ export async function POST(request: NextRequest) {
       console.warn(`[PSD Process] No composite image extracted, falling back to PSD URL: ${baseImageUrl}`);
     }
     
-    // 7. Create template with PNG URLs
+    // 8. Create template with PNG URLs
     const template = await db.template.create({
       data: {
         id: psdId,
@@ -101,23 +119,46 @@ export async function POST(request: NextRequest) {
         height: parsed.height,
         isActive: true,
         layers: {
-          create: parsed.layers.map((layer: any, idx: number) => ({
-            name: layer.name,
-            type: layer.type,
-            zIndex: idx,
-            blendMode: layer.blendMode,
-            opacity: layer.opacity,
-            boundsX: layer.bounds?.x,
-            boundsY: layer.bounds?.y,
-            boundsWidth: layer.bounds?.width,
-            boundsHeight: layer.bounds?.height,
-            isColorable: layer.isColorable || layer.type === 'color_layer',
-            // Save warp and perspective data extracted from PSD
-            warpData: layer.warpData || undefined,
-            perspectiveData: layer.transform || undefined,
-            // Use the PNG URL from extracted images, or undefined
-            compositeUrl: layerUrlMap.get(idx) || undefined,
-          })),
+          create: parsed.layers.map((layer: any, idx: number) => {
+            const bx = layer.bounds?.x;
+            const by = layer.bounds?.y;
+            const bw = layer.bounds?.width;
+            const bh = layer.bounds?.height;
+            let transformX: number | undefined;
+            let transformY: number | undefined;
+            let transformScaleX: number | undefined;
+            let transformScaleY: number | undefined;
+            let transformRotation: number | undefined;
+            
+            if (bx != null && by != null && bw != null && bh != null && parsed.width > 0 && parsed.height > 0) {
+              transformScaleX = bw / parsed.width;
+              transformScaleY = bh / parsed.height;
+              transformX = (bx + bw / 2) / parsed.width;
+              transformY = (by + bh / 2) / parsed.height;
+              transformRotation = 0;
+            }
+            
+            return {
+              name: layer.name,
+              type: layer.type,
+              zIndex: idx,
+              blendMode: layer.blendMode,
+              opacity: layer.opacity,
+              boundsX: bx,
+              boundsY: by,
+              boundsWidth: bw,
+              boundsHeight: bh,
+              transformX,
+              transformY,
+              transformScaleX,
+              transformScaleY,
+              transformRotation,
+              isColorable: layer.isColorable || layer.type === 'color_layer',
+              warpData: layer.warpData || undefined,
+              perspectiveData: layer.transform || undefined,
+              compositeUrl: layerUrlMap.get(idx) || undefined,
+            };
+          }),
         },
         colorOptions: {
           create: parsed.colorLayers.map((cl: any) => ({

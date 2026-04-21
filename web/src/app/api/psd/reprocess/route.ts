@@ -161,14 +161,33 @@ async function reprocessTemplate(templateId: string) {
     }
   }
 
+  // 5b. Fallback: try convertPsdToPng if extractLayerImages didn't produce a composite
+  if (!baseImageUrl) {
+    try {
+      console.log('[PSD Reprocess] No composite from extractLayerImages, trying convertPsdToPng...');
+      const pngBuffer = await convertPsdToPng(buffer);
+      if (pngBuffer) {
+        const compositeKey = `psd/${templateId}/composite.png`;
+        const result = await uploadToStorage(pngBuffer, compositeKey, 'image/png');
+        baseImageUrl = result.url;
+        thumbnailUrl = result.url;
+        console.log(`[PSD Reprocess] Uploaded composite via convertPsdToPng: ${result.url}`);
+      }
+    } catch (e) {
+      console.warn('[PSD Reprocess] convertPsdToPng fallback failed:', e);
+    }
+  }
+
   // 6. Upload individual layer PNGs
   const layerUrlMap = new Map<number, string>();
+  const layerNameMap = new Map<string, string>();
   for (const layerImage of extracted.layers) {
     const safeName = sanitizeLayerName(layerImage.name);
     const layerKey = `psd/${templateId}/layer_${layerImage.layerIndex}_${safeName}.png`;
     try {
       const result = await uploadToStorage(layerImage.buffer, layerKey, 'image/png');
       layerUrlMap.set(layerImage.layerIndex, result.url);
+      layerNameMap.set(layerImage.name, result.url);
     } catch (e) {
       console.warn(`[PSD Reprocess] Failed to upload layer "${layerImage.name}":`, e);
     }
@@ -189,11 +208,27 @@ async function reprocessTemplate(templateId: string) {
   // 8. Update layer compositeUrls
   let updatedLayers = 0;
   for (const layer of template.layers) {
-    const pngUrl = layerUrlMap.get(layer.zIndex);
+    let pngUrl = layerUrlMap.get(layer.zIndex);
+    if (!pngUrl && layerNameMap.has(layer.name)) {
+      pngUrl = layerNameMap.get(layer.name);
+    }
+    
     if (pngUrl) {
+      const updateFields: any = { compositeUrl: pngUrl };
+      
+      if (layer.transformX == null && layer.boundsX != null && layer.boundsY != null && 
+          layer.boundsWidth != null && layer.boundsHeight != null && 
+          template.width > 0 && template.height > 0) {
+        updateFields.transformScaleX = layer.boundsWidth / template.width;
+        updateFields.transformScaleY = layer.boundsHeight / template.height;
+        updateFields.transformX = (layer.boundsX + layer.boundsWidth / 2) / template.width;
+        updateFields.transformY = (layer.boundsY + layer.boundsHeight / 2) / template.height;
+        updateFields.transformRotation = 0;
+      }
+      
       await db.templateLayer.update({
         where: { id: layer.id },
-        data: { compositeUrl: pngUrl },
+        data: updateFields,
       });
       updatedLayers++;
     }

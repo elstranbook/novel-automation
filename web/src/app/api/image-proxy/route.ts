@@ -149,7 +149,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Empty image response' }, { status: 502 });
     }
 
-    console.log('[image-proxy] Success:', url.substring(0, 80), body.byteLength, 'bytes');
+    console.log('[image-proxy] Success:', url.substring(0, 80), body.byteLength, 'bytes', 'type:', contentType);
 
     return new NextResponse(body, {
       status: 200,

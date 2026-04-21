@@ -260,6 +260,14 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
     
     if (!template) return;
     
+    console.log('[CanvasEngine] renderCanvas:', {
+      hasBaseImage: !!baseImageRef.current,
+      hasUserImage: !!userImageRef.current,
+      realismLayers: Object.keys(realismLayersRef.current).length,
+      smartObjectLayer: getSmartObjectLayer()?.name || 'none',
+      activeEngine,
+    });
+    
     // Scale for canvas
     const scaleX = canvas.width / template.width;
     const scaleY = canvas.height / template.height;
@@ -409,36 +417,68 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
   // Track base image load failure
   const baseImageFailedRef = useRef(false);
 
-  // Load images
+  // Load base images with detailed logging
   useEffect(() => {
     if (!template) return;
     baseImageFailedRef.current = false;
 
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = () => { baseImageRef.current = img; baseImageFailedRef.current = false; renderCanvas(); };
+    const proxyUrl = proxyImageUrl(template.baseImage);
+    console.log('[CanvasEngine] Loading base image:', {
+      original: (template.baseImage || '').substring(0, 100),
+      proxied: (proxyUrl || '').substring(0, 100),
+      templateWidth: template.width,
+      templateHeight: template.height,
+      layerCount: template.layers.length,
+      smartObjectLayers: template.layers.filter(l => l.type === 'smart_object').map(l => ({
+        name: l.name,
+        type: l.type,
+        hasPerspective: !!l.perspectiveTransform,
+        hasWarp: !!l.warpData,
+        bounds: l.boundsX != null ? { x: l.boundsX, y: l.boundsY, w: l.boundsWidth, h: l.boundsHeight } : l.bounds,
+      })),
+    });
+    img.onload = () => {
+      console.log('[CanvasEngine] Base image loaded successfully:', img.width, 'x', img.height);
+      baseImageRef.current = img;
+      baseImageFailedRef.current = false;
+      renderCanvas();
+    };
     img.onerror = () => {
       console.warn('[CanvasEngine] Base image failed to load:', (template.baseImage || '').substring(0, 80));
       baseImageFailedRef.current = true;
       baseImageRef.current = null;
       renderCanvas();
     };
-    img.src = proxyImageUrl(template.baseImage) || template.baseImage;
+    img.src = proxyUrl || template.baseImage;
 
-    template.layers.filter(l => l.compositeUrl).forEach(layer => {
+    const compositeLayers = template.layers.filter(l => l.compositeUrl);
+    console.log('[CanvasEngine] Loading', compositeLayers.length, 'composite/realism layers');
+    compositeLayers.forEach(layer => {
       const lImg = new Image();
       lImg.crossOrigin = 'anonymous';
-      lImg.onload = () => { realismLayersRef.current[layer.id] = lImg; renderCanvas(); };
-      lImg.onerror = () => { console.warn('[CanvasEngine] Realism layer failed to load:', layer.name); };
+      lImg.onload = () => {
+        console.log('[CanvasEngine] Realism layer loaded:', layer.name, lImg.width, 'x', lImg.height);
+        realismLayersRef.current[layer.id] = lImg;
+        renderCanvas();
+      };
+      lImg.onerror = () => { console.warn('[CanvasEngine] Realism layer failed to load:', layer.name, layer.compositeUrl?.substring(0, 80)); };
       lImg.src = proxyImageUrl(layer.compositeUrl!) || layer.compositeUrl!;
     });
   }, [template, renderCanvas]);
 
+  // Load user images with detailed logging
   useEffect(() => {
     if (!userImage) { userImageRef.current = null; renderCanvas(); return; }
+    console.log('[CanvasEngine] Loading user image:', userImage.substring(0, 60) + '...');
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = () => { userImageRef.current = img; renderCanvas(); };
+    img.onload = () => {
+      console.log('[CanvasEngine] User image loaded:', img.width, 'x', img.height, 'design:', design);
+      userImageRef.current = img;
+      renderCanvas();
+    };
     img.onerror = () => { console.warn('[CanvasEngine] User image failed to load:', (userImage || '').substring(0, 80)); };
     img.src = proxyImageUrl(userImage) || userImage;
   }, [userImage, renderCanvas]);

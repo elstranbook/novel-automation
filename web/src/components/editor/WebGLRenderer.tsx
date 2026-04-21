@@ -294,6 +294,25 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
   const updateScene = useCallback(async () => {
     if (!template || !sceneRef.current || !textureLoaderRef.current) return;
 
+    console.log('[WebGLRenderer] updateScene:', {
+      templateName: template.name,
+      templateSize: `${template.width}x${template.height}`,
+      hasBaseImage: !!template.baseImage,
+      baseImageUrl: (template.baseImage || '').substring(0, 100),
+      hasUserImage: !!userImage,
+      userImagePrefix: (userImage || '').substring(0, 60),
+      layers: template.layers.length,
+      smartObjectLayers: template.layers.filter(l => l.type === 'smart_object').map(l => ({
+        name: l.name,
+        hasPerspective: !!l.perspectiveTransform,
+        hasWarp: !!l.warpData,
+        blendMode: l.blendMode,
+        compositeUrl: l.compositeUrl ? (l.compositeUrl as string).substring(0, 60) : null,
+      })),
+      compositeLayers: template.layers.filter(l => l.compositeUrl).length,
+      design: { x: design.x, y: design.y, scale: design.scale, rotation: design.rotation },
+    });
+
     // Clear existing meshes
     while(meshesRef.current.children.length > 0) {
       const child = meshesRef.current.children[0] as THREE.Mesh;
@@ -427,20 +446,40 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
         mesh.position.z = 0.5;
         meshesRef.current.add(mesh);
       } else {
-        // No perspective — draw flat within smart object bounds
+        // No perspective — draw flat within smart object bounds, applying design transforms
         const bounds = getSmartObjectBounds(smartObjectLayer, template.width, template.height);
         
-        const geometry = new THREE.PlaneGeometry(bounds.width * scaleX, bounds.height * scaleY);
+        // Calculate draw size with design.scale (cover mode)
+        const texImage = designTexture.image as HTMLImageElement | undefined;
+        const imgAspect = texImage ? texImage.width / texImage.height : 1;
+        const boundsAspect = bounds.width / bounds.height;
+        let drawW: number, drawH: number;
+        
+        if (imgAspect > boundsAspect) {
+          drawH = bounds.height * scaleY * design.scale;
+          drawW = drawH * imgAspect;
+        } else {
+          drawW = bounds.width * scaleX * design.scale;
+          drawH = drawW / imgAspect;
+        }
+        
+        const geometry = new THREE.PlaneGeometry(drawW, drawH);
         const material = new THREE.MeshBasicMaterial({ 
           map: designTexture, 
           transparent: true,
         });
         const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(
-          (bounds.x + bounds.width / 2) * scaleX,
-          height - (bounds.y + bounds.height / 2) * scaleY,
-          0.5
-        );
+        
+        // Apply design.x/y positioning (normalized 0-1 relative to bounds)
+        const centerX = (bounds.x + bounds.width * design.x) * scaleX;
+        const centerY = height - (bounds.y + bounds.height * design.y) * scaleY;
+        mesh.position.set(centerX, centerY, 0.5);
+        
+        // Apply design.rotation
+        if (design.rotation) {
+          mesh.rotation.z = -design.rotation * Math.PI / 180;
+        }
+        
         meshesRef.current.add(mesh);
       }
     }
@@ -492,7 +531,7 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
       }
     }
 
-  }, [template, userImage, colorSelections, width, height, finish]);
+  }, [template, userImage, design, colorSelections, width, height, finish]);
 
   useEffect(() => {
     updateScene();
