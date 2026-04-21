@@ -11,6 +11,10 @@ import { NextRequest, NextResponse } from 'next/server';
  * headers, so the browser allows the client-side code to read the
  * pixel data.
  *
+ * Also handles PSD-to-PNG conversion: when the upstream returns
+ * application/x-photoshop, the proxy converts the PSD to a PNG
+ * image that browsers can render.
+ *
  * Usage:  /api/image-proxy?url=https://mockups-assets.elstranbooks.com/psd/...
  */
 
@@ -20,6 +24,9 @@ const ALLOWED_HOSTNAMES = [
   '12aa18f2a65e739d78fb331d14b23161.r2.cloudflarestorage.com',
   'oaidalleapiprodscus.blob.core.windows.net',
 ];
+
+// Maximum PSD size to attempt conversion (50 MB)
+const MAX_PSD_CONVERSION_SIZE = 50 * 1024 * 1024;
 
 function isAllowedUrl(url: string): boolean {
   try {
@@ -69,6 +76,62 @@ export async function GET(request: NextRequest) {
     }
 
     const contentType = upstream.headers.get('content-type') || 'image/png';
+    const contentLength = parseInt(upstream.headers.get('content-length') || '0', 10);
+
+    // Handle PSD files: convert to PNG
+    if (contentType === 'application/x-photoshop' || contentType === 'image/vnd.adobe.photoshop') {
+      console.log('[image-proxy] PSD file detected, attempting conversion to PNG...');
+
+      // Check size limit for conversion
+      if (contentLength > MAX_PSD_CONVERSION_SIZE) {
+        console.error(`[image-proxy] PSD too large for conversion: ${contentLength} bytes (max ${MAX_PSD_CONVERSION_SIZE})`);
+        return NextResponse.json(
+          { error: `PSD file too large for on-the-fly conversion (${Math.round(contentLength / 1024 / 1024)}MB). Please reprocess the template to generate PNG images.` },
+          { status: 502 },
+        );
+      }
+
+      try {
+        const psdBuffer = Buffer.from(await upstream.arrayBuffer());
+
+        if (psdBuffer.byteLength > MAX_PSD_CONVERSION_SIZE) {
+          console.error(`[image-proxy] PSD buffer too large: ${psdBuffer.byteLength} bytes`);
+          return NextResponse.json(
+            { error: 'PSD file too large for on-the-fly conversion. Please reprocess the template.' },
+            { status: 502 },
+          );
+        }
+
+        // Dynamically import the PSD converter (avoids loading ag-psd for non-PSD requests)
+        const { convertPsdToPng } = await import('@/lib/psd/parser');
+        const pngBuffer = await convertPsdToPng(psdBuffer);
+
+        if (pngBuffer) {
+          console.log(`[image-proxy] PSD→PNG conversion successful: ${pngBuffer.byteLength} bytes for ${url.substring(0, 80)}`);
+          return new NextResponse(new Uint8Array(pngBuffer), {
+            status: 200,
+            headers: {
+              'Content-Type': 'image/png',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET',
+              'Cache-Control': 'public, max-age=86400, s-maxage=3600',
+            },
+          });
+        }
+
+        console.error('[image-proxy] PSD→PNG conversion returned null');
+        return NextResponse.json(
+          { error: 'Failed to convert PSD to PNG. The file may be corrupted or use unsupported features.' },
+          { status: 502 },
+        );
+      } catch (conversionError) {
+        console.error('[image-proxy] PSD conversion error:', conversionError);
+        return NextResponse.json(
+          { error: 'PSD conversion failed. Please reprocess the template to generate PNG images.' },
+          { status: 502 },
+        );
+      }
+    }
 
     // Validate that the response is actually an image
     if (!contentType.startsWith('image/') && !contentType.startsWith('application/octet-stream')) {

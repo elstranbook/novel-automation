@@ -5,7 +5,7 @@ let canvasInitialized = false;
 /**
  * Essential: Initialize canvas for Node.js environment so ag-psd can parse files.
  */
-async function setupCanvas() {
+export async function setupCanvas() {
   if (canvasInitialized) return;
   try {
     const canvas = await import('canvas');
@@ -320,4 +320,121 @@ export function createTemplateConfig(parsed: ParsedPSD, name: string, slug: stri
       internalHeight: so.internalHeight,
     })),
   };
+}
+
+/**
+ * Extract layer images from a PSD file as PNG buffers.
+ *
+ * Reads the PSD with full image data enabled, then exports:
+ * - The composite (flattened) view as a PNG buffer
+ * - Each relevant layer as an individual PNG buffer
+ *
+ * These PNG buffers can be uploaded to R2 CDN to provide
+ * browser-renderable images instead of raw PSD URLs.
+ */
+export interface ExtractedImage {
+  /** Layer name or 'composite' for the flattened view */
+  name: string;
+  /** PNG image buffer */
+  buffer: Buffer;
+  /** The layer index in the PSD (for mapping back to parsed layers) */
+  layerIndex: number;
+}
+
+export interface ExtractedImages {
+  /** The flattened composite view of the entire PSD */
+  composite: Buffer | null;
+  /** Individual layer images (shadows, highlights, textures, etc.) */
+  layers: ExtractedImage[];
+}
+
+export async function extractLayerImages(buffer: Buffer): Promise<ExtractedImages> {
+  await setupCanvas();
+
+  const psd: Psd = readPsd(buffer, {
+    skipThumbnail: false,
+    skipLayerImageData: false,
+  });
+
+  // 1. Extract composite (flattened) image
+  let composite: Buffer | null = null;
+  if (psd.canvas) {
+    try {
+      composite = (psd.canvas as any).toBuffer('image/png') as Buffer;
+      console.log(`[PSD] Extracted composite image: ${composite.byteLength} bytes`);
+    } catch (e) {
+      console.warn('[PSD] Failed to extract composite image:', e);
+    }
+  }
+
+  // 2. Extract individual layer images
+  const layers: ExtractedImage[] = [];
+  let layerIndex = 0;
+
+  const processLayer = (layer: Layer) => {
+    const name = layer.name || `Layer ${layerIndex}`;
+
+    if (layer.canvas) {
+      try {
+        const pngBuffer = (layer.canvas as any).toBuffer('image/png') as Buffer;
+        // Only include layers that have actual visible content
+        if (pngBuffer.byteLength > 100) {
+          layers.push({
+            name,
+            buffer: pngBuffer,
+            layerIndex,
+          });
+          console.log(`[PSD] Extracted layer "${name}": ${pngBuffer.byteLength} bytes`);
+        }
+      } catch (e) {
+        console.warn(`[PSD] Failed to extract layer "${name}":`, e);
+      }
+    }
+
+    layerIndex++;
+
+    // Process child layers (groups)
+    if (layer.children) {
+      for (const child of layer.children) {
+        processLayer(child);
+      }
+    }
+  };
+
+  if (psd.children) {
+    for (const child of psd.children) {
+      processLayer(child);
+    }
+  }
+
+  return { composite, layers };
+}
+
+/**
+ * Convert a PSD buffer to a PNG buffer (composite/flat view).
+ * Used by the image proxy to convert PSD responses on-the-fly.
+ */
+export async function convertPsdToPng(psdBuffer: Buffer): Promise<Buffer | null> {
+  await setupCanvas();
+
+  try {
+    const psd: Psd = readPsd(psdBuffer, {
+      skipThumbnail: false,
+      skipLayerImageData: true, // We only need the composite, not individual layers
+    });
+
+    if (psd.canvas) {
+      return (psd.canvas as any).toBuffer('image/png') as Buffer;
+    }
+
+    // Fallback: try the thumbnail
+    if ((psd as any).thumbnailCanvas) {
+      return ((psd as any).thumbnailCanvas as any).toBuffer('image/png') as Buffer;
+    }
+
+    return null;
+  } catch (e) {
+    console.error('[PSD] Failed to convert PSD to PNG:', e);
+    return null;
+  }
 }
