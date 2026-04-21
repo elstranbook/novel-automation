@@ -9,6 +9,7 @@ import {
 } from '@/lib/canvas/mesh-warp';
 import { BOOK_WARPS } from '@/lib/templates/book-warps';
 import { WebGLRenderer, WebGLRendererHandle } from './WebGLRenderer';
+import { proxyImageUrl } from '@/lib/image-proxy';
 
 interface CanvasEngineProps {
   template: Template | null;
@@ -411,13 +412,13 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => { baseImageRef.current = img; renderCanvas(); };
-    img.src = template.baseImage;
+    img.src = proxyImageUrl(template.baseImage) || template.baseImage;
 
     template.layers.filter(l => l.compositeUrl).forEach(layer => {
       const lImg = new Image();
       lImg.crossOrigin = 'anonymous';
       lImg.onload = () => { realismLayersRef.current[layer.id] = lImg; renderCanvas(); };
-      lImg.src = layer.compositeUrl!;
+      lImg.src = proxyImageUrl(layer.compositeUrl!) || layer.compositeUrl!;
     });
   }, [template, renderCanvas]);
 
@@ -426,7 +427,7 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => { userImageRef.current = img; renderCanvas(); };
-    img.src = userImage;
+    img.src = proxyImageUrl(userImage) || userImage;
   }, [userImage, renderCanvas]);
 
   useEffect(() => { renderCanvas(); }, [renderCanvas, design, colorSelections]);

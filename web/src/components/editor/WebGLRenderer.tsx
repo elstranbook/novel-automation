@@ -4,6 +4,7 @@ import { useEffect, useRef, useImperativeHandle, forwardRef, useCallback, useSta
 import * as THREE from 'three';
 import type { Template, DesignState, TemplateLayer } from '@/types';
 import { BOOK_WARPS } from '@/lib/templates/book-warps';
+import { proxyImageUrl } from '@/lib/image-proxy';
 
 // GLSL Shader for realistic ink-on-paper blending
 const RealismShader = {
@@ -222,6 +223,7 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
     camera.position.z = 10;
     cameraRef.current = camera;
     textureLoaderRef.current = new THREE.TextureLoader();
+    textureLoaderRef.current.setCrossOrigin('anonymous');
 
     // Parallax interaction
     const mouse = new THREE.Vector2();
@@ -289,9 +291,12 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
     const scaleX = width / template.width;
     const scaleY = height / template.height;
 
-    const getTexture = (url: string): Promise<THREE.Texture> => {
+    const getTexture = (rawUrl: string): Promise<THREE.Texture | null> => {
+      // Route external URLs through our CORS proxy
+      const url = proxyImageUrl(rawUrl) || rawUrl;
+
       if (texturesCache.current.has(url)) return Promise.resolve(texturesCache.current.get(url)!);
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve) => {
         loader.load(
           url,
           (t) => {
@@ -305,8 +310,8 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
           },
           undefined,
           (err) => {
-            console.error("TextureLoader error:", url.substring(0, 60), err);
-            reject(err);
+            console.warn('Texture failed to load:', url.substring(0, 80), err);
+            resolve(null);
           }
         );
       });
@@ -315,17 +320,20 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
     // 1. Base Layer (pre-rendered book photo with shadows/creases baked in)
     if (template.baseImage) {
       const texture = await getTexture(template.baseImage);
-      const geometry = new THREE.PlaneGeometry(width, height);
-      const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.position.set(width / 2, height / 2, 0);
-      meshesRef.current.add(mesh);
+      if (texture) {
+        const geometry = new THREE.PlaneGeometry(width, height);
+        const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.set(width / 2, height / 2, 0);
+        meshesRef.current.add(mesh);
+      }
     }
 
     // 2. Find the smart object layer
     const smartObjectLayer = template.layers.find(l => l.type === 'smart_object');
     if (smartObjectLayer && userImage) {
       const designTexture = await getTexture(userImage);
+      if (!designTexture) return;
       
       // Get perspective data
       const perspective = getSmartObjectPerspective(smartObjectLayer, template);
