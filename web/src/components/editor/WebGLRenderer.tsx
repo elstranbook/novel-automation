@@ -3,6 +3,7 @@
 import { useEffect, useRef, useImperativeHandle, forwardRef, useCallback, useState } from 'react';
 import * as THREE from 'three';
 import type { Template, DesignState, TemplateLayer } from '@/types';
+import { BOOK_WARPS } from '@/lib/templates/book-warps';
 
 // GLSL Shader for realistic ink-on-paper blending
 const RealismShader = {
@@ -35,16 +36,13 @@ const RealismShader = {
       vec4 shadow = texture2D(tShadow, vUv);
       vec4 highlight = texture2D(tHighlight, vUv);
 
-      // 1. Start with the user design
       vec3 color = design.rgb;
 
-      // 2. Apply Multiply Blend (Shadows)
-      // Math: Result = Design * Shadow
+      // Apply Multiply Blend (Shadows)
       vec3 multiply = color * shadow.rgb;
       color = mix(color, multiply, shadowOpacity * shadow.a);
 
-      // 3. Apply Screen/Linear Dodge Blend (Highlights)
-      // Math: Result = 1 - (1-Design) * (1-Highlight)
+      // Apply Screen/Linear Dodge Blend (Highlights)
       vec3 screen = 1.0 - (1.0 - color) * (1.0 - highlight.rgb);
       color = mix(color, screen, highlightOpacity * highlight.a);
 
@@ -68,6 +66,100 @@ interface WebGLRendererProps {
 export interface WebGLRendererHandle {
   getCanvas: () => HTMLCanvasElement | null;
   capture: (width?: number, height?: number) => Promise<string>;
+}
+
+/**
+ * Compute pixel bounds for a smart object layer.
+ */
+function getSmartObjectBounds(
+  layer: TemplateLayer,
+  templateWidth: number,
+  templateHeight: number
+): { x: number; y: number; width: number; height: number } {
+  if (layer.transformX != null && layer.transformY != null && 
+      layer.transformScaleX != null && layer.transformScaleY != null) {
+    const w = layer.transformScaleX * templateWidth;
+    const h = layer.transformScaleY * templateHeight;
+    const x = layer.transformX * templateWidth - w / 2;
+    const y = layer.transformY * templateHeight - h / 2;
+    return { x, y, width: w, height: h };
+  }
+  if (layer.boundsX != null && layer.boundsY != null && 
+      layer.boundsWidth != null && layer.boundsHeight != null) {
+    return { x: layer.boundsX, y: layer.boundsY, width: layer.boundsWidth, height: layer.boundsHeight };
+  }
+  if (layer.bounds && layer.bounds.width && layer.bounds.height) {
+    return { x: layer.bounds.x || 0, y: layer.bounds.y || 0, width: layer.bounds.width, height: layer.bounds.height };
+  }
+  return { x: 0, y: 0, width: templateWidth, height: templateHeight };
+}
+
+/**
+ * Get perspective transform corners for a smart object layer.
+ */
+function getSmartObjectPerspective(
+  layer: TemplateLayer,
+  template: Template
+): { corners: [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }, { x: number; y: number }] } | null {
+  // Priority 1: Explicit perspectiveTransform from PSD
+  if (layer.perspectiveTransform && layer.perspectiveTransform.corners) {
+    return layer.perspectiveTransform;
+  }
+  
+  // Priority 2: Warp data with control points
+  if (layer.warpData) {
+    try {
+      const warp = typeof layer.warpData === 'string' ? JSON.parse(layer.warpData) : layer.warpData;
+      if (warp?.controlPoints?.length >= 4) {
+        const cols = warp.gridSize?.cols || 4;
+        const rows = warp.gridSize?.rows || 4;
+        const pts = warp.controlPoints;
+        return {
+          corners: [
+            { x: pts[0].x, y: pts[0].y },
+            { x: pts[cols - 1].x, y: pts[cols - 1].y },
+            { x: pts[rows * cols - 1].x, y: pts[rows * cols - 1].y },
+            { x: pts[(rows - 1) * cols].x, y: pts[(rows - 1) * cols].y },
+          ]
+        };
+      }
+    } catch (e) {
+      console.warn('Failed to parse warpData:', e);
+    }
+  }
+  
+  // Priority 3: Compute from warpPreset using BOOK_WARPS
+  if (template.warpPreset && BOOK_WARPS[template.warpPreset as keyof typeof BOOK_WARPS]) {
+    const preset = BOOK_WARPS[template.warpPreset as keyof typeof BOOK_WARPS];
+    const coverWidth = template.coverWidth || 5.5;
+    const coverHeight = template.coverHeight || 8.5;
+    const spineWidth = template.spineWidth || 0.375;
+    
+    try {
+      const warpResult = preset.create(coverWidth, coverHeight, spineWidth);
+      // Handle both single warp and array of warps (e.g., stackedOnTable)
+      const warp = Array.isArray(warpResult) ? warpResult[0] : warpResult;
+      if (warp?.frontCover?.dst) {
+        const dst = warp.frontCover.dst;
+        const bounds = getSmartObjectBounds(layer, template.width, template.height);
+        const pixelsPerInchW = bounds.width / coverWidth;
+        const pixelsPerInchH = bounds.height / coverHeight;
+        
+        return {
+          corners: [
+            { x: bounds.x + dst.topLeft.x * pixelsPerInchW, y: bounds.y + dst.topLeft.y * pixelsPerInchH },
+            { x: bounds.x + dst.topRight.x * pixelsPerInchW, y: bounds.y + dst.topRight.y * pixelsPerInchH },
+            { x: bounds.x + dst.bottomRight.x * pixelsPerInchW, y: bounds.y + dst.bottomRight.y * pixelsPerInchH },
+            { x: bounds.x + dst.bottomLeft.x * pixelsPerInchW, y: bounds.y + dst.bottomLeft.y * pixelsPerInchH },
+          ]
+        };
+      }
+    } catch (e) {
+      console.warn('Failed to compute warp preset:', e);
+    }
+  }
+  
+  return null;
 }
 
 export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>(({
@@ -94,7 +186,7 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Check WebGL support before initializing
+    // Check WebGL support
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
     if (!gl) {
@@ -105,16 +197,16 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
     }
 
     try {
-    const renderer = new THREE.WebGLRenderer({ 
-      antialias: true, 
-      alpha: true,
-      preserveDrawingBuffer: true 
-    });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(width, height);
-    renderer.setClearColor(0x000000, 0);
-    containerRef.current.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
+      const renderer = new THREE.WebGLRenderer({ 
+        antialias: true, 
+        alpha: true,
+        preserveDrawingBuffer: true 
+      });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(width, height);
+      renderer.setClearColor(0x000000, 0);
+      containerRef.current.appendChild(renderer.domElement);
+      rendererRef.current = renderer;
     } catch (err) {
       console.error('WebGL initialization failed:', err);
       setWebGLError(true);
@@ -129,42 +221,37 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
     const camera = new THREE.OrthographicCamera(0, width, 0, height, 0.1, 1000);
     camera.position.z = 10;
     cameraRef.current = camera;
-textureLoaderRef.current = new THREE.TextureLoader();
+    textureLoaderRef.current = new THREE.TextureLoader();
 
-// Interaction State for Parallax
-const mouse = new THREE.Vector2();
-const targetRotation = new THREE.Vector2();
+    // Parallax interaction
+    const mouse = new THREE.Vector2();
+    const targetRotation = new THREE.Vector2();
 
-const onPointerMove = (event: PointerEvent) => {
-  // Normalize mouse coords (-1 to 1)
-  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    const onPointerMove = (event: PointerEvent) => {
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      targetRotation.x = mouse.y * 0.05;
+      targetRotation.y = mouse.x * 0.05;
+    };
 
-  // Target rotation (subtle: max 5 degrees)
-  targetRotation.x = mouse.y * 0.05;
-  targetRotation.y = mouse.x * 0.05;
-};
+    window.addEventListener('pointermove', onPointerMove);
 
-window.addEventListener('pointermove', onPointerMove);
+    // Animation loop
+    let animationId: number;
+    const animate = () => {
+      animationId = requestAnimationFrame(animate);
+      if (rendererRef.current && sceneRef.current && cameraRef.current) {
+        meshesRef.current.rotation.x += (targetRotation.x - meshesRef.current.rotation.x) * 0.05;
+        meshesRef.current.rotation.y += (targetRotation.y - meshesRef.current.rotation.y) * 0.05;
+        rendererRef.current.render(sceneRef.current, cameraRef.current);
+      }
+    };
+    animate();
 
-// Animation loop
-let animationId: number;
-const animate = () => {
-  animationId = requestAnimationFrame(animate);
-  if (rendererRef.current && sceneRef.current && cameraRef.current) {
-    // Smoothly interpolate rotation for "organic" feel
-    meshesRef.current.rotation.x += (targetRotation.x - meshesRef.current.rotation.x) * 0.05;
-    meshesRef.current.rotation.y += (targetRotation.y - meshesRef.current.rotation.y) * 0.05;
-
-    rendererRef.current.render(sceneRef.current, cameraRef.current);
-  }
-};
-animate();
-
-return () => {
-  cancelAnimationFrame(animationId);
-  window.removeEventListener('pointermove', onPointerMove);
-  if (rendererRef.current) {
+    return () => {
+      cancelAnimationFrame(animationId);
+      window.removeEventListener('pointermove', onPointerMove);
+      if (rendererRef.current) {
         rendererRef.current.dispose();
         if (containerRef.current && rendererRef.current.domElement) {
           try {
@@ -189,7 +276,7 @@ return () => {
   const updateScene = useCallback(async () => {
     if (!template || !sceneRef.current || !textureLoaderRef.current) return;
 
-    // Clear
+    // Clear existing meshes
     while(meshesRef.current.children.length > 0) {
       const child = meshesRef.current.children[0] as THREE.Mesh;
       if (child.geometry) child.geometry.dispose();
@@ -203,16 +290,13 @@ return () => {
     const scaleY = height / template.height;
 
     const getTexture = (url: string): Promise<THREE.Texture> => {
-      console.log("/loading texture from URL:", url.substring(0, 60) + "...");
       if (texturesCache.current.has(url)) return Promise.resolve(texturesCache.current.get(url)!);
       return new Promise((resolve, reject) => {
         loader.load(
           url,
           (t) => {
-            console.log("✅ Texture loaded successfully:", url.substring(0, 60) + "...");
             t.minFilter = THREE.LinearFilter;
             t.magFilter = THREE.LinearFilter;
-            // Enable Anisotropy for sharp angles (Realism Anchor #3)
             if (rendererRef.current) {
               t.anisotropy = rendererRef.current.capabilities.getMaxAnisotropy();
             }
@@ -221,14 +305,14 @@ return () => {
           },
           undefined,
           (err) => {
-            console.error("❌ TextureLoader error for URL:", url.substring(0, 60) + "...", err);
+            console.error("TextureLoader error:", url.substring(0, 60), err);
             reject(err);
           }
         );
       });
     };
 
-    // 1. Base Layer
+    // 1. Base Layer (pre-rendered book photo with shadows/creases baked in)
     if (template.baseImage) {
       const texture = await getTexture(template.baseImage);
       const geometry = new THREE.PlaneGeometry(width, height);
@@ -238,55 +322,44 @@ return () => {
       meshesRef.current.add(mesh);
     }
 
-    // 2. Integrated Smart Object Layer
+    // 2. Find the smart object layer
     const smartObjectLayer = template.layers.find(l => l.type === 'smart_object');
     if (smartObjectLayer && userImage) {
-      console.log("🎨 Loading user image with WebGL:", userImage.substring(0, 60) + "...");
       const designTexture = await getTexture(userImage);
       
-      // Look for realism maps (extracted shadow/highlight layers from the same area)
-      const shadowLayer = template.layers.find(l => l.compositeUrl && l.blendMode.toLowerCase().includes('multiply'));
-      const highlightLayer = template.layers.find(l => l.compositeUrl && (l.blendMode.toLowerCase().includes('screen') || l.blendMode.toLowerCase().includes('linear dodge')));
-
-      const shadowTexture = shadowLayer ? await getTexture(shadowLayer.compositeUrl!) : null;
-      const highlightTexture = highlightLayer ? await getTexture(highlightLayer.compositeUrl!) : null;
-
-      // GEOMETRY (Realism Anchor #1: 16-Point Mesh)
-      let geometry;
-      let pts: any[] = [];
-
-      if (smartObjectLayer.perspectiveTransform) {
-        // We simulate a 4x4 grid even for 4-point transforms for consistency
-        const corners = smartObjectLayer.perspectiveTransform.corners;
-        geometry = new THREE.PlaneGeometry(1, 1, 3, 3); // 4x4 grid of vertices
-        // Interpolate grid points based on 4 corners
+      // Get perspective data
+      const perspective = getSmartObjectPerspective(smartObjectLayer, template);
+      
+      if (perspective) {
+        // Render with perspective/warp using a 4x4 vertex grid
+        const corners = perspective.corners;
+        const geometry = new THREE.PlaneGeometry(1, 1, 3, 3); // 4x4 grid
+        
+        // Bilinearly interpolate 4 corners to 16 vertices
+        const pts: { x: number; y: number }[] = [];
         for (let j = 0; j <= 3; j++) {
           for (let i = 0; i <= 3; i++) {
             const u = i / 3;
             const v = j / 3;
-            // Bilinear interpolation
             const x = (1-u)*(1-v)*corners[0].x + u*(1-v)*corners[1].x + u*v*corners[2].x + (1-u)*v*corners[3].x;
             const y_coord = (1-u)*(1-v)*corners[0].y + u*(1-v)*corners[1].y + u*v*corners[2].y + (1-u)*v*corners[3].y;
             pts.push({ x, y: y_coord });
           }
         }
-      } else if (smartObjectLayer.warpData) {
-        const warp = typeof smartObjectLayer.warpData === 'string' ? JSON.parse(smartObjectLayer.warpData) : smartObjectLayer.warpData;
-        if (warp.controlPoints && warp.controlPoints.length === 16) {
-          geometry = new THREE.PlaneGeometry(1, 1, 3, 3);
-          pts = warp.controlPoints;
-        }
-      }
 
-      if (geometry && pts.length === 16) {
         const pos = geometry.attributes.position;
-        // Map 16 vertices to 16 control points
         for (let i = 0; i < 16; i++) {
           pos.setXY(i, pts[i].x * scaleX, height - pts[i].y * scaleY);
         }
         pos.needsUpdate = true;
 
-        // MATERIAL (Realism Anchor #2: Ink-on-Paper Shader)
+        // Look for realism maps
+        const shadowLayer = template.layers.find(l => l.compositeUrl && l.blendMode.toLowerCase().includes('multiply'));
+        const highlightLayer = template.layers.find(l => l.compositeUrl && (l.blendMode.toLowerCase().includes('screen') || l.blendMode.toLowerCase().includes('linear dodge')));
+        const shadowTexture = shadowLayer ? await getTexture(shadowLayer.compositeUrl!).catch(() => null) : null;
+        const highlightTexture = highlightLayer ? await getTexture(highlightLayer.compositeUrl!).catch(() => null) : null;
+
+        // Shader material with realism
         const material = new THREE.ShaderMaterial({
           uniforms: THREE.UniformsUtils.clone(RealismShader.uniforms),
           vertexShader: RealismShader.vertexShader,
@@ -299,7 +372,6 @@ return () => {
         material.uniforms.tShadow.value = shadowTexture;
         material.uniforms.tHighlight.value = highlightTexture;
         
-        // Dynamic Finish Logic (Phase 4 Polish)
         const shadowBase = shadowLayer?.opacity || 0.8;
         const highlightBase = highlightLayer?.opacity || 0.5;
 
@@ -322,20 +394,71 @@ return () => {
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.z = 0.5;
         meshesRef.current.add(mesh);
+      } else {
+        // No perspective — draw flat within smart object bounds
+        const bounds = getSmartObjectBounds(smartObjectLayer, template.width, template.height);
+        
+        const geometry = new THREE.PlaneGeometry(bounds.width * scaleX, bounds.height * scaleY);
+        const material = new THREE.MeshBasicMaterial({ 
+          map: designTexture, 
+          transparent: true,
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.set(
+          (bounds.x + bounds.width / 2) * scaleX,
+          height - (bounds.y + bounds.height / 2) * scaleY,
+          0.5
+        );
+        meshesRef.current.add(mesh);
       }
     }
 
-    // 3. Independent Realism Layers (those not handled by shader)
-    template.layers.forEach((layer, i) => {
+    // 3. Independent Realism Layers
+    for (const layer of template.layers) {
       if (layer.compositeUrl && layer.type !== 'smart_object') {
-        // Skip if already used in the integrated shader
         const isAlreadyProcessed = (layer.blendMode.toLowerCase().includes('multiply') || layer.blendMode.toLowerCase().includes('screen'));
-        if (isAlreadyProcessed && template.layers.some(l => l.type === 'smart_object')) return;
+        if (isAlreadyProcessed && template.layers.some(l => l.type === 'smart_object')) continue;
 
-        // Draw standard realism layer
-        // ... (standard logic)
+        try {
+          const texture = await getTexture(layer.compositeUrl!);
+          const geometry = new THREE.PlaneGeometry(width, height);
+          const material = new THREE.MeshBasicMaterial({ 
+            map: texture, 
+            transparent: true,
+            opacity: layer.opacity || 1,
+          });
+          const mesh = new THREE.Mesh(geometry, material);
+          mesh.position.set(width / 2, height / 2, 1);
+          meshesRef.current.add(mesh);
+        } catch (e) {
+          console.warn('Failed to load realism layer:', e);
+        }
       }
-    });
+    }
+
+    // 4. Re-apply shadow overlay from base image for realistic compositing
+    // This overlays the base image (which has baked-in shadows) with multiply blend
+    // on top of the user design to add realistic creases and shadows
+    const shadowLayers = template.layers.filter(l => l.type === 'shadow' && !l.compositeUrl);
+    if (shadowLayers.length > 0 && template.baseImage && smartObjectLayer && userImage) {
+      try {
+        const baseTexture = await getTexture(template.baseImage);
+        for (const layer of shadowLayers) {
+          const geometry = new THREE.PlaneGeometry(width, height);
+          const material = new THREE.MeshBasicMaterial({ 
+            map: baseTexture, 
+            transparent: true,
+            opacity: layer.opacity || 0.25,
+            blending: THREE.MultiplyBlending,
+          });
+          const mesh = new THREE.Mesh(geometry, material);
+          mesh.position.set(width / 2, height / 2, 2);
+          meshesRef.current.add(mesh);
+        }
+      } catch (e) {
+        console.warn('Failed to apply shadow overlay:', e);
+      }
+    }
 
   }, [template, userImage, colorSelections, width, height, finish]);
 
@@ -353,18 +476,14 @@ return () => {
       const originalSize = new THREE.Vector2();
       renderer.getSize(originalSize);
       
-      // 1. Scale up for High-Res
       renderer.setSize(capWidth, capHeight, false);
       camera.right = capWidth;
       camera.bottom = capHeight;
       camera.updateProjectionMatrix();
 
-      // 2. Re-render at new resolution
-      // We must wait for a frame or ensure scene is updated
       renderer.render(sceneRef.current, camera);
       const dataUrl = renderer.domElement.toDataURL('image/png', 1.0);
       
-      // 3. Restore original resolution
       renderer.setSize(originalSize.x, originalSize.y, false);
       camera.right = width;
       camera.bottom = height;
@@ -374,17 +493,7 @@ return () => {
     }
   }));
 
-  // Notify parent when the handle is ready (fixes the race condition)
-  useEffect(() => {
-    if (!webGLError && ref && onWebGLReady) {
-      // The handle is available via the ref after useImperativeHandle runs
-      // We read it through the forwarded ref
-      const handle = (ref as any).current as WebGLRendererHandle | null;
-      if (handle) onWebGLReady(handle);
-    }
-  }, [webGLError, onWebGLReady, ref]);
-
-  // If WebGL failed, render nothing — the parent CanvasEngine will fall back to canvas 2D
+  // If WebGL failed, return null — the parent CanvasEngine will fall back to canvas 2D
   if (webGLError) {
     return null;
   }

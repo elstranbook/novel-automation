@@ -62,6 +62,11 @@ export async function POST(request: NextRequest) {
             boundsWidth: layer.bounds?.width,
             boundsHeight: layer.bounds?.height,
             isColorable: layer.isColorable || layer.type === 'color_layer',
+            // Save warp and perspective data extracted from PSD
+            warpData: layer.warpData || undefined,
+            perspectiveData: layer.transform || undefined,
+            // Save composite URL if available
+            compositeUrl: layer.compositeUrl || undefined,
           })),
         },
         colorOptions: {
