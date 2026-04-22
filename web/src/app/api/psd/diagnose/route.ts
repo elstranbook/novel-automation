@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic';
  * POST /api/psd/diagnose
  *
  * Returns current state of all templates and their layers (no changes made).
+ * Useful for debugging transform and bounds data.
  * Body: { } or { "templateId": "uuid" }
  */
 export async function POST(request: NextRequest) {

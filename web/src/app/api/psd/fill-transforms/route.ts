@@ -11,6 +11,12 @@ export const dynamic = 'force-dynamic';
  * Computes and fills transformX/Y/ScaleX/ScaleY from existing boundsX/Y/Width/Height.
  * No PSD download needed — works purely from database data.
  *
+ * Transform convention:
+ *   transformX = center X of layer / template width  (normalized 0-1)
+ *   transformY = center Y of layer / template height (normalized 0-1)
+ *   transformScaleX = layer width / template width   (normalized 0-1)
+ *   transformScaleY = layer height / template height (normalized 0-1)
+ *
  * Body: { "all": true } or { "templateId": "uuid" }
  */
 export async function POST(request: NextRequest) {
