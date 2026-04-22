@@ -364,8 +364,23 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
       }
     }
 
-    // 2. Find the smart object layer
-    const smartObjectLayer = template.layers.find(l => l.type === 'smart_object');
+    // 2. Find the best smart object layer for the user's cover design
+    // Priority: layers named "Cover", "Front cover", "Book cover", "design" > generic smart objects
+    // Avoid: "Edge", "Book edge", "Pages color", "Glue color" layers
+    const smartObjectLayers = template.layers.filter(l => l.type === 'smart_object');
+    const smartObjectLayer = smartObjectLayers.find(l => {
+      const name = l.name.toLowerCase();
+      return name.includes('front cover') || name.includes('book cover') || 
+             (name.includes('cover') && !name.includes('back') && !name.includes('color'));
+    }) || smartObjectLayers.find(l => {
+      const name = l.name.toLowerCase();
+      return name.includes('design') || name.includes('mockup') || name.includes('artwork') || name.includes('placeholder');
+    }) || smartObjectLayers.find(l => {
+      const name = l.name.toLowerCase();
+      // Skip edge/spine/glue/pages layers — prefer the biggest cover-like layer
+      return !name.includes('edge') && !name.includes('glue') && !name.includes('pages') && !name.includes('spine');
+    }) || smartObjectLayers[0]; // Fallback to first smart object
+    console.log(`[WebGLRenderer] Selected smart object: ${smartObjectLayer?.name || 'none'} (from ${smartObjectLayers.length} smart objects)`);
     if (smartObjectLayer && userImage) {
       const designTexture = await getTexture(userImage);
       if (!designTexture) return;
