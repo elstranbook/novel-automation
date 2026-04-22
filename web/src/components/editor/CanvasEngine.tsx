@@ -207,36 +207,35 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
   const getSmartObjectLayer = useCallback(() => {
     if (!template) return null;
     
-    // 1. Highest priority: Layer with explicit warpData or perspectiveTransform
-    let layer = template.layers.find(
-      (l) => l.type === 'smart_object' && (l.warpData || l.perspectiveTransform)
-    );
+    const smartObjectLayers = template.layers.filter(l => l.type === 'smart_object');
+    if (smartObjectLayers.length === 0) return null;
     
-    // 2. Second priority: Layer with transform positioning (transformX/Y)
-    if (!layer) {
-      layer = template.layers.find(
-        (l) => l.type === 'smart_object' && l.transformX != null
-      );
-    }
+    // 1. Highest priority: Layer named "Front cover", "Book cover", or "Cover" (not back/color)
+    let layer = smartObjectLayers.find(l => {
+      const name = l.name.toLowerCase();
+      return name.includes('front cover') || name.includes('book cover') || 
+             (name.includes('cover') && !name.includes('back') && !name.includes('color'));
+    });
     
-    // 3. Third priority: Layer with bounds
+    // 2. Second priority: Layer named "design", "mockup", "artwork", "placeholder"
     if (!layer) {
-      layer = template.layers.find(
-        (l) => l.type === 'smart_object' && (l.boundsX != null || l.bounds != null)
-      );
-    }
-    
-    // 4. Fourth priority: Any smart object at all
-    if (!layer) {
-      layer = template.layers.find((l) => l.type === 'smart_object');
-    }
-    
-    // 5. Fallback: search by name keywords
-    if (!layer) {
-      layer = template.layers.find((l) => {
+      layer = smartObjectLayers.find(l => {
         const name = l.name.toLowerCase();
-        return name.includes('design') || name.includes('cover') || name.includes('mockup') || name.includes('artwork') || name.includes('placeholder');
+        return name.includes('design') || name.includes('mockup') || name.includes('artwork') || name.includes('placeholder');
       });
+    }
+    
+    // 3. Third priority: Any smart object that's NOT edge/glue/pages/spine
+    if (!layer) {
+      layer = smartObjectLayers.find(l => {
+        const name = l.name.toLowerCase();
+        return !name.includes('edge') && !name.includes('glue') && !name.includes('pages') && !name.includes('spine');
+      });
+    }
+    
+    // 4. Fallback: first smart object
+    if (!layer) {
+      layer = smartObjectLayers[0];
     }
     
     return layer;
