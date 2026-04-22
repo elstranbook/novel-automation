@@ -441,7 +441,7 @@ async function reprocessTemplate(templateId: string) {
       const bw = layer.boundsWidth;
       const bh = layer.boundsHeight;
 
-      if (bw != null && bh != null && template.width > 0 && template.height > 0) {
+      if (bx != null && by != null && bw != null && bh != null && template.width > 0 && template.height > 0) {
         updateFields.transformX = (bx + bw / 2) / template.width;
         updateFields.transformY = (by + bh / 2) / template.height;
         updateFields.transformScaleX = bw / template.width;
