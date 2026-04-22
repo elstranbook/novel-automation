@@ -207,7 +207,7 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
   const getSmartObjectLayer = useCallback(() => {
     if (!template) return null;
     
-    const smartObjectLayers = template.layers.filter(l => l.type === 'smart_object');
+    const smartObjectLayers = template.layers.filter(l => l.type === 'smart_object' && l.opacity > 0);
     if (smartObjectLayers.length === 0) return null;
     
     // 1. Highest priority: Layer named "Front cover", "Book cover", or "Cover" (not back/color)

@@ -367,7 +367,8 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
     // 2. Find the best smart object layer for the user's cover design
     // Priority: layers named "Cover", "Front cover", "Book cover", "design" > generic smart objects
     // Avoid: "Edge", "Book edge", "Pages color", "Glue color" layers
-    const smartObjectLayers = template.layers.filter(l => l.type === 'smart_object');
+    // Also exclude invisible layers (opacity=0) which have garbage transform values
+    const smartObjectLayers = template.layers.filter(l => l.type === 'smart_object' && l.opacity > 0);
     const smartObjectLayer = smartObjectLayers.find(l => {
       const name = l.name.toLowerCase();
       return name.includes('front cover') || name.includes('book cover') || 
