@@ -269,7 +269,7 @@ export async function parsePSD(buffer: Buffer): Promise<ParsedPSD> {
       layers,
       smartObjects,
       colorLayers,
-      resolution: psd.resolution || 72,
+      resolution: psd.imageResources?.resolutionInfo?.horizontalResolution || 72,
     };
   } catch (error) {
     console.error('PSD Processing error:', error);
