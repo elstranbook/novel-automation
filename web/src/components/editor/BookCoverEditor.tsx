@@ -198,6 +198,10 @@ export function BookCoverEditor({ onBack }: BookCoverEditorProps) {
             design={design}
             colorSelections={colorSelections}
             finish={bookFinish}
+            spineWidth={spineWidth}
+            pageColor={pageColor}
+            showPages={showPages}
+            showShadow={showShadow}
             onDesignChange={updateDesign}
           />
         </div>

@@ -28,7 +28,7 @@ export class MockupManager {
         ...options,
       };
 
-      const response = await fetch(`${this.BASE_URL}/api/renders`, {
+      const response = await fetch(`${this.BASE_URL}/api/render`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(renderData),

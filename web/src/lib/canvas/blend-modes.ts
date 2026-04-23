@@ -8,7 +8,7 @@ export const canvasBlendModes: Record<BlendModeKey, GlobalCompositeOperation> = 
   multiply: 'multiply',
   screen: 'screen',
   overlay: 'overlay',
-  color: 'source-over', // Custom implementation needed
+  color: 'color',          // Supported in modern browsers
   darken: 'darken',
   lighten: 'lighten',
   'color-dodge': 'color-dodge',
@@ -17,9 +17,9 @@ export const canvasBlendModes: Record<BlendModeKey, GlobalCompositeOperation> = 
   'soft-light': 'soft-light',
   difference: 'difference',
   exclusion: 'exclusion',
-  hue: 'source-over', // Custom implementation needed
-  saturation: 'source-over', // Custom implementation needed
-  luminosity: 'source-over', // Custom implementation needed
+  hue: 'hue',              // Supported in modern browsers
+  saturation: 'saturation',  // Supported in modern browsers
+  luminosity: 'luminosity',  // Supported in modern browsers
 };
 
 // Custom color blend mode that preserves luminosity

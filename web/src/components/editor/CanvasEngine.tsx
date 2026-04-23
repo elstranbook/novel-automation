@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
-import type { Template, TemplateLayer, DesignState } from '@/types';
+import type { Template, DesignState } from '@/types';
 import { hexToRgb } from '@/lib/canvas/color-utils';
+import { canvasBlendModes } from '@/lib/canvas/blend-modes';
 import { 
   applyPerspectiveTransform, 
   QuadCorners
 } from '@/lib/canvas/mesh-warp';
-import { BOOK_WARPS } from '@/lib/templates/book-warps';
+import { getSmartObjectBounds, getSmartObjectPerspective, selectSmartObjectLayer } from '@/lib/canvas/smart-object-helpers';
 import { WebGLRenderer, WebGLRendererHandle } from './WebGLRenderer';
 import { proxyImageUrl } from '@/lib/image-proxy';
 
@@ -17,6 +18,11 @@ interface CanvasEngineProps {
   design: DesignState;
   colorSelections: Record<string, string>;
   finish?: 'matte' | 'glossy' | 'soft_touch';
+  /** Book-specific controls */
+  spineWidth?: number;
+  pageColor?: string;
+  showPages?: boolean;
+  showShadow?: boolean;
   engine?: 'canvas' | 'webgl';
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
   onWebGLReady?: (handle: WebGLRendererHandle) => void;
@@ -28,129 +34,16 @@ export interface CanvasEngineHandle {
   getCanvas: () => HTMLCanvasElement | null;
 }
 
-/**
- * Compute the pixel bounds for a smart object layer on a template.
- * Uses transformX/Y/ScaleX/ScaleY (normalized 0-1) when available,
- * falls back to boundsX/Y/Width/Height (pixel coords from PSD).
- */
-function getSmartObjectBounds(
-  layer: TemplateLayer,
-  templateWidth: number,
-  templateHeight: number
-): { x: number; y: number; width: number; height: number } {
-  // Priority 1: transformX/Y/ScaleX/ScaleY (normalized 0-1 relative positioning)
-  if (layer.transformX != null && layer.transformY != null && 
-      layer.transformScaleX != null && layer.transformScaleY != null) {
-    const w = layer.transformScaleX * templateWidth;
-    const h = layer.transformScaleY * templateHeight;
-    const x = layer.transformX * templateWidth - w / 2;
-    const y = layer.transformY * templateHeight - h / 2;
-    return { x, y, width: w, height: h };
-  }
-  
-  // Priority 2: boundsX/Y/Width/Height (absolute pixel coords from PSD)
-  if (layer.boundsX != null && layer.boundsY != null && 
-      layer.boundsWidth != null && layer.boundsHeight != null) {
-    return {
-      x: layer.boundsX,
-      y: layer.boundsY,
-      width: layer.boundsWidth,
-      height: layer.boundsHeight,
-    };
-  }
-
-  // Priority 3: bounds object (from API response)
-  if (layer.bounds && layer.bounds.width && layer.bounds.height) {
-    return {
-      x: layer.bounds.x || 0,
-      y: layer.bounds.y || 0,
-      width: layer.bounds.width,
-      height: layer.bounds.height,
-    };
-  }
-  
-  // Fallback: full template area
-  return { x: 0, y: 0, width: templateWidth, height: templateHeight };
-}
-
-/**
- * Get perspective transform corners for a smart object layer.
- * Uses explicit perspectiveData/warpData if available, otherwise 
- * computes from the template's warpPreset using BOOK_WARPS.
- */
-function getSmartObjectPerspective(
-  layer: TemplateLayer,
-  template: Template
-): { corners: [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }, { x: number; y: number }] } | null {
-  // Priority 1: Explicit perspectiveTransform from PSD
-  if (layer.perspectiveTransform && layer.perspectiveTransform.corners) {
-    return layer.perspectiveTransform;
-  }
-  
-  // Priority 2: Warp data with control points
-  if (layer.warpData) {
-    try {
-      const warp = typeof layer.warpData === 'string' ? JSON.parse(layer.warpData) : layer.warpData;
-      if (warp?.controlPoints?.length >= 4) {
-        const cols = warp.gridSize?.cols || 4;
-        const rows = warp.gridSize?.rows || 4;
-        const pts = warp.controlPoints;
-        return {
-          corners: [
-            { x: pts[0].x, y: pts[0].y },
-            { x: pts[cols - 1].x, y: pts[cols - 1].y },
-            { x: pts[rows * cols - 1].x, y: pts[rows * cols - 1].y },
-            { x: pts[(rows - 1) * cols].x, y: pts[(rows - 1) * cols].y },
-          ]
-        };
-      }
-    } catch (e) {
-      console.warn('Failed to parse warpData:', e);
-    }
-  }
-  
-  // Priority 3: Compute from warpPreset using BOOK_WARPS
-  if (template.warpPreset && BOOK_WARPS[template.warpPreset as keyof typeof BOOK_WARPS]) {
-    const preset = BOOK_WARPS[template.warpPreset as keyof typeof BOOK_WARPS];
-    const coverWidth = template.coverWidth || 5.5;
-    const coverHeight = template.coverHeight || 8.5;
-    const spineWidth = template.spineWidth || 0.375;
-    
-    try {
-      const warpResult = preset.create(coverWidth, coverHeight, spineWidth);
-      // Handle both single warp and array of warps (e.g., stackedOnTable)
-      const warp = Array.isArray(warpResult) ? warpResult[0] : warpResult;
-      if (warp?.frontCover?.dst) {
-        const dst = warp.frontCover.dst;
-        // Convert inch-based coordinates to pixel coordinates
-        // The front cover area on the template image
-        const bounds = getSmartObjectBounds(layer, template.width, template.height);
-        const pixelsPerInchW = bounds.width / coverWidth;
-        const pixelsPerInchH = bounds.height / coverHeight;
-        
-        return {
-          corners: [
-            { x: bounds.x + dst.topLeft.x * pixelsPerInchW, y: bounds.y + dst.topLeft.y * pixelsPerInchH },
-            { x: bounds.x + dst.topRight.x * pixelsPerInchW, y: bounds.y + dst.topRight.y * pixelsPerInchH },
-            { x: bounds.x + dst.bottomRight.x * pixelsPerInchW, y: bounds.y + dst.bottomRight.y * pixelsPerInchH },
-            { x: bounds.x + dst.bottomLeft.x * pixelsPerInchW, y: bounds.y + dst.bottomLeft.y * pixelsPerInchH },
-          ]
-        };
-      }
-    } catch (e) {
-      console.warn('Failed to compute warp preset:', e);
-    }
-  }
-  
-  return null;
-}
-
 export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
   template,
   userImage,
   design,
   colorSelections,
   finish = 'matte',
+  spineWidth = 0.375,
+  pageColor = '#FFFAF0',
+  showPages = true,
+  showShadow = true,
   engine: engineProp = 'webgl',
   onCanvasReady,
   onWebGLReady,
@@ -203,42 +96,10 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
     return () => window.removeEventListener('resize', updateSize);
   }, []);
 
-  // Get the primary smart object layer from template
+  // Get the primary smart object layer from template (delegates to shared helper)
   const getSmartObjectLayer = useCallback(() => {
     if (!template) return null;
-    
-    const smartObjectLayers = template.layers.filter(l => l.type === 'smart_object' && l.opacity > 0);
-    if (smartObjectLayers.length === 0) return null;
-    
-    // 1. Highest priority: Layer named "Front cover", "Book cover", or "Cover" (not back/color)
-    let layer = smartObjectLayers.find(l => {
-      const name = l.name.toLowerCase();
-      return name.includes('front cover') || name.includes('book cover') || 
-             (name.includes('cover') && !name.includes('back') && !name.includes('color'));
-    });
-    
-    // 2. Second priority: Layer named "design", "mockup", "artwork", "placeholder"
-    if (!layer) {
-      layer = smartObjectLayers.find(l => {
-        const name = l.name.toLowerCase();
-        return name.includes('design') || name.includes('mockup') || name.includes('artwork') || name.includes('placeholder');
-      });
-    }
-    
-    // 3. Third priority: Any smart object that's NOT edge/glue/pages/spine
-    if (!layer) {
-      layer = smartObjectLayers.find(l => {
-        const name = l.name.toLowerCase();
-        return !name.includes('edge') && !name.includes('glue') && !name.includes('pages') && !name.includes('spine');
-      });
-    }
-    
-    // 4. Fallback: first smart object
-    if (!layer) {
-      layer = smartObjectLayers[0];
-    }
-    
-    return layer;
+    return selectSmartObjectLayer(template);
   }, [template]);
 
   // Render canvas function (2D fallback)
@@ -283,7 +144,15 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
       colorLayers.forEach((layer) => {
         const color = colorSelections[layer.name];
         if (color && color !== '#FFFFFF') {
-          applyColorOverlay(ctx, canvas.width, canvas.height, color);
+          const layerBounds = getSmartObjectBounds(layer, template.width, template.height);
+          // Scale bounds to canvas coordinates
+          const scaledBounds = {
+            x: layerBounds.x * scaleX,
+            y: layerBounds.y * scaleY,
+            width: layerBounds.width * scaleX,
+            height: layerBounds.height * scaleY,
+          };
+          applyColorOverlay(ctx, canvas.width, canvas.height, color, scaledBounds);
         }
       });
     }
@@ -379,10 +248,9 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
         if (rlImg) {
           ctx.save();
           const bm = (layer.blendMode || 'normal').toLowerCase();
-          if (bm.includes('multiply')) ctx.globalCompositeOperation = 'multiply';
-          else if (bm.includes('screen')) ctx.globalCompositeOperation = 'screen';
-          else if (bm.includes('overlay')) ctx.globalCompositeOperation = 'overlay';
-          
+          // Use the proper blend mode mapping (supports color, hue, saturation, luminosity, etc.)
+          const compositeOp = canvasBlendModes[bm as keyof typeof canvasBlendModes] || 'source-over';
+          ctx.globalCompositeOperation = compositeOp;
           ctx.globalAlpha = layer.opacity || 1;
           const lx = (layer.boundsX || 0) * scaleX;
           const ly = (layer.boundsY || 0) * scaleY;
@@ -396,22 +264,42 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
       // 4. Re-draw the base image shadow layers on top of the user design
       // The base image contains pre-baked shadows; we overlay the shadow-type layers
       // from the template on top for realistic compositing
-      const shadowLayers = template.layers.filter(l => 
-        l.type === 'shadow' && !l.compositeUrl
-      );
-      shadowLayers.forEach(layer => {
-        // Shadow layers reference the same baseImage but with multiply blend
-        // The base image already has these baked in, so we apply a subtle multiply pass
-        if (baseImageRef.current) {
+      // Only apply if showShadow is enabled
+      if (showShadow) {
+        const shadowLayers = template.layers.filter(l => 
+          l.type === 'shadow' && !l.compositeUrl
+        );
+        shadowLayers.forEach(layer => {
+          if (baseImageRef.current) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.globalAlpha = layer.opacity || 0.25;
+            ctx.drawImage(baseImageRef.current, 0, 0, canvas.width, canvas.height);
+            ctx.restore();
+          }
+        });
+      }
+      
+      // 5. Draw page edges if enabled and template has a pages layer
+      if (showPages) {
+        const pagesLayer = template.layers.find(l => 
+          l.type === 'smart_object' && l.name.toLowerCase().includes('page')
+        );
+        if (pagesLayer) {
+          const pagesBounds = getSmartObjectBounds(pagesLayer, template.width, template.height);
           ctx.save();
-          ctx.globalCompositeOperation = 'multiply';
-          ctx.globalAlpha = layer.opacity || 0.25;
-          ctx.drawImage(baseImageRef.current, 0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = pageColor;
+          ctx.fillRect(
+            pagesBounds.x * scaleX,
+            pagesBounds.y * scaleY,
+            pagesBounds.width * scaleX,
+            pagesBounds.height * scaleY
+          );
           ctx.restore();
         }
-      });
+      }
     }
-  }, [template, userImage, design, colorSelections, getSmartObjectLayer, activeEngine]);
+  }, [template, userImage, design, colorSelections, getSmartObjectLayer, activeEngine, showShadow, showPages, pageColor]);
 
   // Track base image load failure
   const baseImageFailedRef = useRef(false);
@@ -592,9 +480,8 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
           if (rlImg) {
             ctx.save();
             const bm = (layer.blendMode || 'normal').toLowerCase();
-            if (bm.includes('multiply')) ctx.globalCompositeOperation = 'multiply';
-            else if (bm.includes('screen')) ctx.globalCompositeOperation = 'screen';
-            else if (bm.includes('overlay')) ctx.globalCompositeOperation = 'overlay';
+            const compositeOp = canvasBlendModes[bm as keyof typeof canvasBlendModes] || 'source-over';
+            ctx.globalCompositeOperation = compositeOp;
             ctx.globalAlpha = layer.opacity || 1;
             ctx.drawImage(rlImg, 0, 0, capWidth, capHeight);
             ctx.restore();
@@ -661,6 +548,10 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
           width={canvasSize.width}
           height={canvasSize.height}
           finish={finish}
+          spineWidth={spineWidth}
+          pageColor={pageColor}
+          showPages={showPages}
+          showShadow={showShadow}
           onWebGLError={handleWebGLError}
           onWebGLReady={handleWebGLReady}
         />
@@ -694,16 +585,43 @@ function drawCheckerboard(ctx: CanvasRenderingContext2D, width: number, height: 
   }
 }
 
-function applyColorOverlay(ctx: CanvasRenderingContext2D, width: number, height: number, colorHex: string) {
+function applyColorOverlay(
+  ctx: CanvasRenderingContext2D, 
+  canvasWidth: number, 
+  canvasHeight: number, 
+  colorHex: string,
+  layerBounds?: { x: number; y: number; width: number; height: number } | null
+) {
   const rgb = hexToRgb(colorHex);
-  const imageData = ctx.getImageData(0, 0, width, height);
+  
+  // If we have layer bounds, only apply the color overlay within those bounds
+  // to avoid painting the entire canvas
+  const bx = layerBounds?.x ?? 0;
+  const by = layerBounds?.y ?? 0;
+  const bw = layerBounds?.width ?? canvasWidth;
+  const bh = layerBounds?.height ?? canvasHeight;
+  
+  // Clamp to canvas bounds
+  const startX = Math.max(0, Math.floor(bx));
+  const startY = Math.max(0, Math.floor(by));
+  const endX = Math.min(canvasWidth, Math.ceil(bx + bw));
+  const endY = Math.min(canvasHeight, Math.ceil(by + bh));
+  
+  if (startX >= endX || startY >= endY) return;
+  
+  const imageData = ctx.getImageData(startX, startY, endX - startX, endY - startY);
   const data = imageData.data;
-  for (let i = 0; i < data.length; i += 4) {
-    if (data[i + 3] === 0) continue;
-    const lum = (0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]) / 255;
-    data[i] = Math.round(rgb.r * lum);
-    data[i + 1] = Math.round(rgb.g * lum);
-    data[i + 2] = Math.round(rgb.b * lum);
+  const width = imageData.width;
+  
+  for (let y = 0; y < imageData.height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      if (data[i + 3] === 0) continue;
+      const lum = (0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]) / 255;
+      data[i] = Math.round(rgb.r * lum);
+      data[i + 1] = Math.round(rgb.g * lum);
+      data[i + 2] = Math.round(rgb.b * lum);
+    }
   }
-  ctx.putImageData(imageData, 0, 0);
+  ctx.putImageData(imageData, startX, startY);
 }

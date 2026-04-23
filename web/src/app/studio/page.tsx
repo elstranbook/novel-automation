@@ -2070,7 +2070,7 @@ function StudioContent() {
         body: JSON.stringify({
           novelId,
           coverUrl,
-          templateId: selectedTemplate,
+          templateId: selectedTemplate?.id || selectedTemplate,
           coverId: `cover_${Date.now()}`,
         }),
       });

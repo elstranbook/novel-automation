@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useImperativeHandle, forwardRef, useCallback, useState } from 'react';
 import * as THREE from 'three';
-import type { Template, DesignState, TemplateLayer } from '@/types';
-import { BOOK_WARPS } from '@/lib/templates/book-warps';
+import type { Template, DesignState } from '@/types';
+import { getSmartObjectBounds, getSmartObjectPerspective, selectSmartObjectLayer } from '@/lib/canvas/smart-object-helpers';
 import { proxyImageUrl } from '@/lib/image-proxy';
 
 // GLSL Shader for realistic ink-on-paper blending
@@ -60,6 +60,11 @@ interface WebGLRendererProps {
   width: number;
   height: number;
   finish?: 'matte' | 'glossy' | 'soft_touch';
+  /** Book-specific controls */
+  spineWidth?: number;
+  pageColor?: string;
+  showPages?: boolean;
+  showShadow?: boolean;
   onWebGLError?: () => void;
   onWebGLReady?: (handle: WebGLRendererHandle) => void;
 }
@@ -85,100 +90,6 @@ function createWhitePlaceholderTexture(): THREE.Texture {
   return tex;
 }
 
-/**
- * Compute pixel bounds for a smart object layer.
- */
-function getSmartObjectBounds(
-  layer: TemplateLayer,
-  templateWidth: number,
-  templateHeight: number
-): { x: number; y: number; width: number; height: number } {
-  if (layer.transformX != null && layer.transformY != null && 
-      layer.transformScaleX != null && layer.transformScaleY != null) {
-    const w = layer.transformScaleX * templateWidth;
-    const h = layer.transformScaleY * templateHeight;
-    const x = layer.transformX * templateWidth - w / 2;
-    const y = layer.transformY * templateHeight - h / 2;
-    return { x, y, width: w, height: h };
-  }
-  if (layer.boundsX != null && layer.boundsY != null && 
-      layer.boundsWidth != null && layer.boundsHeight != null) {
-    return { x: layer.boundsX, y: layer.boundsY, width: layer.boundsWidth, height: layer.boundsHeight };
-  }
-  if (layer.bounds && layer.bounds.width && layer.bounds.height) {
-    return { x: layer.bounds.x || 0, y: layer.bounds.y || 0, width: layer.bounds.width, height: layer.bounds.height };
-  }
-  return { x: 0, y: 0, width: templateWidth, height: templateHeight };
-}
-
-/**
- * Get perspective transform corners for a smart object layer.
- */
-function getSmartObjectPerspective(
-  layer: TemplateLayer,
-  template: Template
-): { corners: [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }, { x: number; y: number }] } | null {
-  // Priority 1: Explicit perspectiveTransform from PSD
-  if (layer.perspectiveTransform && layer.perspectiveTransform.corners) {
-    return layer.perspectiveTransform;
-  }
-  
-  // Priority 2: Warp data with control points
-  if (layer.warpData) {
-    try {
-      const warp = typeof layer.warpData === 'string' ? JSON.parse(layer.warpData) : layer.warpData;
-      if (warp?.controlPoints?.length >= 4) {
-        const cols = warp.gridSize?.cols || 4;
-        const rows = warp.gridSize?.rows || 4;
-        const pts = warp.controlPoints;
-        return {
-          corners: [
-            { x: pts[0].x, y: pts[0].y },
-            { x: pts[cols - 1].x, y: pts[cols - 1].y },
-            { x: pts[rows * cols - 1].x, y: pts[rows * cols - 1].y },
-            { x: pts[(rows - 1) * cols].x, y: pts[(rows - 1) * cols].y },
-          ]
-        };
-      }
-    } catch (e) {
-      console.warn('Failed to parse warpData:', e);
-    }
-  }
-  
-  // Priority 3: Compute from warpPreset using BOOK_WARPS
-  if (template.warpPreset && BOOK_WARPS[template.warpPreset as keyof typeof BOOK_WARPS]) {
-    const preset = BOOK_WARPS[template.warpPreset as keyof typeof BOOK_WARPS];
-    const coverWidth = template.coverWidth || 5.5;
-    const coverHeight = template.coverHeight || 8.5;
-    const spineWidth = template.spineWidth || 0.375;
-    
-    try {
-      const warpResult = preset.create(coverWidth, coverHeight, spineWidth);
-      // Handle both single warp and array of warps (e.g., stackedOnTable)
-      const warp = Array.isArray(warpResult) ? warpResult[0] : warpResult;
-      if (warp?.frontCover?.dst) {
-        const dst = warp.frontCover.dst;
-        const bounds = getSmartObjectBounds(layer, template.width, template.height);
-        const pixelsPerInchW = bounds.width / coverWidth;
-        const pixelsPerInchH = bounds.height / coverHeight;
-        
-        return {
-          corners: [
-            { x: bounds.x + dst.topLeft.x * pixelsPerInchW, y: bounds.y + dst.topLeft.y * pixelsPerInchH },
-            { x: bounds.x + dst.topRight.x * pixelsPerInchW, y: bounds.y + dst.topRight.y * pixelsPerInchH },
-            { x: bounds.x + dst.bottomRight.x * pixelsPerInchW, y: bounds.y + dst.bottomRight.y * pixelsPerInchH },
-            { x: bounds.x + dst.bottomLeft.x * pixelsPerInchW, y: bounds.y + dst.bottomLeft.y * pixelsPerInchH },
-          ]
-        };
-      }
-    } catch (e) {
-      console.warn('Failed to compute warp preset:', e);
-    }
-  }
-  
-  return null;
-}
-
 export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>(({
   template,
   userImage,
@@ -187,6 +98,10 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
   width,
   height,
   finish = 'matte',
+  spineWidth = 0.375,
+  pageColor = '#FFFAF0',
+  showPages = true,
+  showShadow = true,
   onWebGLError,
   onWebGLReady,
 }, ref) => {
@@ -364,24 +279,9 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
       }
     }
 
-    // 2. Find the best smart object layer for the user's cover design
-    // Priority: layers named "Cover", "Front cover", "Book cover", "design" > generic smart objects
-    // Avoid: "Edge", "Book edge", "Pages color", "Glue color" layers
-    // Also exclude invisible layers (opacity=0) which have garbage transform values
-    const smartObjectLayers = template.layers.filter(l => l.type === 'smart_object' && l.opacity > 0);
-    const smartObjectLayer = smartObjectLayers.find(l => {
-      const name = l.name.toLowerCase();
-      return name.includes('front cover') || name.includes('book cover') || 
-             (name.includes('cover') && !name.includes('back') && !name.includes('color'));
-    }) || smartObjectLayers.find(l => {
-      const name = l.name.toLowerCase();
-      return name.includes('design') || name.includes('mockup') || name.includes('artwork') || name.includes('placeholder');
-    }) || smartObjectLayers.find(l => {
-      const name = l.name.toLowerCase();
-      // Skip edge/spine/glue/pages layers — prefer the biggest cover-like layer
-      return !name.includes('edge') && !name.includes('glue') && !name.includes('pages') && !name.includes('spine');
-    }) || smartObjectLayers[0]; // Fallback to first smart object
-    console.log(`[WebGLRenderer] Selected smart object: ${smartObjectLayer?.name || 'none'} (from ${smartObjectLayers.length} smart objects)`);
+    // Find the best smart object layer for the user's cover design
+    const smartObjectLayer = selectSmartObjectLayer(template);
+    console.log(`[WebGLRenderer] Selected smart object: ${smartObjectLayer?.name || 'none'} (from ${template.layers.filter(l => l.type === 'smart_object' && l.opacity > 0).length} smart objects)`);
     if (smartObjectLayer && userImage) {
       const designTexture = await getTexture(userImage);
       if (!designTexture) return;
@@ -524,30 +424,65 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
     }
 
     // 4. Re-apply shadow overlay from base image for realistic compositing
-    // This overlays the base image (which has baked-in shadows) with multiply blend
-    // on top of the user design to add realistic creases and shadows
-    const shadowLayers = template.layers.filter(l => l.type === 'shadow' && !l.compositeUrl);
-    if (shadowLayers.length > 0 && template.baseImage && smartObjectLayer && userImage) {
-      try {
-        const baseTexture = await getTexture(template.baseImage);
-        for (const layer of shadowLayers) {
-          const geometry = new THREE.PlaneGeometry(width, height);
-          const material = new THREE.MeshBasicMaterial({ 
-            map: baseTexture, 
-            transparent: true,
-            opacity: layer.opacity || 0.25,
-            blending: THREE.MultiplyBlending,
-          });
-          const mesh = new THREE.Mesh(geometry, material);
-          mesh.position.set(width / 2, height / 2, 2);
-          meshesRef.current.add(mesh);
+    // Only apply if showShadow is enabled
+    if (showShadow) {
+      const shadowLayers = template.layers.filter(l => l.type === 'shadow' && !l.compositeUrl);
+      if (shadowLayers.length > 0 && template.baseImage && smartObjectLayer && userImage) {
+        try {
+          const baseTexture = await getTexture(template.baseImage);
+          for (const layer of shadowLayers) {
+            const geometry = new THREE.PlaneGeometry(width, height);
+            const material = new THREE.MeshBasicMaterial({ 
+              map: baseTexture, 
+              transparent: true,
+              opacity: layer.opacity || 0.25,
+              blending: THREE.MultiplyBlending,
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(width / 2, height / 2, 2);
+            meshesRef.current.add(mesh);
+          }
+        } catch (e) {
+          console.warn('Failed to apply shadow overlay:', e);
         }
-      } catch (e) {
-        console.warn('Failed to apply shadow overlay:', e);
+      }
+    }
+    
+    // 5. Draw page edges if enabled and template has a pages layer
+    if (showPages) {
+      const pagesLayer = template.layers.find(l => 
+        l.type === 'smart_object' && l.name.toLowerCase().includes('page')
+      );
+      if (pagesLayer) {
+        const pagesBounds = getSmartObjectBounds(pagesLayer, template.width, template.height);
+        const scaleX = width / template.width;
+        const scaleY = height / template.height;
+        // Create a colored rectangle for the page edges
+        const pagesCanvas = document.createElement('canvas');
+        pagesCanvas.width = Math.round(pagesBounds.width * scaleX);
+        pagesCanvas.height = Math.round(pagesBounds.height * scaleY);
+        const pagesCtx = pagesCanvas.getContext('2d')!;
+        pagesCtx.fillStyle = pageColor;
+        pagesCtx.fillRect(0, 0, pagesCanvas.width, pagesCanvas.height);
+        const pagesTexture = new THREE.CanvasTexture(pagesCanvas);
+        pagesTexture.needsUpdate = true;
+        const pagesGeometry = new THREE.PlaneGeometry(pagesBounds.width * scaleX, pagesBounds.height * scaleY);
+        const pagesMaterial = new THREE.MeshBasicMaterial({ 
+          map: pagesTexture, 
+          transparent: true,
+          opacity: 0.9,
+        });
+        const pagesMesh = new THREE.Mesh(pagesGeometry, pagesMaterial);
+        pagesMesh.position.set(
+          (pagesBounds.x + pagesBounds.width / 2) * scaleX,
+          height - (pagesBounds.y + pagesBounds.height / 2) * scaleY,
+          0.3
+        );
+        meshesRef.current.add(pagesMesh);
       }
     }
 
-  }, [template, userImage, design, colorSelections, width, height, finish]);
+  }, [template, userImage, design, colorSelections, width, height, finish, spineWidth, pageColor, showPages, showShadow]);
 
   useEffect(() => {
     updateScene();
