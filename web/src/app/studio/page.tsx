@@ -387,7 +387,7 @@ function StudioContent() {
   const [coverPrompt, setCoverPrompt] = useState<string | null>(null);
   const [imageModel, setImageModel] = useState("gpt-image-1");
   const [generatedCoverUrl, setGeneratedCoverUrl] = useState<string | null>(null);
-  const [generatedCovers, setGeneratedCovers] = useState<Array<{ url: string; createdAt: string }>>([]);
+  const [generatedCovers, setGeneratedCovers] = useState<Array<{ id: string; url: string; createdAt: string }>>([]);
   const [isPublished, setIsPublished] = useState(false);
   const [publishPublicId, setPublishPublicId] = useState<string | null>(null);
   const [proseScenes, setProseScenes] = useState<ScenesMap | null>(null);
@@ -847,7 +847,7 @@ function StudioContent() {
         // First try with all columns including prompt
         const { data, error } = await supabase
           .from("cover_design_prompts")
-          .select("prompt,url,model,is_active,created_at")
+          .select("id,prompt,url,model,is_active,created_at")
           .eq("novel_id", novelIdValue)
           .order("created_at", { ascending: false });
 
@@ -895,6 +895,7 @@ function StudioContent() {
         const covers = coversData
           .filter((c: any) => c.url) // Only include records that have a URL
           .map((c: any) => ({
+            id: c.id,
             url: c.url,
             createdAt: c.created_at,
           }));
@@ -2049,7 +2050,7 @@ function StudioContent() {
       const data = await response.json();
       setGeneratedCoverUrl(data.imageUrl);
       setCoverUrl(data.imageUrl);
-      setGeneratedCovers((prev) => [{ url: data.imageUrl, createdAt: new Date().toISOString() }, ...prev]);
+      setGeneratedCovers((prev) => [{ id: data.coverId || `new-${Date.now()}`, url: data.imageUrl, createdAt: new Date().toISOString() }, ...prev]);
       setMessage("Cover image generated and saved successfully!");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
@@ -4105,7 +4106,7 @@ function StudioContent() {
                               await fetch("/api/novel/covers/activate", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ novelId, coverUrl: cover.url }),
+                                body: JSON.stringify({ novelId, coverId: cover.id, coverUrl: cover.url }),
                               });
                               console.log("✅ Cover selection persisted");
                             } catch (err) {
@@ -4150,7 +4151,7 @@ function StudioContent() {
                   fetch("/api/novel/covers/activate", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ novelId, coverUrl: cover.url }),
+                    body: JSON.stringify({ novelId, coverId: cover.id, coverUrl: cover.url }),
                   }).catch((err) => console.error("❌ Failed to persist cover selection:", err));
                 }
               }}
