@@ -397,6 +397,8 @@ function StudioContent() {
     selectedTemplate,
     activeTab: mockupActiveTab,
     userImage: mockupUserImage,
+    design: mockupDesign,
+    colorSelections: mockupColorSelections,
     setSelectedTemplate,
     setUserImage: setMockupUserImage,
     setActiveTab: setMockupActiveTab,
@@ -2089,7 +2091,9 @@ function StudioContent() {
 
   const generateMockup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!coverUrl) return;
+    // Use mockupUserImage (the actual image in the editor) instead of coverUrl which may be stale
+    const userImage = mockupUserImage || coverUrl;
+    if (!userImage) return;
     // Safely extract template ID — selectedTemplate is a Template object, never a string
     const templateId = selectedTemplate?.id || null;
     if (!templateId) {
@@ -2107,9 +2111,16 @@ function StudioContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           novelId,
-          coverUrl,
+          coverUrl: userImage,
           templateId,
           coverId: `cover_${Date.now()}`,
+          options: {
+            designX: mockupDesign.x,
+            designY: mockupDesign.y,
+            designScale: mockupDesign.scale,
+            designRotation: mockupDesign.rotation,
+            colorSelections: mockupColorSelections,
+          },
         }),
       });
       if (!response.ok) throw new Error("Failed to submit mockup");

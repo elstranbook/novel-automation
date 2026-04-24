@@ -19,6 +19,14 @@ export interface RenderOptions {
   /** Template dimensions (pixel width/height of the base image) */
   templateWidth?: number;
   templateHeight?: number;
+  /** Warp preset name for book covers */
+  warpPreset?: string | null;
+  /** Cover width in inches */
+  coverWidth?: number | null;
+  /** Cover height in inches */
+  coverHeight?: number | null;
+  /** Spine width in inches */
+  spineWidth?: number | null;
 }
 
 export interface RenderLayerInfo {
@@ -282,6 +290,94 @@ async function applyPerspectiveWarp(
 }
 
 /**
+ * Get perspective corners for a smart object layer on the server side.
+ * Mirrors the client-side getSmartObjectPerspective logic but works
+ * with RenderLayerInfo instead of TemplateLayer.
+ */
+async function getServerPerspectiveCorners(
+  layer: RenderLayerInfo,
+  layers: RenderLayerInfo[],
+  templateWidth: number,
+  templateHeight: number,
+  warpPreset?: string | null,
+  coverWidth?: number | null,
+  coverHeight?: number | null,
+  spineWidth?: number | null
+): Promise<Array<{ x: number; y: number }> | null> {
+  // Priority 1: Explicit perspectiveData from PSD
+  const perspectiveCorners = layer.perspectiveData?.corners;
+  if (Array.isArray(perspectiveCorners) && perspectiveCorners.length === 4) {
+    return perspectiveCorners;
+  }
+
+  // Priority 2: Warp data with control points
+  if (layer.warpData) {
+    try {
+      const warp = typeof layer.warpData === 'string' ? JSON.parse(layer.warpData) : layer.warpData;
+      if (warp?.controlPoints?.length >= 4) {
+        const cols = warp.gridSize?.cols || 4;
+        const rows = warp.gridSize?.rows || 4;
+        const pts = warp.controlPoints;
+        const needed = rows * cols;
+        if (pts.length >= needed) {
+          return [
+            { x: pts[0].x, y: pts[0].y },
+            { x: pts[cols - 1].x, y: pts[cols - 1].y },
+            { x: pts[rows * cols - 1].x, y: pts[rows * cols - 1].y },
+            { x: pts[(rows - 1) * cols].x, y: pts[(rows - 1) * cols].y },
+          ];
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to parse warpData:', e);
+    }
+  }
+
+  // Priority 3: Compute from warpPreset using BOOK_WARPS
+  if (warpPreset) {
+    try {
+      const { BOOK_WARPS } = await import('@/lib/templates/book-warps');
+      if (BOOK_WARPS[warpPreset as keyof typeof BOOK_WARPS]) {
+        const preset = BOOK_WARPS[warpPreset as keyof typeof BOOK_WARPS];
+        const cw = coverWidth || 5.5;
+        const ch = coverHeight || 8.5;
+        const sw = spineWidth || 0.375;
+
+        const warpResult = preset.create(cw, ch, sw);
+        const warp = Array.isArray(warpResult) ? warpResult[0] : warpResult;
+        if (warp?.frontCover?.dst) {
+          const dst = warp.frontCover.dst;
+          const ppiX = templateWidth / cw;
+          const ppiY = templateHeight / ch;
+
+          return [
+            { x: dst.topLeft.x * ppiX, y: dst.topLeft.y * ppiY },
+            { x: dst.topRight.x * ppiX, y: dst.topRight.y * ppiY },
+            { x: dst.bottomRight.x * ppiX, y: dst.bottomRight.y * ppiY },
+            { x: dst.bottomLeft.x * ppiX, y: dst.bottomLeft.y * ppiY },
+          ];
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to compute warp preset on server:', e);
+    }
+  }
+
+  // Priority 4: Smart object bounds as flat rectangle
+  const bounds = getSmartObjectBounds(layer, templateWidth, templateHeight);
+  if (bounds && bounds.width > 0 && bounds.height > 0) {
+    return [
+      { x: bounds.x, y: bounds.y },
+      { x: bounds.x + bounds.width, y: bounds.y },
+      { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
+      { x: bounds.x, y: bounds.y + bounds.height },
+    ];
+  }
+
+  return null;
+}
+
+/**
  * Select the best smart object layer for rendering the user's cover,
  * matching the client-side logic in smart-object-helpers.ts
  */
@@ -448,6 +544,10 @@ export async function generateMockup(options: RenderOptions): Promise<Buffer> {
     layers,
     templateWidth,
     templateHeight,
+    warpPreset,
+    coverWidth,
+    coverHeight,
+    spineWidth,
   } = options;
   
   // Load template base image
@@ -495,7 +595,11 @@ export async function generateMockup(options: RenderOptions): Promise<Buffer> {
         }
 
         // Check if this smart object layer has perspective data for warping
-        const perspectiveCorners = smartObjectLayer.perspectiveData?.corners;
+        // Uses the full priority chain: perspectiveData → warpData → warpPreset → bounds
+        const perspectiveCorners = await getServerPerspectiveCorners(
+          smartObjectLayer, layers, templateWidth, templateHeight,
+          warpPreset, coverWidth, coverHeight, spineWidth
+        );
         const hasPerspective = Array.isArray(perspectiveCorners) && perspectiveCorners.length === 4;
 
         let designCanvas: Buffer;

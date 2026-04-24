@@ -82,14 +82,18 @@ export function getSmartObjectPerspective(
         const cols = warp.gridSize?.cols || 4;
         const rows = warp.gridSize?.rows || 4;
         const pts = warp.controlPoints;
-        return {
-          corners: [
-            { x: pts[0].x, y: pts[0].y },
-            { x: pts[cols - 1].x, y: pts[cols - 1].y },
-            { x: pts[rows * cols - 1].x, y: pts[rows * cols - 1].y },
-            { x: pts[(rows - 1) * cols].x, y: pts[(rows - 1) * cols].y },
-          ]
-        };
+        // Validate we have enough points for the grid
+        const needed = rows * cols;
+        if (pts.length >= needed) {
+          return {
+            corners: [
+              { x: pts[0].x, y: pts[0].y },
+              { x: pts[cols - 1].x, y: pts[cols - 1].y },
+              { x: pts[rows * cols - 1].x, y: pts[rows * cols - 1].y },
+              { x: pts[(rows - 1) * cols].x, y: pts[(rows - 1) * cols].y },
+            ]
+          };
+        }
       }
     } catch (e) {
       console.warn('Failed to parse warpData:', e);
@@ -109,23 +113,39 @@ export function getSmartObjectPerspective(
       const warp = Array.isArray(warpResult) ? warpResult[0] : warpResult;
       if (warp?.frontCover?.dst) {
         const dst = warp.frontCover.dst;
-        // Convert inch-based coordinates to pixel coordinates
-        const bounds = getSmartObjectBounds(layer, template.width, template.height);
-        const pixelsPerInchW = bounds.width / coverWidth;
-        const pixelsPerInchH = bounds.height / coverHeight;
+        // Convert inch-based coordinates to pixel coordinates.
+        // The warp preset returns coordinates in inch space relative to (0,0),
+        // NOT relative to the smart object bounds. So we must NOT add bounds.x/y.
+        // PPI = template pixels / cover inches gives us the correct scale.
+        const ppiX = template.width / coverWidth;
+        const ppiY = template.height / coverHeight;
         
         return {
           corners: [
-            { x: bounds.x + dst.topLeft.x * pixelsPerInchW, y: bounds.y + dst.topLeft.y * pixelsPerInchH },
-            { x: bounds.x + dst.topRight.x * pixelsPerInchW, y: bounds.y + dst.topRight.y * pixelsPerInchH },
-            { x: bounds.x + dst.bottomRight.x * pixelsPerInchW, y: bounds.y + dst.bottomRight.y * pixelsPerInchH },
-            { x: bounds.x + dst.bottomLeft.x * pixelsPerInchW, y: bounds.y + dst.bottomLeft.y * pixelsPerInchH },
+            { x: dst.topLeft.x * ppiX, y: dst.topLeft.y * ppiY },
+            { x: dst.topRight.x * ppiX, y: dst.topRight.y * ppiY },
+            { x: dst.bottomRight.x * ppiX, y: dst.bottomRight.y * ppiY },
+            { x: dst.bottomLeft.x * ppiX, y: dst.bottomLeft.y * ppiY },
           ]
         };
       }
     } catch (e) {
       console.warn('Failed to compute warp preset:', e);
     }
+  }
+  
+  // Priority 4: Smart object bounds as flat rectangle (no perspective)
+  // This is the fallback when there's no perspective data at all
+  const bounds = getSmartObjectBounds(layer, template.width, template.height);
+  if (bounds.width > 0 && bounds.height > 0) {
+    return {
+      corners: [
+        { x: bounds.x, y: bounds.y },
+        { x: bounds.x + bounds.width, y: bounds.y },
+        { x: bounds.x + bounds.width, y: bounds.y + bounds.height },
+        { x: bounds.x, y: bounds.y + bounds.height },
+      ]
+    };
   }
   
   return null;

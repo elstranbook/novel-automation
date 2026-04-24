@@ -113,6 +113,7 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
   
   const texturesCache = useRef<Map<string, THREE.Texture>>(new Map());
   const meshesRef = useRef<THREE.Group>(new THREE.Group());
+  const whitePlaceholderRef = useRef<THREE.Texture | null>(null);
   const [webGLError, setWebGLError] = useState(false);
 
   // Maximum cached textures to prevent unbounded memory growth
@@ -197,6 +198,11 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
       }
       texturesCache.current.forEach(t => t.dispose());
       texturesCache.current.clear();
+      // Dispose the cached white placeholder texture to prevent GPU memory leak
+      if (whitePlaceholderRef.current) {
+        whitePlaceholderRef.current.dispose();
+        whitePlaceholderRef.current = null;
+      }
     };
   }, []);
 
@@ -316,6 +322,13 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
       
       // Get perspective data
       const perspective = getSmartObjectPerspective(smartObjectLayer, template);
+      console.log('[WebGLRenderer] Perspective data:', perspective ? {
+        corners: perspective.corners,
+        hasWarpData: !!smartObjectLayer.warpData,
+        hasPerspectiveTransform: !!smartObjectLayer.perspectiveTransform,
+        hasWarpPreset: !!smartObjectLayer.warpPreset,
+        hasBounds: !!smartObjectLayer.bounds,
+      } : 'null (no perspective data)');
       
       if (perspective) {
         // Render with perspective/warp using a 4x4 vertex grid
@@ -340,14 +353,16 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
         }
         pos.needsUpdate = true;
 
-        // Fix UV mapping: PlaneGeometry(1,1,3,3) assigns UV v=1 to first row (iy=0)
-        // and v=0 to last row (iy=3), but our interpolation maps j=0 to top edge
-        // (v=0 in design) and j=3 to bottom edge (v=1 in design). Correct this.
+        // Fix UV mapping: PlaneGeometry(1,1,3,3) default UVs have v=1 at top, v=0 at bottom.
+        // Our camera has top=0, bottom=height (y-down), so j=0 maps to top edge (smaller y)
+        // and j=3 maps to bottom edge (larger y).
+        // In texture coordinates, (0,0) is bottom-left and (1,1) is top-right.
+        // So j=0 (top of quad) → v=1 (top of texture), j=3 (bottom of quad) → v=0 (bottom of texture).
         const uv = geometry.attributes.uv;
         for (let j = 0; j <= 3; j++) {
           for (let i = 0; i <= 3; i++) {
             const idx = j * 4 + i;
-            uv.setXY(idx, i / 3, j / 3); // v=0 at top row, v=1 at bottom row
+            uv.setXY(idx, i / 3, 1 - j / 3); // Flip v: j=0 → v=1 (top), j=3 → v=0 (bottom)
           }
         }
         uv.needsUpdate = true;
@@ -363,8 +378,15 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
 
         // Create placeholder white textures for any missing realism maps
         // (the shader will multiply by white = no change, screen with white = no change)
-        const shadowTex = shadowTexture || createWhitePlaceholderTexture();
-        const highlightTex = highlightTexture || createWhitePlaceholderTexture();
+        // Cache the placeholder texture to avoid GPU memory leak on repeated template changes
+        const getWhitePlaceholder = () => {
+          if (!whitePlaceholderRef.current) {
+            whitePlaceholderRef.current = createWhitePlaceholderTexture();
+          }
+          return whitePlaceholderRef.current;
+        };
+        const shadowTex = shadowTexture || getWhitePlaceholder();
+        const highlightTex = highlightTexture || getWhitePlaceholder();
 
         // Shader material with realism
         const material = new THREE.ShaderMaterial({

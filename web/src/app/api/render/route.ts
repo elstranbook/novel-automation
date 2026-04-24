@@ -54,6 +54,10 @@ setJobProcessor(async (job) => {
     layers: renderLayers,
     templateWidth: template.width,
     templateHeight: template.height,
+    warpPreset: template.warpPreset,
+    coverWidth: template.coverWidth,
+    coverHeight: template.coverHeight,
+    spineWidth: template.spineWidth,
   });
   
   // Upload to storage
@@ -246,6 +250,10 @@ export async function POST(request: NextRequest) {
           layers: renderLayers,
           templateWidth: template.width,
           templateHeight: template.height,
+          warpPreset: template.warpPreset,
+          coverWidth: template.coverWidth,
+          coverHeight: template.coverHeight,
+          spineWidth: template.spineWidth,
         });
         
         // Try to upload to CDN (works on Vercel)
