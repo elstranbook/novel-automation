@@ -4360,7 +4360,18 @@ function StudioContent() {
                     [1,2,3].map(i => <div key={i} className="aspect-[4/3] rounded-2xl bg-zinc-900 animate-pulse border border-zinc-800" />)
                   ) : filteredTemplates.length > 0 ? (
                     filteredTemplates.map((template) => (
-                      <TemplateCard key={template.id} template={template} onClick={setSelectedTemplate} />
+                      <TemplateCard
+                        key={template.id}
+                        template={template}
+                        onClick={setSelectedTemplate}
+                        onDelete={(deleted) => {
+                          setMockupTemplates(prev => prev.filter(t => t.id !== deleted.id));
+                          setFilteredTemplates(prev => prev.filter(t => t.id !== deleted.id));
+                          if (selectedTemplate?.id === deleted.id) {
+                            setSelectedTemplate(null);
+                          }
+                        }}
+                      />
                     ))
                   ) : (
                     <div className="col-span-full py-12 text-center text-zinc-500 italic">No templates found matching your search.</div>

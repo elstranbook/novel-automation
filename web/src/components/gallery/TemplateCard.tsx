@@ -1,14 +1,29 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Trash2, Loader2 } from 'lucide-react';
 import type { Template } from '@/types';
 
 interface TemplateCardProps {
   template: Template;
   onClick: (template: Template) => void;
+  onDelete?: (template: Template) => void;
   priority?: boolean;
 }
 
@@ -26,7 +41,9 @@ const categoryNames: Record<string, string> = {
   poster: 'Poster',
 };
 
-export function TemplateCard({ template, onClick, priority = false }: TemplateCardProps) {
+export function TemplateCard({ template, onClick, onDelete, priority = false }: TemplateCardProps) {
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // Only use actual image URLs - skip PSD files, non-images, etc.
   const rawThumbnail = template.thumbnail || '';
   const isPSD = rawThumbnail.toLowerCase().includes('.psd') || 
@@ -37,6 +54,27 @@ export function TemplateCard({ template, onClick, priority = false }: TemplateCa
   const isDataUrl = rawThumbnail.startsWith('data:');
   const hasValidThumbnail = !isPSD && rawThumbnail.length > 0 && 
     (hasImageExtension || isDataUrl) && (isHttpUrl || isLocalPath || isDataUrl);
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isDeleting) return;
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/templates/${template.id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to delete template');
+      }
+      onDelete?.(template);
+    } catch (err) {
+      console.error('Failed to delete template:', err);
+      alert('Failed to delete template. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <motion.div
@@ -74,6 +112,47 @@ export function TemplateCard({ template, onClick, priority = false }: TemplateCa
           <div className="absolute bottom-0 left-0 right-0 p-4 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
             <p className="text-white text-sm line-clamp-2">{template.description}</p>
           </div>
+
+          {/* Delete button — top-right corner, visible on hover */}
+          {onDelete && (
+            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="h-8 w-8 rounded-full shadow-lg"
+                    onClick={(e) => e.stopPropagation()}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Template</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to delete <strong>&ldquo;{template.name}&rdquo;</strong>? This action cannot be undone.
+                      All associated layers, color options, and render history will be permanently removed.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDelete}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      {isDeleting ? 'Deleting...' : 'Delete Template'}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          )}
         </div>
         <CardContent className="p-4">
           <div className="flex items-start justify-between gap-2">
