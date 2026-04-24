@@ -415,6 +415,34 @@ function StudioContent() {
   // but sync it with mockupUserImage where possible.
   const [coverUrl, setCoverUrl] = useState("");
   const [mockupJobId, setMockupJobId] = useState<string | null>(null);
+  const [mockupRenderStatus, setMockupRenderStatus] = useState<"idle" | "pending" | "processing" | "completed" | "failed">("idle");
+  const [mockupRenderProgress, setMockupRenderProgress] = useState(0);
+  const [mockupRenderResultUrl, setMockupRenderResultUrl] = useState<string | null>(null);
+
+  // Poll mockup render job status
+  useEffect(() => {
+    if (!mockupJobId || mockupRenderStatus === "completed" || mockupRenderStatus === "failed") return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/render?id=${mockupJobId}`);
+        if (!response.ok) return;
+        const data = await response.json();
+        setMockupRenderStatus(data.status as typeof mockupRenderStatus);
+        setMockupRenderProgress(data.progress || 0);
+        if (data.status === "completed" && data.resultUrl) {
+          setMockupRenderResultUrl(data.resultUrl);
+          setMessage("Mockup render completed! Download ready.");
+        } else if (data.status === "failed") {
+          setError("Mockup render failed. Please try again.");
+        }
+      } catch (err) {
+        console.error("Failed to poll render status:", err);
+      }
+    }, 2000);
+
+    return () => clearInterval(pollInterval);
+  }, [mockupJobId, mockupRenderStatus]);
 
   // Sync generated cover to mockup user image
   useEffect(() => {
@@ -2062,8 +2090,17 @@ function StudioContent() {
   const generateMockup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!coverUrl) return;
+    // Safely extract template ID — selectedTemplate is a Template object, never a string
+    const templateId = selectedTemplate?.id || null;
+    if (!templateId) {
+      setError("Please select a template first.");
+      return;
+    }
     setLoadingStep("mockup");
     setError(null);
+    setMockupRenderStatus("pending");
+    setMockupRenderProgress(0);
+    setMockupRenderResultUrl(null);
     try {
       const response = await fetch("/api/mockup", {
         method: "POST",
@@ -2071,16 +2108,17 @@ function StudioContent() {
         body: JSON.stringify({
           novelId,
           coverUrl,
-          templateId: selectedTemplate?.id || selectedTemplate,
+          templateId,
           coverId: `cover_${Date.now()}`,
         }),
       });
       if (!response.ok) throw new Error("Failed to submit mockup");
       const data = await response.json();
       setMockupJobId(data.jobId);
-      setMessage("Mockup render job submitted successfully!");
+      setMessage("Mockup render job submitted! Processing...");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
+      setMockupRenderStatus("failed");
     } finally {
       setLoadingStep(null);
     }
@@ -4135,6 +4173,78 @@ function StudioContent() {
 
 {view === "mockups" && (
   <div className="space-y-8 animate-in fade-in duration-700 min-h-[800px]">
+    {/* Render Job Progress */}
+    {mockupRenderStatus !== "idle" && (
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500">Server Render</h3>
+          <span className={`text-xs font-bold uppercase tracking-widest ${
+            mockupRenderStatus === "completed" ? "text-emerald-400" :
+            mockupRenderStatus === "failed" ? "text-red-400" :
+            "text-amber-400"
+          }`}>
+            {mockupRenderStatus === "pending" && "Queued..."}
+            {mockupRenderStatus === "processing" && `Processing ${mockupRenderProgress}%`}
+            {mockupRenderStatus === "completed" && "Complete"}
+            {mockupRenderStatus === "failed" && "Failed"}
+          </span>
+        </div>
+        {(mockupRenderStatus === "pending" || mockupRenderStatus === "processing") && (
+          <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
+            <div
+              className="bg-amber-500 h-full rounded-full transition-all duration-500"
+              style={{ width: `${Math.max(mockupRenderProgress, 5)}%` }}
+            />
+          </div>
+        )}
+        {mockupRenderStatus === "completed" && mockupRenderResultUrl && (
+          <div className="flex items-center gap-4 mt-2">
+            <a
+              href={mockupRenderResultUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-amber-400 underline underline-offset-2 hover:text-amber-300"
+            >
+              View Rendered Mockup
+            </a>
+            <button
+              onClick={() => {
+                const link = document.createElement('a');
+                link.href = mockupRenderResultUrl;
+                link.download = `mockup-${Date.now()}.png`;
+                link.click();
+              }}
+              className="text-sm text-emerald-400 underline underline-offset-2 hover:text-emerald-300"
+            >
+              Download
+            </button>
+            <button
+              onClick={() => {
+                setMockupRenderStatus("idle");
+                setMockupJobId(null);
+                setMockupRenderResultUrl(null);
+                setMockupRenderProgress(0);
+              }}
+              className="text-sm text-zinc-500 hover:text-zinc-300"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+        {mockupRenderStatus === "failed" && (
+          <button
+            onClick={() => {
+              setMockupRenderStatus("idle");
+              setMockupJobId(null);
+            }}
+            className="text-sm text-red-400 underline underline-offset-2 hover:text-red-300 mt-2"
+          >
+            Dismiss &amp; Retry
+          </button>
+        )}
+      </section>
+    )}
+
     {/* Cover Image Picker */}
     {generatedCovers.length > 0 && (
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">

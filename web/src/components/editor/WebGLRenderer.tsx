@@ -115,6 +115,9 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
   const meshesRef = useRef<THREE.Group>(new THREE.Group());
   const [webGLError, setWebGLError] = useState(false);
 
+  // Maximum cached textures to prevent unbounded memory growth
+  const MAX_TEXTURE_CACHE_SIZE = 20;
+
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -209,6 +212,20 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
   const updateScene = useCallback(async () => {
     if (!template || !sceneRef.current || !textureLoaderRef.current) return;
 
+    // Clear stale cached textures when template changes (dispose textures not from current template)
+    const currentTemplateUrls = new Set<string>();
+    if (template.baseImage) currentTemplateUrls.add(proxyImageUrl(template.baseImage) || template.baseImage);
+    template.layers.forEach(l => {
+      if (l.compositeUrl) currentTemplateUrls.add(proxyImageUrl(l.compositeUrl) || l.compositeUrl);
+    });
+    // Remove cached textures that don't belong to the current template
+    for (const [key, texture] of texturesCache.current) {
+      if (!currentTemplateUrls.has(key)) {
+        texture.dispose();
+        texturesCache.current.delete(key);
+      }
+    }
+
     console.log('[WebGLRenderer] updateScene:', {
       templateName: template.name,
       templateSize: `${template.width}x${template.height}`,
@@ -246,6 +263,17 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
       const url = proxyImageUrl(rawUrl) || rawUrl;
 
       if (texturesCache.current.has(url)) return Promise.resolve(texturesCache.current.get(url)!);
+      
+      // Evict oldest textures if cache is full
+      if (texturesCache.current.size >= MAX_TEXTURE_CACHE_SIZE) {
+        const firstKey = texturesCache.current.keys().next().value;
+        if (firstKey) {
+          const oldTexture = texturesCache.current.get(firstKey);
+          oldTexture?.dispose();
+          texturesCache.current.delete(firstKey);
+        }
+      }
+      
       return new Promise((resolve) => {
         loader.load(
           url,

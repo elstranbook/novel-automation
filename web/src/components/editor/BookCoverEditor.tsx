@@ -16,6 +16,7 @@ import {
   Layers,
   Settings2,
   Loader2,
+  Trash2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CanvasEngine, CanvasEngineHandle } from './CanvasEngine';
@@ -168,6 +169,17 @@ export function BookCoverEditor({ onBack }: BookCoverEditorProps) {
               <Upload className="w-4 h-4" />
               <span className="hidden sm:inline">Upload Design</span>
             </Button>
+
+            {userImage && (
+              <Button
+                variant="outline"
+                onClick={handleRemoveDesign}
+                className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span className="hidden sm:inline">Remove</span>
+              </Button>
+            )}
             
             <Button
               onClick={handleDownload}

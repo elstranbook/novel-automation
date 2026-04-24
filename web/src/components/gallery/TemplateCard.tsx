@@ -28,17 +28,15 @@ const categoryNames: Record<string, string> = {
 
 export function TemplateCard({ template, onClick, priority = false }: TemplateCardProps) {
   // Only use actual image URLs - skip PSD files, non-images, etc.
-  const rawThumbnail = template.thumbnail;
-  const isValidImage = !rawThumbnail?.includes('.psd') && 
-    !rawThumbnail?.includes('.psb') &&
-    (rawThumbnail?.endsWith('.png') || 
-    rawThumbnail?.endsWith('.jpg') || 
-    rawThumbnail?.endsWith('.jpeg') ||
-    rawThumbnail?.endsWith('.webp') ||
-    rawThumbnail?.endsWith('.gif'));
-  const hasValidThumbnail = isValidImage && 
-    rawThumbnail.length > 0 && 
-    (rawThumbnail.startsWith('http') || rawThumbnail.startsWith('https'));
+  const rawThumbnail = template.thumbnail || '';
+  const isPSD = rawThumbnail.toLowerCase().includes('.psd') || 
+    rawThumbnail.toLowerCase().includes('.psb');
+  const hasImageExtension = /\.(png|jpe?g|webp|gif|svg|avif)(\?.*)?$/i.test(rawThumbnail);
+  const isHttpUrl = rawThumbnail.startsWith('http://') || rawThumbnail.startsWith('https://');
+  const isLocalPath = rawThumbnail.startsWith('/');
+  const isDataUrl = rawThumbnail.startsWith('data:');
+  const hasValidThumbnail = !isPSD && rawThumbnail.length > 0 && 
+    (hasImageExtension || isDataUrl) && (isHttpUrl || isLocalPath || isDataUrl);
 
   return (
     <motion.div
@@ -51,7 +49,7 @@ export function TemplateCard({ template, onClick, priority = false }: TemplateCa
         onClick={() => onClick(template)}
       >
         <div className="relative aspect-square overflow-hidden bg-gray-100 dark:bg-gray-800">
-          {hasValidThumbnail ? (
+          {hasValidThumbnail && (isHttpUrl || isDataUrl) ? (
             <Image
               src={template.thumbnail}
               alt={template.name}
@@ -59,6 +57,13 @@ export function TemplateCard({ template, onClick, priority = false }: TemplateCa
               priority={priority}
               className="object-cover transition-transform duration-500 group-hover:scale-105"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+            />
+          ) : hasValidThumbnail && isLocalPath ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={template.thumbnail}
+              alt={template.name}
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-200 dark:bg-gray-800">

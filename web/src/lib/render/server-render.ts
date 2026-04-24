@@ -14,6 +14,29 @@ export interface RenderOptions {
   colorSelections: Record<string, string>;
   outputWidth: number;
   outputHeight: number;
+  /** Optional layer data for perspective-aware rendering */
+  layers?: RenderLayerInfo[];
+  /** Template dimensions (pixel width/height of the base image) */
+  templateWidth?: number;
+  templateHeight?: number;
+}
+
+export interface RenderLayerInfo {
+  name: string;
+  type: string;
+  boundsX?: number | null;
+  boundsY?: number | null;
+  boundsWidth?: number | null;
+  boundsHeight?: number | null;
+  transformX?: number | null;
+  transformY?: number | null;
+  transformScaleX?: number | null;
+  transformScaleY?: number | null;
+  warpData?: any;
+  perspectiveData?: any;
+  blendMode?: string;
+  opacity?: number;
+  compositeUrl?: string | null;
 }
 
 export interface LayerInfo {
@@ -28,6 +51,104 @@ export interface LayerInfo {
     scaleY: number;
     rotation: number;
   };
+}
+
+/**
+ * Get the smart object bounds for a layer, matching the client-side logic
+ * in smart-object-helpers.ts
+ */
+function getSmartObjectBounds(
+  layer: RenderLayerInfo,
+  templateWidth: number,
+  templateHeight: number
+): { x: number; y: number; width: number; height: number } | null {
+  // Priority 1: transformX/Y/ScaleX/ScaleY (normalized 0-1)
+  if (layer.transformX != null && layer.transformY != null &&
+      layer.transformScaleX != null && layer.transformScaleY != null) {
+    const w = layer.transformScaleX * templateWidth;
+    const h = layer.transformScaleY * templateHeight;
+    const x = layer.transformX * templateWidth - w / 2;
+    const y = layer.transformY * templateHeight - h / 2;
+    return { x, y, width: w, height: h };
+  }
+
+  // Priority 2: boundsX/Y/Width/Height (absolute pixel coords from PSD)
+  if (layer.boundsX != null && layer.boundsY != null &&
+      layer.boundsWidth != null && layer.boundsHeight != null) {
+    return {
+      x: layer.boundsX,
+      y: layer.boundsY,
+      width: layer.boundsWidth,
+      height: layer.boundsHeight,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Select the best smart object layer for rendering the user's cover,
+ * matching the client-side logic in smart-object-helpers.ts
+ */
+function selectSmartObjectLayer(layers: RenderLayerInfo[]): RenderLayerInfo | null {
+  const smartObjectLayers = layers.filter(l => l.type === 'smart_object' && (l.opacity ?? 1) > 0);
+  if (smartObjectLayers.length === 0) return null;
+
+  // Priority 1: "Front cover", "Book cover", "Cover" (not back/color)
+  let layer = smartObjectLayers.find(l => {
+    const name = l.name.toLowerCase();
+    return name.includes('front cover') || name.includes('book cover') ||
+           (name.includes('cover') && !name.includes('back') && !name.includes('color'));
+  });
+
+  // Priority 2: "design", "mockup", "artwork", "placeholder"
+  if (!layer) {
+    layer = smartObjectLayers.find(l => {
+      const name = l.name.toLowerCase();
+      return name.includes('design') || name.includes('mockup') || name.includes('artwork') || name.includes('placeholder');
+    });
+  }
+
+  // Priority 3: Any smart object that's NOT edge/glue/pages/spine
+  if (!layer) {
+    layer = smartObjectLayers.find(l => {
+      const name = l.name.toLowerCase();
+      return !name.includes('edge') && !name.includes('glue') && !name.includes('pages') && !name.includes('spine');
+    });
+  }
+
+  // Fallback: first smart object
+  if (!layer) {
+    layer = smartObjectLayers[0];
+  }
+
+  return layer;
+}
+
+/**
+ * Load an image from a URL or local path into a Buffer.
+ * Handles data URLs, local paths, and remote URLs.
+ */
+async function loadImageBuffer(imageUrl: string): Promise<Buffer> {
+  if (imageUrl.startsWith('data:')) {
+    const base64Data = imageUrl.split(',')[1];
+    return Buffer.from(base64Data, 'base64');
+  }
+
+  // Try local path first
+  const localPath = path.join(process.cwd(), 'public', imageUrl.replace(/^\//, ''));
+  if (fs.existsSync(localPath)) {
+    return fs.readFileSync(localPath);
+  }
+
+  // Try fetching from URL
+  try {
+    const response = await fetch(imageUrl);
+    if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`);
+    return Buffer.from(await response.arrayBuffer());
+  } catch (err) {
+    throw new Error(`Cannot load image: ${imageUrl}`);
+  }
 }
 
 // Apply blend mode using pixel manipulation
@@ -118,7 +239,7 @@ async function applyBlendMode(
   }).png().toBuffer();
 }
 
-// Generate mockup render
+// Generate mockup render — now with perspective-aware smart object layer support
 export async function generateMockup(options: RenderOptions): Promise<Buffer> {
   const {
     templateBaseImage,
@@ -129,29 +250,147 @@ export async function generateMockup(options: RenderOptions): Promise<Buffer> {
     designRotation,
     outputWidth,
     outputHeight,
+    layers,
+    templateWidth,
+    templateHeight,
   } = options;
   
   // Load template base image
-  const basePath = path.join(process.cwd(), 'public', templateBaseImage.replace(/^\//, ''));
-  const baseBuffer = fs.readFileSync(basePath);
+  const baseBuffer = await loadImageBuffer(templateBaseImage);
   const baseImage = sharp(baseBuffer);
   const baseMeta = await baseImage.metadata();
-  
+  const baseW = baseMeta.width!;
+  const baseH = baseMeta.height!;
+
   // Load user design
-  let designBuffer: Buffer;
-  if (userImage.startsWith('data:')) {
-    // Base64 data URL
-    const base64Data = userImage.split(',')[1];
-    designBuffer = Buffer.from(base64Data, 'base64');
-  } else {
-    // File path
-    const designPath = path.join(process.cwd(), 'public', userImage.replace(/^\//, ''));
-    designBuffer = fs.readFileSync(designPath);
-  }
-  
+  const designBuffer = await loadImageBuffer(userImage);
   const designImage = sharp(designBuffer);
   const designMeta = await designImage.metadata();
-  
+
+  // If we have layer data, use smart-object-aware rendering
+  if (layers && layers.length > 0 && templateWidth && templateHeight) {
+    const smartObjectLayer = selectSmartObjectLayer(layers);
+    
+    if (smartObjectLayer) {
+      const bounds = getSmartObjectBounds(smartObjectLayer, templateWidth, templateHeight);
+      
+      if (bounds) {
+        const scaleX = baseW / templateWidth;
+        const scaleY = baseH / templateHeight;
+        
+        // Scale bounds to actual base image dimensions
+        const scaledBounds = {
+          x: bounds.x * scaleX,
+          y: bounds.y * scaleY,
+          width: bounds.width * scaleX,
+          height: bounds.height * scaleY,
+        };
+
+        // Calculate cover-mode sizing (fill the smart object bounds)
+        const imgAspect = designMeta.width! / designMeta.height!;
+        const boundsAspect = scaledBounds.width / scaledBounds.height;
+        let drawW: number, drawH: number;
+
+        if (imgAspect > boundsAspect) {
+          drawH = scaledBounds.height * designScale;
+          drawW = drawH * imgAspect;
+        } else {
+          drawW = scaledBounds.width * designScale;
+          drawH = drawW / imgAspect;
+        }
+
+        // Resize design to the calculated dimensions
+        const resizedDesign = await sharp(designBuffer)
+          .resize(Math.round(drawW), Math.round(drawH), { fit: 'cover' })
+          .png()
+          .toBuffer();
+
+        // Calculate position (centered based on normalized coords relative to bounds)
+        const posX = Math.round(scaledBounds.x + scaledBounds.width * designX - drawW / 2);
+        const posY = Math.round(scaledBounds.y + scaledBounds.height * designY - drawH / 2);
+
+        // Create a canvas the same size as the base image
+        // Draw the design on it, then composite with the base
+        // This allows us to clip to the smart object bounds
+        const designCanvas = await sharp({
+          create: {
+            width: baseW,
+            height: baseH,
+            channels: 4,
+            background: { r: 0, g: 0, b: 0, alpha: 0 },
+          },
+        })
+          .composite([
+            {
+              input: resizedDesign,
+              left: Math.max(0, posX),
+              top: Math.max(0, posY),
+              blend: 'over',
+            },
+          ])
+          .png()
+          .toBuffer();
+
+        // Composite: base image → user design → realism layers
+        let result = baseBuffer;
+        
+        // Apply user design on top of base
+        result = await sharp(result)
+          .composite([
+            {
+              input: designCanvas,
+              blend: 'over',
+            },
+          ])
+          .png()
+          .toBuffer();
+
+        // Apply composite/realism layers (shadows, highlights) with proper blend modes
+        const compositeLayers = layers.filter(l => l.compositeUrl);
+        for (const layer of compositeLayers) {
+          try {
+            const layerBuffer = await loadImageBuffer(layer.compositeUrl!);
+            const blendMode = (layer.blendMode || 'normal').toLowerCase();
+            const layerOpacity = layer.opacity ?? 1;
+            
+            if (blendMode === 'multiply' || blendMode === 'screen' || blendMode === 'overlay' || blendMode === 'color') {
+              result = await applyBlendMode(result, layerBuffer, blendMode, layerOpacity);
+            } else {
+              // For normal and other blend modes, use sharp's composite
+              const resizedLayer = await sharp(layerBuffer)
+                .resize(baseW, baseH, { fit: 'fill' })
+                .ensureAlpha()
+                .png()
+                .toBuffer();
+              
+              result = await sharp(result)
+                .composite([
+                  {
+                    input: resizedLayer,
+                    blend: 'over',
+                    // Apply opacity via premultiplied alpha
+                    top: 0,
+                    left: 0,
+                  },
+                ])
+                .png()
+                .toBuffer();
+            }
+          } catch (err) {
+            console.warn(`Failed to apply composite layer "${layer.name}":`, err);
+          }
+        }
+
+        // Final resize to output dimensions
+        return sharp(result)
+          .resize(outputWidth, outputHeight, { fit: 'contain' })
+          .png()
+          .toBuffer();
+      }
+    }
+  }
+
+  // Fallback: Original flat compositing (for templates without layer data)
   // Calculate design dimensions based on scale
   const designWidth = Math.round(baseMeta.width! * designScale);
   const designHeight = Math.round(designWidth * (designMeta.height! / designMeta.width!));
@@ -195,31 +434,22 @@ export async function generateMockupWithColors(
   outputHeight: number = 1024
 ): Promise<Buffer> {
   // Load base image
-  const basePath = path.join(process.cwd(), 'public', templateBaseImage.replace(/^\//, ''));
-  const baseBuffer = fs.readFileSync(basePath);
+  const baseBuffer = await loadImageBuffer(templateBaseImage);
   
   let resultBuffer = baseBuffer;
   
   // If we have a color layer, apply color tint
   if (colorLayerImage) {
-    const colorLayerPath = path.join(process.cwd(), 'public', colorLayerImage.replace(/^\//, ''));
-    if (fs.existsSync(colorLayerPath)) {
-      const colorLayerBuffer = fs.readFileSync(colorLayerPath);
-      // @ts-ignore
+    try {
+      const colorLayerBuffer = await loadImageBuffer(colorLayerImage);
       resultBuffer = await applyBlendMode(baseBuffer, colorLayerBuffer, 'color', 1.0);
+    } catch (err) {
+      console.warn('Failed to load color layer, skipping:', err);
     }
   }
   
   // Load and process user design
-  let designBuffer: Buffer;
-  if (userDesign.startsWith('data:')) {
-    const base64Data = userDesign.split(',')[1];
-    designBuffer = Buffer.from(base64Data, 'base64');
-  } else {
-    const designPath = path.join(process.cwd(), 'public', userDesign.replace(/^\//, ''));
-    designBuffer = fs.readFileSync(designPath);
-  }
-  
+  const designBuffer = await loadImageBuffer(userDesign);
   const baseImage = sharp(resultBuffer);
   const baseMeta = await baseImage.metadata();
   const designImage = sharp(designBuffer);

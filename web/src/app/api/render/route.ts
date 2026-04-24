@@ -11,16 +11,36 @@ import path from 'path';
 setJobProcessor(async (job) => {
   const { templateId, userImage, designX, designY, designScale, designRotation, colorSelections, exportWidth, exportHeight } = job.data;
   
-  // Get template
+  // Get template with layers for perspective-aware rendering
   const template = await db.template.findUnique({
     where: { id: templateId },
+    include: { layers: true },
   });
   
   if (!template) {
     throw new Error('Template not found');
   }
   
-  // Generate mockup
+  // Map layers to RenderLayerInfo format
+  const renderLayers = template.layers.map(layer => ({
+    name: layer.name,
+    type: layer.type,
+    boundsX: layer.boundsX,
+    boundsY: layer.boundsY,
+    boundsWidth: layer.boundsWidth,
+    boundsHeight: layer.boundsHeight,
+    transformX: layer.transformX,
+    transformY: layer.transformY,
+    transformScaleX: layer.transformScaleX,
+    transformScaleY: layer.transformScaleY,
+    warpData: layer.warpData,
+    perspectiveData: layer.perspectiveData,
+    blendMode: layer.blendMode,
+    opacity: layer.opacity,
+    compositeUrl: layer.compositeUrl,
+  }));
+  
+  // Generate mockup with layer data for smart-object-aware rendering
   const imageBuffer = await generateMockup({
     templateBaseImage: template.baseImage,
     userImage,
@@ -31,6 +51,9 @@ setJobProcessor(async (job) => {
     colorSelections,
     outputWidth: exportWidth || 2048,
     outputHeight: exportHeight || 2048,
+    layers: renderLayers,
+    templateWidth: template.width,
+    templateHeight: template.height,
   });
   
   // Upload to storage
@@ -123,9 +146,10 @@ export async function POST(request: NextRequest) {
       useQueue = true, // Use queue by default
     } = body;
     
-    // Get template
+    // Get template with layers for perspective-aware rendering
     const template = await db.template.findUnique({
       where: { id: templateId },
+      include: { layers: true },
     });
     
     if (!template) {
@@ -190,6 +214,25 @@ export async function POST(request: NextRequest) {
       });
       
       try {
+        // Map layers to RenderLayerInfo format
+        const renderLayers = template.layers.map(layer => ({
+          name: layer.name,
+          type: layer.type,
+          boundsX: layer.boundsX,
+          boundsY: layer.boundsY,
+          boundsWidth: layer.boundsWidth,
+          boundsHeight: layer.boundsHeight,
+          transformX: layer.transformX,
+          transformY: layer.transformY,
+          transformScaleX: layer.transformScaleX,
+          transformScaleY: layer.transformScaleY,
+          warpData: layer.warpData,
+          perspectiveData: layer.perspectiveData,
+          blendMode: layer.blendMode,
+          opacity: layer.opacity,
+          compositeUrl: layer.compositeUrl,
+        }));
+        
         const imageBuffer = await generateMockup({
           templateBaseImage: template.baseImage,
           userImage,
@@ -200,6 +243,9 @@ export async function POST(request: NextRequest) {
           colorSelections: colorSelections || {},
           outputWidth: exportWidth || 2048,
           outputHeight: exportHeight || 2048,
+          layers: renderLayers,
+          templateWidth: template.width,
+          templateHeight: template.height,
         });
         
         // Try to upload to CDN (works on Vercel)
