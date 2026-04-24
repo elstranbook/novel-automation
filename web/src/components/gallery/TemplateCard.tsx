@@ -8,14 +8,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Trash2, Loader2 } from 'lucide-react';
 import type { Template } from '@/types';
@@ -43,6 +41,8 @@ const categoryNames: Record<string, string> = {
 
 export function TemplateCard({ template, onClick, onDelete, priority = false }: TemplateCardProps) {
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Only use actual image URLs - skip PSD files, non-images, etc.
   const rawThumbnail = template.thumbnail || '';
@@ -55,10 +55,10 @@ export function TemplateCard({ template, onClick, onDelete, priority = false }: 
   const hasValidThumbnail = !isPSD && rawThumbnail.length > 0 && 
     (hasImageExtension || isDataUrl) && (isHttpUrl || isLocalPath || isDataUrl);
 
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDelete = async () => {
     if (isDeleting) return;
     setIsDeleting(true);
+    setDeleteError(null);
     try {
       const response = await fetch(`/api/templates/${template.id}`, {
         method: 'DELETE',
@@ -67,10 +67,12 @@ export function TemplateCard({ template, onClick, onDelete, priority = false }: 
         const data = await response.json().catch(() => ({}));
         throw new Error(data.error || 'Failed to delete template');
       }
+      // Close dialog only after successful delete
+      setDeleteDialogOpen(false);
       onDelete?.(template);
     } catch (err) {
       console.error('Failed to delete template:', err);
-      alert('Failed to delete template. Please try again.');
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete template. Please try again.');
     } finally {
       setIsDeleting(false);
     }
@@ -116,22 +118,28 @@ export function TemplateCard({ template, onClick, onDelete, priority = false }: 
           {/* Delete button — top-right corner, visible on hover */}
           {onDelete && (
             <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    className="h-8 w-8 rounded-full shadow-lg"
-                    onClick={(e) => e.stopPropagation()}
-                    disabled={isDeleting}
-                  >
-                    {isDeleting ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                  </Button>
-                </AlertDialogTrigger>
+              <Button
+                variant="destructive"
+                size="icon"
+                className="h-8 w-8 rounded-full shadow-lg"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDeleteDialogOpen(true);
+                }}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+              </Button>
+              <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => {
+                // Don't allow closing the dialog while deleting
+                if (isDeleting && !open) return;
+                setDeleteDialogOpen(open);
+                if (!open) setDeleteError(null);
+              }}>
                 <AlertDialogContent onClick={(e) => e.stopPropagation()}>
                   <AlertDialogHeader>
                     <AlertDialogTitle>Delete Template</AlertDialogTitle>
@@ -140,14 +148,25 @@ export function TemplateCard({ template, onClick, onDelete, priority = false }: 
                       All associated layers, color options, and render history will be permanently removed.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
+                  {deleteError && (
+                    <p className="text-sm text-destructive">{deleteError}</p>
+                  )}
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
+                    <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                    <Button
+                      variant="destructive"
                       onClick={handleDelete}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      disabled={isDeleting}
                     >
-                      {isDeleting ? 'Deleting...' : 'Delete Template'}
-                    </AlertDialogAction>
+                      {isDeleting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          Deleting...
+                        </>
+                      ) : (
+                        'Delete Template'
+                      )}
+                    </Button>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
