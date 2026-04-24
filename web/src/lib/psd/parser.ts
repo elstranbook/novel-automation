@@ -153,21 +153,55 @@ export async function parsePSD(buffer: Buffer): Promise<ParsedPSD> {
       if (layer.placedLayer) {
         const so = layer.placedLayer;
         
-        // Handle perspective transforms (4 corners)
-        // ag-psd provides this in placedLayer.transform (8 numbers: x,y of 4 corners)
-        // Order: TL.x, TL.y, TR.x, TR.y, BR.x, BR.y, BL.x, BL.y
-        const transformData = so.transform || (so as any).nonAffineTransform;
+        // Handle perspective transforms from smart object
+        // Priority 1: nonAffineTransform (8 numbers: x,y of 4 corners — true perspective)
+        // Priority 2: transform (affine matrix {xx,xy,yx,yy,tx,ty}) — compute corners
+        const nonAffine = (so as any).nonAffineTransform;
         
-        if (Array.isArray(transformData) && transformData.length >= 8) {
+        if (Array.isArray(nonAffine) && nonAffine.length >= 8) {
+          // True perspective: 4 corner points as [TL.x, TL.y, TR.x, TR.y, BR.x, BR.y, BL.x, BL.y]
           transform = {
             corners: [
-              { x: transformData[0], y: transformData[1] },
-              { x: transformData[2], y: transformData[3] },
-              { x: transformData[4], y: transformData[5] },
-              { x: transformData[6], y: transformData[7] },
+              { x: nonAffine[0], y: nonAffine[1] },
+              { x: nonAffine[2], y: nonAffine[3] },
+              { x: nonAffine[4], y: nonAffine[5] },
+              { x: nonAffine[6], y: nonAffine[7] },
             ]
           };
-          console.log(`Extracted perspective transform for ${name}:`, transform.corners);
+          console.log(`Extracted non-affine perspective transform for ${name}:`, transform.corners);
+        } else if (so.transform) {
+          // Affine transform: ag-psd stores as {xx, xy, yx, yy, tx, ty} or as array [xx, xy, yx, yy, tx, ty]
+          // Matrix: | xx yx tx |   Applied to internal dimensions (so.width × so.height)
+          //         | xy yy ty |
+          //         |  0  0  1 |
+          const soTr = so.transform as any;
+          let xx: number, xy: number, yx: number, yy: number, tx: number, ty: number;
+          
+          if (Array.isArray(soTr) && soTr.length >= 6) {
+            // Array format: [xx, xy, yx, yy, tx, ty]
+            [xx, xy, yx, yy, tx, ty] = soTr;
+          } else if (soTr && typeof soTr === 'object' && 'xx' in soTr) {
+            // Object format: {xx, xy, yx, yy, tx, ty}
+            xx = soTr.xx; xy = soTr.xy; yx = soTr.yx; yy = soTr.yy; tx = soTr.tx; ty = soTr.ty;
+          } else {
+            xx = xy = yx = yy = tx = ty = 0;
+          }
+          
+          // Use the smart object's internal dimensions to compute the 4 corners
+          const soW = so.width || internalWidth || bounds.width;
+          const soH = so.height || internalHeight || bounds.height;
+          
+          // Apply affine matrix to the 4 corners of the internal rectangle (0,0)→(soW,soH)
+          // Corner = M * [x, y, 1]^T
+          const cTL = { x: tx + xx * 0 + yx * 0, y: ty + xy * 0 + yy * 0 };           // (0,0)
+          const cTR = { x: tx + xx * soW + yx * 0, y: ty + xy * soW + yy * 0 };         // (soW,0)
+          const cBR = { x: tx + xx * soW + yx * soH, y: ty + xy * soW + yy * soH };     // (soW,soH)
+          const cBL = { x: tx + xx * 0 + yx * soH, y: ty + xy * 0 + yy * soH };         // (0,soH)
+          
+          transform = {
+            corners: [cTL, cTR, cBR, cBL]
+          };
+          console.log(`Extracted affine transform for ${name}:`, { matrix: { xx, xy, yx, yy, tx, ty }, soW, soH, corners: transform.corners });
         }
 
         // Handle native PSD warps

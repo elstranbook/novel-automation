@@ -150,6 +150,12 @@ export const CanvasEngine = forwardRef<CanvasEngineHandle, CanvasEngineProps>(({
       if (smartObjectLayer) {
         // Try to get perspective transform
         const perspective = getSmartObjectPerspective(smartObjectLayer, template);
+        console.log('[CanvasEngine] Perspective result:', perspective ? {
+          corners: perspective.corners,
+          source: smartObjectLayer.perspectiveTransform ? 'P1:perspectiveTransform' :
+                  smartObjectLayer.warpData ? 'P2:warpData' :
+                  template.warpPreset ? 'P3:warpPreset' : 'P4:bounds'
+        } : 'null');
 
         if (perspective) {
           // Perspective warp using triangle subdivision

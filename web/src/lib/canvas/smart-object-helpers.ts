@@ -85,12 +85,15 @@ export function getSmartObjectPerspective(
         // Validate we have enough points for the grid
         const needed = rows * cols;
         if (pts.length >= needed) {
+          // Use DESTINATION coordinates (source + offset), not source coordinates.
+          // Seed stores: { x: srcX, y: srcY, offsetX: dstX - srcX, offsetY: dstY - srcY }
+          // PSD parser stores: { x, y, offsetX: 0, offsetY: 0 } (x,y already in dest space)
           return {
             corners: [
-              { x: pts[0].x, y: pts[0].y },
-              { x: pts[cols - 1].x, y: pts[cols - 1].y },
-              { x: pts[rows * cols - 1].x, y: pts[rows * cols - 1].y },
-              { x: pts[(rows - 1) * cols].x, y: pts[(rows - 1) * cols].y },
+              { x: pts[0].x + (pts[0].offsetX || 0), y: pts[0].y + (pts[0].offsetY || 0) },
+              { x: pts[cols - 1].x + (pts[cols - 1].offsetX || 0), y: pts[cols - 1].y + (pts[cols - 1].offsetY || 0) },
+              { x: pts[rows * cols - 1].x + (pts[rows * cols - 1].offsetX || 0), y: pts[rows * cols - 1].y + (pts[rows * cols - 1].offsetY || 0) },
+              { x: pts[(rows - 1) * cols].x + (pts[(rows - 1) * cols].offsetX || 0), y: pts[(rows - 1) * cols].y + (pts[(rows - 1) * cols].offsetY || 0) },
             ]
           };
         }
@@ -114,18 +117,20 @@ export function getSmartObjectPerspective(
       if (warp?.frontCover?.dst) {
         const dst = warp.frontCover.dst;
         // Convert inch-based coordinates to pixel coordinates.
-        // The warp preset returns coordinates in inch space relative to (0,0),
-        // NOT relative to the smart object bounds. So we must NOT add bounds.x/y.
         // PPI = template pixels / cover inches gives us the correct scale.
         const ppiX = template.width / coverWidth;
         const ppiY = template.height / coverHeight;
         
+        // Offset corners by the smart object bounds position so the warp
+        // is positioned where the book actually is in the template image
+        const boundsOffset = getSmartObjectBounds(layer, template.width, template.height);
+        
         return {
           corners: [
-            { x: dst.topLeft.x * ppiX, y: dst.topLeft.y * ppiY },
-            { x: dst.topRight.x * ppiX, y: dst.topRight.y * ppiY },
-            { x: dst.bottomRight.x * ppiX, y: dst.bottomRight.y * ppiY },
-            { x: dst.bottomLeft.x * ppiX, y: dst.bottomLeft.y * ppiY },
+            { x: dst.topLeft.x * ppiX + boundsOffset.x, y: dst.topLeft.y * ppiY + boundsOffset.y },
+            { x: dst.topRight.x * ppiX + boundsOffset.x, y: dst.topRight.y * ppiY + boundsOffset.y },
+            { x: dst.bottomRight.x * ppiX + boundsOffset.x, y: dst.bottomRight.y * ppiY + boundsOffset.y },
+            { x: dst.bottomLeft.x * ppiX + boundsOffset.x, y: dst.bottomLeft.y * ppiY + boundsOffset.y },
           ]
         };
       }

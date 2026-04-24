@@ -320,11 +320,12 @@ async function getServerPerspectiveCorners(
         const pts = warp.controlPoints;
         const needed = rows * cols;
         if (pts.length >= needed) {
+          // Use DESTINATION coordinates (source + offset), not source coordinates.
           return [
-            { x: pts[0].x, y: pts[0].y },
-            { x: pts[cols - 1].x, y: pts[cols - 1].y },
-            { x: pts[rows * cols - 1].x, y: pts[rows * cols - 1].y },
-            { x: pts[(rows - 1) * cols].x, y: pts[(rows - 1) * cols].y },
+            { x: pts[0].x + (pts[0].offsetX || 0), y: pts[0].y + (pts[0].offsetY || 0) },
+            { x: pts[cols - 1].x + (pts[cols - 1].offsetX || 0), y: pts[cols - 1].y + (pts[cols - 1].offsetY || 0) },
+            { x: pts[rows * cols - 1].x + (pts[rows * cols - 1].offsetX || 0), y: pts[rows * cols - 1].y + (pts[rows * cols - 1].offsetY || 0) },
+            { x: pts[(rows - 1) * cols].x + (pts[(rows - 1) * cols].offsetX || 0), y: pts[(rows - 1) * cols].y + (pts[(rows - 1) * cols].offsetY || 0) },
           ];
         }
       }
@@ -350,11 +351,16 @@ async function getServerPerspectiveCorners(
           const ppiX = templateWidth / cw;
           const ppiY = templateHeight / ch;
 
+          // Offset corners by the smart object bounds position
+          const bounds = getSmartObjectBounds(layer, templateWidth, templateHeight);
+          const bx = bounds ? bounds.x : 0;
+          const by = bounds ? bounds.y : 0;
+
           return [
-            { x: dst.topLeft.x * ppiX, y: dst.topLeft.y * ppiY },
-            { x: dst.topRight.x * ppiX, y: dst.topRight.y * ppiY },
-            { x: dst.bottomRight.x * ppiX, y: dst.bottomRight.y * ppiY },
-            { x: dst.bottomLeft.x * ppiX, y: dst.bottomLeft.y * ppiY },
+            { x: dst.topLeft.x * ppiX + bx, y: dst.topLeft.y * ppiY + by },
+            { x: dst.topRight.x * ppiX + bx, y: dst.topRight.y * ppiY + by },
+            { x: dst.bottomRight.x * ppiX + bx, y: dst.bottomRight.y * ppiY + by },
+            { x: dst.bottomLeft.x * ppiX + bx, y: dst.bottomLeft.y * ppiY + by },
           ];
         }
       }
