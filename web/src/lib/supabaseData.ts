@@ -108,7 +108,14 @@ export const replaceSceneRows = async ({
     chapter_order: number;
   }[] = [];
 
-  Object.entries(scenes).forEach(([chapterTitle, chapterScenes], chapterIndex) => {
+  // Sort by chapter number to avoid lexicographic ordering (1, 10, 11, 2, 3...)
+  const getChapterNumber = (key: string): number => {
+    const match = key.match(/(\d+)/);
+    return match ? parseInt(match[1], 10) : 0;
+  };
+  Object.entries(scenes)
+    .sort((a, b) => getChapterNumber(a[0]) - getChapterNumber(b[0]))
+    .forEach(([chapterTitle, chapterScenes], chapterIndex) => {
     chapterScenes.forEach((scene, index) => {
       rows.push({
         novel_id: novelId,

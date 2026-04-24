@@ -88,6 +88,24 @@ const base64ToBlob = (base64: string, mime: string) => {
   return new Blob([bytes], { type: mime });
 };
 
+const getChapterNumber = (key: string): number => {
+  // Extract the first number from the key — handles "Chapter 1: Title", "1", "chapter_10", etc.
+  const match = key.match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : 0;
+};
+
+const sortScenesEntries = (scenes: ScenesMap): [string, string[]][] =>
+  Object.entries(scenes).sort(
+    (a, b) => getChapterNumber(a[0]) - getChapterNumber(b[0])
+  );
+
+const sortBeatsEntries = (
+  beats: ChapterBeats
+): [string, Array<Record<string, unknown>>][] =>
+  Object.entries(beats).sort(
+    (a, b) => getChapterNumber(a[0]) - getChapterNumber(b[0])
+  );
+
 const formatJson = (value: unknown) =>
   value ? JSON.stringify(value, null, 2) : "";
 
@@ -132,7 +150,7 @@ const pageBreakMarkdown = "\n\n\\pagebreak\n\n";
 const pageBreakHtml = '<div style="page-break-after: always; break-after: page;"></div>';
 
 const formatProseText = (prose: ScenesMap) =>
-  Object.entries(prose)
+  sortScenesEntries(prose)
     .map(([chapter, scenes], index) => {
       const chapterHeader = `Chapter ${index + 1}: ${chapter}`;
       return `${chapterHeader}\n\n${scenes.join("\n\n")}`;
@@ -140,7 +158,7 @@ const formatProseText = (prose: ScenesMap) =>
     .join(`\n\n${pageBreakText}\n\n`);
 
 const formatProseMarkdown = (prose: ScenesMap) =>
-  Object.entries(prose)
+  sortScenesEntries(prose)
     .map(([chapter, scenes], index) => {
       const chapterHeader = `## Chapter ${index + 1}: ${chapter}`;
       return `${chapterHeader}\n\n${scenes.join("\n\n")}`;
@@ -148,7 +166,7 @@ const formatProseMarkdown = (prose: ScenesMap) =>
     .join(pageBreakMarkdown);
 
 const formatProseHtml = (prose: ScenesMap) =>
-  `<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\" />\n<title>Novel Export</title>\n</head>\n<body>\n${Object.entries(prose)
+  `<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\" />\n<title>Novel Export</title>\n</head>\n<body>\n${sortScenesEntries(prose)
     .map(([chapter, scenes], index) => {
       const header = `<h2>Chapter ${index + 1}: ${chapter}</h2>`;
       const body = scenes
@@ -161,7 +179,7 @@ const formatProseHtml = (prose: ScenesMap) =>
 
 const buildDocxDocument = (prose: ScenesMap) => {
   const children: Paragraph[] = [];
-  Object.entries(prose).forEach(([chapter, scenes], index) => {
+  sortScenesEntries(prose).forEach(([chapter, scenes], index) => {
     children.push(
       new Paragraph({
         text: `Chapter ${index + 1}: ${chapter}`,
@@ -519,7 +537,7 @@ function StudioContent() {
   };
 
   const formatChapterBeatsText = (beats: ChapterBeats) =>
-    Object.entries(beats)
+    sortBeatsEntries(beats)
       .map(([chapterKey, chapterBeats], index) =>
         `${getChapterDisplayTitle(chapterKey, index)}\n\n${formatReadable(chapterBeats)}`
       )
@@ -1710,8 +1728,8 @@ function StudioContent() {
 
       await supabase.from("scenes").delete().eq("novel_id", novelIdValue);
       const rows: Array<Record<string, unknown>> = [];
-      Object.entries(normalizedScenes).forEach(([chapterTitle, scenes], chapterIndex) => {
-        (scenes as string[]).forEach((scene, index) => {
+      sortScenesEntries(normalizedScenes).forEach(([chapterTitle, scenes], chapterIndex) => {
+        scenes.forEach((scene, index) => {
           rows.push({
             novel_id: novelIdValue,
             user_id: user.id,
@@ -1745,7 +1763,7 @@ function StudioContent() {
       const novelIdValue = await ensureNovel(user.id);
       const prose: ScenesMap = {};
 
-      const entries = Object.entries(allScenes);
+      const entries = sortScenesEntries(allScenes);
       for (let index = 0; index < entries.length; index += 1) {
         const [chapterTitle, scenes] = entries[index];
         const chapterProse: string[] = [];
@@ -1801,8 +1819,8 @@ function StudioContent() {
 
       await supabase.from("prose_scenes").delete().eq("novel_id", novelIdValue);
       const proseRows: Array<Record<string, unknown>> = [];
-      Object.entries(prose).forEach(([chapterTitle, scenes], chapterIndex) => {
-        (scenes as string[]).forEach((scene, sceneOrder) => {
+      sortScenesEntries(prose).forEach(([chapterTitle, scenes], chapterIndex) => {
+        scenes.forEach((scene, sceneOrder) => {
           proseRows.push({
             novel_id: novelIdValue,
             user_id: user.id,
@@ -3231,7 +3249,7 @@ function StudioContent() {
               </button>
               <Collapsible label="Chapter beats">
                 <div className="space-y-4 text-xs text-zinc-200">
-                  {Object.entries(chapterBeats).map(([chapterKey, beats], index) => (
+                  {sortBeatsEntries(chapterBeats).map(([chapterKey, beats], index) => (
                     <div
                       key={chapterKey}
                       className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4"
@@ -3282,7 +3300,7 @@ function StudioContent() {
                 Download TXT
               </button>
               <Collapsible label="Scenes">
-                {Object.entries(allScenes).map(([chapter, scenes]) => (
+                {sortScenesEntries(allScenes).map(([chapter, scenes]) => (
                   <div
                     key={chapter}
                     className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
@@ -3362,7 +3380,7 @@ function StudioContent() {
                 </button>
               </div>
               <Collapsible label="Generated prose">
-                {Object.entries(proseScenes).map(([chapter, scenes]) => (
+                {sortScenesEntries(proseScenes).map(([chapter, scenes]) => (
                   <div
                     key={chapter}
                     className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
