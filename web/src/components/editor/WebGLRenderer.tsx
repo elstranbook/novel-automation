@@ -326,7 +326,7 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
         corners: perspective.corners,
         hasWarpData: !!smartObjectLayer.warpData,
         hasPerspectiveTransform: !!smartObjectLayer.perspectiveTransform,
-        hasWarpPreset: !!smartObjectLayer.warpPreset,
+        hasWarpPreset: !!template.warpPreset,
         hasBounds: !!smartObjectLayer.bounds,
       } : 'null (no perspective data)');
       
