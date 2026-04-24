@@ -56,42 +56,59 @@ interface TemplateSeedDef {
 
 const PERSPECTIVE_DATA: Record<string, PerspectiveCorners> = {
   flatFront: {
-    topLeft: { x: 100, y: 100 },
-    topRight: { x: 1550, y: 100 },
-    bottomRight: { x: 1550, y: 2450 },
-    bottomLeft: { x: 100, y: 2450 },
+    topLeft: { x: 75, y: 75 },
+    topRight: { x: 1575, y: 75 },
+    bottomRight: { x: 1575, y: 2475 },
+    bottomLeft: { x: 75, y: 2475 },
   },
   angledWithSpine: {
-    topLeft: { x: 350, y: 50 },
-    topRight: { x: 1700, y: 50 },
-    bottomRight: { x: 1700, y: 2500 },
-    bottomLeft: { x: 350, y: 2500 },
+    topLeft: { x: 280, y: 80 },
+    topRight: { x: 1750, y: 120 },
+    bottomRight: { x: 1720, y: 2440 },
+    bottomLeft: { x: 280, y: 2480 },
   },
   handHeld: {
-    topLeft: { x: 120, y: 50 },
-    topRight: { x: 1580, y: 80 },
-    bottomRight: { x: 1560, y: 2480 },
-    bottomLeft: { x: 140, y: 2450 },
+    topLeft: { x: 120, y: 60 },
+    topRight: { x: 1530, y: 100 },
+    bottomRight: { x: 1510, y: 2470 },
+    bottomLeft: { x: 140, y: 2440 },
   },
   stackedOnTable: {
-    topLeft: { x: 100, y: 100 },
-    topRight: { x: 1550, y: 100 },
-    bottomRight: { x: 1550, y: 2450 },
-    bottomLeft: { x: 100, y: 2450 },
+    topLeft: { x: 80, y: 80 },
+    topRight: { x: 1530, y: 100 },
+    bottomRight: { x: 1550, y: 2460 },
+    bottomLeft: { x: 100, y: 2470 },
   },
   openSpread: {
     topLeft: { x: 50, y: 100 },
-    topRight: { x: 1450, y: 100 },
-    bottomRight: { x: 1450, y: 2450 },
+    topRight: { x: 1440, y: 80 },
+    bottomRight: { x: 1440, y: 2470 },
     bottomLeft: { x: 50, y: 2450 },
   },
   bookshelf: {
-    topLeft: { x: 10, y: 50 },
-    topRight: { x: 390, y: 50 },
-    bottomRight: { x: 390, y: 2500 },
-    bottomLeft: { x: 10, y: 2500 },
+    topLeft: { x: 15, y: 50 },
+    topRight: { x: 385, y: 50 },
+    bottomRight: { x: 385, y: 2500 },
+    bottomLeft: { x: 15, y: 2500 },
   },
 };
+
+// ---------------------------------------------------------------------------
+// Compute bounding box from perspective corners
+// ---------------------------------------------------------------------------
+
+function computeBoundsFromCorners(corners: PerspectiveCorners): { x: number; y: number; width: number; height: number } {
+  const xs = [corners.topLeft.x, corners.topRight.x, corners.bottomRight.x, corners.bottomLeft.x];
+  const ys = [corners.topLeft.y, corners.topRight.y, corners.bottomRight.y, corners.bottomLeft.y];
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  return {
+    x: minX,
+    y: minY,
+    width: Math.max(...xs) - minX,
+    height: Math.max(...ys) - minY,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Generate warp mesh control-points from perspective corners
@@ -291,6 +308,9 @@ async function seedTemplates() {
     });
 
     if (existing) {
+      // Compute bounds from perspective corners
+      const bounds = computeBoundsFromCorners(tmpl.perspectiveData);
+
       // Update existing template's smart_object layers with warp/perspective data
       const smartLayers = existing.layers.filter(l => l.type === 'smart_object');
 
@@ -302,6 +322,10 @@ async function seedTemplates() {
               data: {
                 warpData: warpDataJson,
                 perspectiveData: perspectiveDataJson,
+                boundsX: bounds.x,
+                boundsY: bounds.y,
+                boundsWidth: bounds.width,
+                boundsHeight: bounds.height,
               },
             });
             console.log(`  ✏️  Updated warp/perspective data for "${tmpl.name}" layer "${layer.name}"`);
@@ -324,6 +348,10 @@ async function seedTemplates() {
             warpData: warpDataJson,
             perspectiveData: perspectiveDataJson,
             layerPart: 'front',
+            boundsX: bounds.x,
+            boundsY: bounds.y,
+            boundsWidth: bounds.width,
+            boundsHeight: bounds.height,
           },
         });
         console.log(`  ✏️  Created smart_object layer for "${tmpl.name}"`);
@@ -337,6 +365,7 @@ async function seedTemplates() {
     const layersData: any[] = [];
 
     // 1. Smart Object layer — where the cover design is placed
+    const bounds = computeBoundsFromCorners(tmpl.perspectiveData);
     layersData.push({
       name: 'Cover Design',
       type: 'smart_object',
@@ -346,6 +375,10 @@ async function seedTemplates() {
       warpData: warpDataJson,
       perspectiveData: perspectiveDataJson,
       layerPart: 'front',
+      boundsX: bounds.x,
+      boundsY: bounds.y,
+      boundsWidth: bounds.width,
+      boundsHeight: bounds.height,
     });
 
     // 2. Shadow & Creases layer

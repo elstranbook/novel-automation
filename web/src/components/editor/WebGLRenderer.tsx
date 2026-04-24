@@ -336,9 +336,21 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
 
         const pos = geometry.attributes.position;
         for (let i = 0; i < 16; i++) {
-          pos.setXY(i, pts[i].x * scaleX, height - pts[i].y * scaleY);
+          pos.setXY(i, pts[i].x * scaleX, pts[i].y * scaleY);
         }
         pos.needsUpdate = true;
+
+        // Fix UV mapping: PlaneGeometry(1,1,3,3) assigns UV v=1 to first row (iy=0)
+        // and v=0 to last row (iy=3), but our interpolation maps j=0 to top edge
+        // (v=0 in design) and j=3 to bottom edge (v=1 in design). Correct this.
+        const uv = geometry.attributes.uv;
+        for (let j = 0; j <= 3; j++) {
+          for (let i = 0; i <= 3; i++) {
+            const idx = j * 4 + i;
+            uv.setXY(idx, i / 3, j / 3); // v=0 at top row, v=1 at bottom row
+          }
+        }
+        uv.needsUpdate = true;
 
         // Look for realism maps
         const shadowLayer = template.layers.find(l => l.compositeUrl && l.blendMode.toLowerCase().includes('multiply'));
@@ -416,7 +428,7 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
         
         // Apply design.x/y positioning (normalized 0-1 relative to bounds)
         const centerX = (bounds.x + bounds.width * design.x) * scaleX;
-        const centerY = height - (bounds.y + bounds.height * design.y) * scaleY;
+        const centerY = (bounds.y + bounds.height * design.y) * scaleY;
         mesh.position.set(centerX, centerY, 0.5);
         
         // Apply design.rotation
@@ -503,7 +515,7 @@ export const WebGLRenderer = forwardRef<WebGLRendererHandle, WebGLRendererProps>
         const pagesMesh = new THREE.Mesh(pagesGeometry, pagesMaterial);
         pagesMesh.position.set(
           (pagesBounds.x + pagesBounds.width / 2) * scaleX,
-          height - (pagesBounds.y + pagesBounds.height / 2) * scaleY,
+          (pagesBounds.y + pagesBounds.height / 2) * scaleY,
           0.3
         );
         meshesRef.current.add(pagesMesh);

@@ -87,6 +87,201 @@ function getSmartObjectBounds(
 }
 
 /**
+ * Inverse bilinear interpolation: given a point (px, py) and a quad defined by 4 corners
+ * [topLeft, topRight, bottomRight, bottomLeft], find the (u, v) parameters such that
+ * bilinear(u, v) ≈ (px, py).
+ *
+ * Uses Newton's method with the Jacobian of the bilinear mapping.
+ */
+function inverseBilinear(
+  px: number, py: number,
+  tl: { x: number; y: number }, tr: { x: number; y: number },
+  br: { x: number; y: number }, bl: { x: number; y: number }
+): { u: number; v: number } | null {
+  // Initial guess at center of quad
+  let u = 0.5;
+  let v = 0.5;
+
+  for (let iter = 0; iter < 10; iter++) {
+    // Forward bilinear: compute expected position at current (u, v)
+    const x = (1 - u) * (1 - v) * tl.x + u * (1 - v) * tr.x + u * v * br.x + (1 - u) * v * bl.x;
+    const y = (1 - u) * (1 - v) * tl.y + u * (1 - v) * tr.y + u * v * br.y + (1 - u) * v * bl.y;
+
+    const dx = px - x;
+    const dy = py - y;
+
+    // Convergence check
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) break;
+
+    // Jacobian partial derivatives
+    const dxdu = -(1 - v) * tl.x + (1 - v) * tr.x + v * br.x - v * bl.x;
+    const dxdv = -(1 - u) * tl.x - u * tr.x + u * br.x + (1 - u) * bl.x;
+    const dydu = -(1 - v) * tl.y + (1 - v) * tr.y + v * br.y - v * bl.y;
+    const dydv = -(1 - u) * tl.y - u * tr.y + u * br.y + (1 - u) * bl.y;
+
+    const det = dxdu * dydv - dxdv * dydu;
+    if (Math.abs(det) < 1e-10) return null;
+
+    u += (dydv * dx - dxdv * dy) / det;
+    v += (-dydu * dx + dxdu * dy) / det;
+
+    // Clamp to slightly outside [0,1] to allow edge pixels
+    u = Math.max(-0.02, Math.min(1.02, u));
+    v = Math.max(-0.02, Math.min(1.02, v));
+  }
+
+  // Reject if clearly outside the quad
+  if (u < -0.005 || u > 1.005 || v < -0.005 || v > 1.005) return null;
+  return { u: Math.max(0, Math.min(1, u)), v: Math.max(0, Math.min(1, v)) };
+}
+
+/**
+ * Apply perspective warp to a design image using inverse bilinear interpolation.
+ * Creates a transparent canvas the same size as the base image, with the design
+ * warped to fit the perspective quad defined by the corners.
+ *
+ * The design is first placed on a flat canvas matching the smart object bounds
+ * (respecting designX/designY/designScale), then each pixel in the perspective
+ * quad's bounding box is mapped back to the flat canvas via inverse bilinear.
+ */
+async function applyPerspectiveWarp(
+  designBuffer: Buffer,
+  corners: Array<{ x: number; y: number }>,
+  baseWidth: number,
+  baseHeight: number,
+  templateWidth: number,
+  templateHeight: number,
+  bounds: { x: number; y: number; width: number; height: number },
+  designX: number,
+  designY: number,
+  designScale: number
+): Promise<Buffer> {
+  const designImage = sharp(designBuffer);
+  const designMeta = await designImage.metadata();
+  const designW = designMeta.width!;
+  const designH = designMeta.height!;
+
+  // Scale corners from template coordinates to base image coordinates
+  const scaleX = baseWidth / templateWidth;
+  const scaleY = baseHeight / templateHeight;
+  const scaledCorners = corners.map(c => ({
+    x: Math.round(c.x * scaleX),
+    y: Math.round(c.y * scaleY),
+  }));
+
+  const [tl, tr, br, bl] = scaledCorners;
+
+  // Calculate bounding box of the perspective quad on the base image
+  const xs = scaledCorners.map(c => c.x);
+  const ys = scaledCorners.map(c => c.y);
+  const minX = Math.max(0, Math.min(...xs));
+  const minY = Math.max(0, Math.min(...ys));
+  const maxX = Math.min(baseWidth, Math.max(...xs));
+  const maxY = Math.min(baseHeight, Math.max(...ys));
+
+  // --- Step 1: Create flat design canvas (bounds-sized) ---
+  // This handles designX/designY/designScale positioning just like the flat renderer
+  const scaledBounds = {
+    x: bounds.x * scaleX,
+    y: bounds.y * scaleY,
+    width: bounds.width * scaleX,
+    height: bounds.height * scaleY,
+  };
+
+  const imgAspect = designW / designH;
+  const boundsAspect = scaledBounds.width / scaledBounds.height;
+  let drawW: number, drawH: number;
+  if (imgAspect > boundsAspect) {
+    drawH = scaledBounds.height * designScale;
+    drawW = drawH * imgAspect;
+  } else {
+    drawW = scaledBounds.width * designScale;
+    drawH = drawW / imgAspect;
+  }
+
+  // Resize the design to the calculated draw dimensions
+  const resizedDesignBuf = await sharp(designBuffer)
+    .resize(Math.round(drawW), Math.round(drawH), { fit: 'cover' })
+    .ensureAlpha()
+    .raw()
+    .toBuffer();
+
+  const resizedW = Math.round(drawW);
+  const resizedH = Math.round(drawH);
+
+  // Position of the design within the flat bounds canvas
+  const flatOffsetX = Math.round(scaledBounds.width * designX - drawW / 2);
+  const flatOffsetY = Math.round(scaledBounds.height * designY - drawH / 2);
+
+  // --- Step 2: Create the output canvas (base-image-sized, transparent) ---
+  const outputChannels = 4;
+  const output = Buffer.alloc(baseWidth * baseHeight * outputChannels, 0);
+
+  // --- Step 3: For each pixel in the bounding box, use inverse bilinear ---
+  // to find the corresponding (u, v) in [0,1] within the quad, then map to
+  // the flat design canvas coordinates.
+  for (let py = minY; py < maxY; py++) {
+    for (let px = minX; px < maxX; px++) {
+      const uv = inverseBilinear(px, py, tl, tr, br, bl);
+      if (!uv) continue;
+
+      const { u, v } = uv;
+
+      // (u, v) maps to position within the smart object bounds
+      // Convert to flat design canvas coordinates
+      const flatX = u * scaledBounds.width - flatOffsetX;
+      const flatY = v * scaledBounds.height - flatOffsetY;
+
+      // Bilinear sampling from the resized design image
+      const srcXf = flatX;
+      const srcYf = flatY;
+      const srcX0 = Math.floor(srcXf);
+      const srcY0 = Math.floor(srcYf);
+      const srcX1 = srcX0 + 1;
+      const srcY1 = srcY0 + 1;
+
+      // Skip if completely outside the design
+      if (srcX1 < 0 || srcY1 < 0 || srcX0 >= resizedW || srcY0 >= resizedH) continue;
+
+      // Fractional parts for bilinear interpolation
+      const fx = srcXf - srcX0;
+      const fy = srcYf - srcY0;
+
+      // Helper to safely sample a pixel from the resized design
+      const samplePixel = (sx: number, sy: number): [number, number, number, number] => {
+        if (sx < 0 || sx >= resizedW || sy < 0 || sy >= resizedH) return [0, 0, 0, 0];
+        const idx = (sy * resizedW + sx) * outputChannels;
+        return [resizedDesignBuf[idx], resizedDesignBuf[idx + 1], resizedDesignBuf[idx + 2], resizedDesignBuf[idx + 3]];
+      };
+
+      const c00 = samplePixel(srcX0, srcY0);
+      const c10 = samplePixel(srcX1, srcY0);
+      const c01 = samplePixel(srcX0, srcY1);
+      const c11 = samplePixel(srcX1, srcY1);
+
+      // Bilinear interpolation
+      const r = c00[0] * (1 - fx) * (1 - fy) + c10[0] * fx * (1 - fy) + c01[0] * (1 - fx) * fy + c11[0] * fx * fy;
+      const g = c00[1] * (1 - fx) * (1 - fy) + c10[1] * fx * (1 - fy) + c01[1] * (1 - fx) * fy + c11[1] * fx * fy;
+      const b = c00[2] * (1 - fx) * (1 - fy) + c10[2] * fx * (1 - fy) + c01[2] * (1 - fx) * fy + c11[2] * fx * fy;
+      const a = c00[3] * (1 - fx) * (1 - fy) + c10[3] * fx * (1 - fy) + c01[3] * (1 - fx) * fy + c11[3] * fx * fy;
+
+      // Only write if there's meaningful alpha
+      if (a < 1) continue;
+
+      const dstIdx = (py * baseWidth + px) * outputChannels;
+      output[dstIdx] = Math.round(r);
+      output[dstIdx + 1] = Math.round(g);
+      output[dstIdx + 2] = Math.round(b);
+      output[dstIdx + 3] = Math.round(a);
+    }
+  }
+
+  return sharp(output, {
+    raw: { width: baseWidth, height: baseHeight, channels: outputChannels as 4 },
+  }).png().toBuffer();
+}
+
+/**
  * Select the best smart object layer for rendering the user's cover,
  * matching the client-side logic in smart-object-helpers.ts
  */
@@ -299,37 +494,55 @@ export async function generateMockup(options: RenderOptions): Promise<Buffer> {
           drawH = drawW / imgAspect;
         }
 
-        // Resize design to the calculated dimensions
-        const resizedDesign = await sharp(designBuffer)
-          .resize(Math.round(drawW), Math.round(drawH), { fit: 'cover' })
-          .png()
-          .toBuffer();
+        // Check if this smart object layer has perspective data for warping
+        const perspectiveCorners = smartObjectLayer.perspectiveData?.corners;
+        const hasPerspective = Array.isArray(perspectiveCorners) && perspectiveCorners.length === 4;
 
-        // Calculate position (centered based on normalized coords relative to bounds)
-        const posX = Math.round(scaledBounds.x + scaledBounds.width * designX - drawW / 2);
-        const posY = Math.round(scaledBounds.y + scaledBounds.height * designY - drawH / 2);
+        let designCanvas: Buffer;
 
-        // Create a canvas the same size as the base image
-        // Draw the design on it, then composite with the base
-        // This allows us to clip to the smart object bounds
-        const designCanvas = await sharp({
-          create: {
-            width: baseW,
-            height: baseH,
-            channels: 4,
-            background: { r: 0, g: 0, b: 0, alpha: 0 },
-          },
-        })
-          .composite([
-            {
-              input: resizedDesign,
-              left: Math.max(0, posX),
-              top: Math.max(0, posY),
-              blend: 'over',
+        if (hasPerspective) {
+          // Perspective-aware rendering: warp the design to match the template's perspective
+          designCanvas = await applyPerspectiveWarp(
+            designBuffer,
+            perspectiveCorners,
+            baseW,
+            baseH,
+            templateWidth,
+            templateHeight,
+            bounds,
+            designX,
+            designY,
+            designScale
+          );
+        } else {
+          // Flat rendering (original behavior): place design at the smart object bounds position
+          const resizedDesign = await sharp(designBuffer)
+            .resize(Math.round(drawW), Math.round(drawH), { fit: 'cover' })
+            .png()
+            .toBuffer();
+
+          const posX = Math.round(scaledBounds.x + scaledBounds.width * designX - drawW / 2);
+          const posY = Math.round(scaledBounds.y + scaledBounds.height * designY - drawH / 2);
+
+          designCanvas = await sharp({
+            create: {
+              width: baseW,
+              height: baseH,
+              channels: 4,
+              background: { r: 0, g: 0, b: 0, alpha: 0 },
             },
-          ])
-          .png()
-          .toBuffer();
+          })
+            .composite([
+              {
+                input: resizedDesign,
+                left: Math.max(0, posX),
+                top: Math.max(0, posY),
+                blend: 'over',
+              },
+            ])
+            .png()
+            .toBuffer();
+        }
 
         // Composite: base image → user design → realism layers
         let result = baseBuffer;
