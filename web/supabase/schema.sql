@@ -85,6 +85,7 @@ create table if not exists public.scenes (
   chapter_title text not null,
   scene_content text not null,
   scene_order integer not null,
+  chapter_order integer not null default 0,
   scene_raw jsonb,
   created_at timestamptz default now()
 );

@@ -66,34 +66,54 @@ export async function POST(request: Request) {
       if (!scenesSource || Object.keys(scenesSource).length === 0) {
         const { data: proseRows } = await supabaseAdmin
           .from("prose_scenes")
-          .select("chapter_title,scene_content,scene_order")
+          .select("chapter_title,scene_content,scene_order,chapter_order")
           .eq("novel_id", novelId)
+          .order("chapter_order", { ascending: true })
           .order("scene_order", { ascending: true });
 
         if (proseRows && proseRows.length > 0) {
-          scenesSource = proseRows.reduce<Record<string, string[]>>((acc, row) => {
+          const ordered: Record<string, string[]> = {};
+          const chapterOrderSeen: string[] = [];
+          const grouped: Record<string, string[]> = {};
+          proseRows.forEach((row) => {
             const chapterTitle = row.chapter_title as string;
-            if (!acc[chapterTitle]) acc[chapterTitle] = [];
-            acc[chapterTitle].push(row.scene_content as string);
-            return acc;
-          }, {});
+            if (!grouped[chapterTitle]) {
+              grouped[chapterTitle] = [];
+              chapterOrderSeen.push(chapterTitle);
+            }
+            grouped[chapterTitle].push(row.scene_content as string);
+          });
+          chapterOrderSeen.forEach((title) => {
+            ordered[title] = grouped[title];
+          });
+          scenesSource = ordered;
         }
       }
 
       if (!scenesSource || Object.keys(scenesSource).length === 0) {
         const { data: sceneRows } = await supabaseAdmin
           .from("scenes")
-          .select("chapter_title,scene_content,scene_order")
+          .select("chapter_title,scene_content,scene_order,chapter_order")
           .eq("novel_id", novelId)
+          .order("chapter_order", { ascending: true })
           .order("scene_order", { ascending: true });
 
         if (sceneRows && sceneRows.length > 0) {
-          scenesSource = sceneRows.reduce<Record<string, string[]>>((acc, row) => {
+          const ordered: Record<string, string[]> = {};
+          const chapterOrderSeen: string[] = [];
+          const grouped: Record<string, string[]> = {};
+          sceneRows.forEach((row) => {
             const chapterTitle = row.chapter_title as string;
-            if (!acc[chapterTitle]) acc[chapterTitle] = [];
-            acc[chapterTitle].push(row.scene_content as string);
-            return acc;
-          }, {});
+            if (!grouped[chapterTitle]) {
+              grouped[chapterTitle] = [];
+              chapterOrderSeen.push(chapterTitle);
+            }
+            grouped[chapterTitle].push(row.scene_content as string);
+          });
+          chapterOrderSeen.forEach((title) => {
+            ordered[title] = grouped[title];
+          });
+          scenesSource = ordered;
         }
       }
     }

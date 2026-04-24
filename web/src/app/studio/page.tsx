@@ -1018,15 +1018,18 @@ function StudioContent() {
 
     const { data: scenesRows } = await supabase
       .from("scenes")
-      .select("chapter_title,scene_content,scene_order")
+      .select("chapter_title,scene_content,scene_order,chapter_order")
       .eq("novel_id", novelIdValue)
+      .order("chapter_order", { ascending: true })
       .order("scene_order", { ascending: true });
 
     if (scenesRows) {
       const grouped: ScenesMap = {};
+      const chapterOrderSeen: string[] = [];
       scenesRows.forEach((row) => {
         if (!grouped[row.chapter_title]) {
           grouped[row.chapter_title] = [];
+          chapterOrderSeen.push(row.chapter_title);
         }
         let content: string;
         const rawContent = row.scene_content as unknown;
@@ -1040,24 +1043,37 @@ function StudioContent() {
         }
         grouped[row.chapter_title].push(content);
       });
-      setAllScenes(grouped);
+      // Rebuild in correct chapter order (JS object key insertion order matters)
+      const ordered: ScenesMap = {};
+      chapterOrderSeen.forEach((title) => {
+        ordered[title] = grouped[title];
+      });
+      setAllScenes(ordered);
     }
 
     const { data: proseRows } = await supabase
       .from("prose_scenes")
-      .select("chapter_title,scene_content,scene_order")
+      .select("chapter_title,scene_content,scene_order,chapter_order")
       .eq("novel_id", novelIdValue)
+      .order("chapter_order", { ascending: true })
       .order("scene_order", { ascending: true });
 
     if (proseRows) {
       const groupedProse: ScenesMap = {};
+      const chapterOrderSeen: string[] = [];
       proseRows.forEach((row) => {
         if (!groupedProse[row.chapter_title]) {
           groupedProse[row.chapter_title] = [];
+          chapterOrderSeen.push(row.chapter_title);
         }
         groupedProse[row.chapter_title].push(row.scene_content as string);
       });
-      setProseScenes(groupedProse);
+      // Rebuild in correct chapter order (JS object key insertion order matters)
+      const orderedProse: ScenesMap = {};
+      chapterOrderSeen.forEach((title) => {
+        orderedProse[title] = groupedProse[title];
+      });
+      setProseScenes(orderedProse);
     }
 
     const { data: keywords } = await supabase
@@ -1694,7 +1710,7 @@ function StudioContent() {
 
       await supabase.from("scenes").delete().eq("novel_id", novelIdValue);
       const rows: Array<Record<string, unknown>> = [];
-      Object.entries(normalizedScenes).forEach(([chapterTitle, scenes]) => {
+      Object.entries(normalizedScenes).forEach(([chapterTitle, scenes], chapterIndex) => {
         (scenes as string[]).forEach((scene, index) => {
           rows.push({
             novel_id: novelIdValue,
@@ -1702,6 +1718,7 @@ function StudioContent() {
             chapter_title: chapterTitle,
             scene_content: scene,
             scene_order: index,
+            chapter_order: chapterIndex,
           });
         });
       });
@@ -1783,20 +1800,21 @@ function StudioContent() {
       setProseScenes(prose);
 
       await supabase.from("prose_scenes").delete().eq("novel_id", novelIdValue);
-      const rows: Array<Record<string, unknown>> = [];
-      Object.entries(prose).forEach(([chapterTitle, scenes]) => {
+      const proseRows: Array<Record<string, unknown>> = [];
+      Object.entries(prose).forEach(([chapterTitle, scenes], chapterIndex) => {
         (scenes as string[]).forEach((scene, sceneOrder) => {
-          rows.push({
+          proseRows.push({
             novel_id: novelIdValue,
             user_id: user.id,
             chapter_title: chapterTitle,
             scene_content: scene,
             scene_order: sceneOrder,
+            chapter_order: chapterIndex,
           });
         });
       });
-      if (rows.length) {
-        await supabase.from("prose_scenes").insert(rows);
+      if (proseRows.length) {
+        await supabase.from("prose_scenes").insert(proseRows);
       }
 
       const formats = await generateExportFormats();
@@ -1876,40 +1894,54 @@ function StudioContent() {
       if (!scenesSource || Object.keys(scenesSource).length === 0) {
         const { data: proseRows } = await supabase
           .from("prose_scenes")
-          .select("chapter_title,scene_content,scene_order")
+          .select("chapter_title,scene_content,scene_order,chapter_order")
           .eq("novel_id", novelIdValue)
+          .order("chapter_order", { ascending: true })
           .order("scene_order", { ascending: true });
 
         if (proseRows && proseRows.length > 0) {
           const groupedProse: ScenesMap = {};
+          const chapterOrderSeen: string[] = [];
           proseRows.forEach((row) => {
             if (!groupedProse[row.chapter_title]) {
               groupedProse[row.chapter_title] = [];
+              chapterOrderSeen.push(row.chapter_title);
             }
             groupedProse[row.chapter_title].push(row.scene_content as string);
           });
-          setProseScenes(groupedProse);
-          scenesSource = groupedProse;
+          const orderedProse: ScenesMap = {};
+          chapterOrderSeen.forEach((title) => {
+            orderedProse[title] = groupedProse[title];
+          });
+          setProseScenes(orderedProse);
+          scenesSource = orderedProse;
         }
       }
 
       if (!scenesSource || Object.keys(scenesSource).length === 0) {
         const { data: sceneRows } = await supabase
           .from("scenes")
-          .select("chapter_title,scene_content,scene_order")
+          .select("chapter_title,scene_content,scene_order,chapter_order")
           .eq("novel_id", novelIdValue)
+          .order("chapter_order", { ascending: true })
           .order("scene_order", { ascending: true });
 
         if (sceneRows && sceneRows.length > 0) {
           const groupedScenes: ScenesMap = {};
+          const chapterOrderSeen: string[] = [];
           sceneRows.forEach((row) => {
             if (!groupedScenes[row.chapter_title]) {
               groupedScenes[row.chapter_title] = [];
+              chapterOrderSeen.push(row.chapter_title);
             }
             groupedScenes[row.chapter_title].push(row.scene_content as string);
           });
-          setAllScenes(groupedScenes);
-          scenesSource = groupedScenes;
+          const orderedScenes: ScenesMap = {};
+          chapterOrderSeen.forEach((title) => {
+            orderedScenes[title] = groupedScenes[title];
+          });
+          setAllScenes(orderedScenes);
+          scenesSource = orderedScenes;
         }
       }
 

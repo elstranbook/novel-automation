@@ -105,9 +105,10 @@ export const replaceSceneRows = async ({
     chapter_title: string;
     scene_content: string;
     scene_order: number;
+    chapter_order: number;
   }[] = [];
 
-  Object.entries(scenes).forEach(([chapterTitle, chapterScenes]) => {
+  Object.entries(scenes).forEach(([chapterTitle, chapterScenes], chapterIndex) => {
     chapterScenes.forEach((scene, index) => {
       rows.push({
         novel_id: novelId,
@@ -115,6 +116,7 @@ export const replaceSceneRows = async ({
         chapter_title: chapterTitle,
         scene_content: scene,
         scene_order: index,
+        chapter_order: chapterIndex,
       });
     });
   });
