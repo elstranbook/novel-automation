@@ -1,0 +1,182 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+model Template {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  category    String   // "tshirt", "mug", "phone", "poster", "novel", "book", etc.
+  thumbnail   String   // URL to preview image
+  baseImage   String   // URL to base photo
+  width       Int      // Original width
+  height      Int      // Original height
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Book-specific fields
+  coverWidth  Float?   // Width in inches (e.g., 5.5 for novels)
+  coverHeight Float?   // Height in inches (e.g., 8.5 for novels)
+  spineWidth  Float?   // Spine width in inches
+  warpPreset  String?  // Warp preset name for book covers
+  
+  layers      TemplateLayer[]
+  colorOptions ColorOption[]
+  renders     Render[]
+}
+
+model TemplateLayer {
+  id           String   @id @default(cuid())
+  templateId   String
+  template     Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  
+  name         String   // "design", "front_color", "back_color", "shadow", "texture", "spine_design"
+  type         String   // "smart_object", "color_layer", "shadow", "texture", "overlay", "spine", "pages"
+  zIndex       Int      // Layer order
+  
+  // Transform data for smart objects
+  transformX   Float?
+  transformY   Float?
+  transformScaleX Float?
+  transformScaleY Float?
+  transformRotation Float?
+  
+  // Bounds from PSD (pixel coordinates)
+  boundsX      Float?
+  boundsY      Float?
+  boundsWidth  Float?
+  boundsHeight Float?
+  
+  // Warp mesh data (JSON)
+  warpData     Json?  // {gridSize: [8,8], controlPoints: [...]}
+  
+  // Perspective transform data (JSON)
+  perspectiveData Json? // {corners: [{x,y}, {x,y}, {x,y}, {x,y}]}
+  
+  // Clipping mask path (SVG path)
+  maskPath     String?
+  
+  // Blend mode
+  blendMode    String   @default("normal") // "multiply", "screen", "overlay", "color", etc.
+  opacity      Float    @default(1.0)
+  
+  // For color layers
+  defaultColor String?  // Hex color
+  isColorable  Boolean  @default(false)
+  
+  // Book-specific layer info
+  layerPart    String?  // "front", "spine", "back", "pages"
+  
+  compositeUrl String?  // URL to extracted layer image (shadows/highlights)
+  
+  createdAt    DateTime @default(now())
+}
+
+model ColorOption {
+  id          String   @id @default(cuid())
+  templateId  String
+  template    Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  
+  name        String   // "Front", "Back", "Sleeves", "Cover"
+  layerName   String   // Which layer to modify
+  colors      Json   // array: [{name: "White", hex: "#FFFFFF"}, ...]
+  
+  createdAt   DateTime @default(now())
+}
+
+model Render {
+  id          String   @id @default(cuid())
+  templateId  String
+  template    Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  
+  userImage   String   // URL to uploaded design
+  designX     Float
+  designY     Float
+  designScale Float
+  designRotation Float
+  
+  colorSelections Json // {"front": "#FF0000", "back": "#00FF00"}
+  
+  status      String   @default("pending") // "pending", "processing", "completed", "failed"
+  resultUrl   String?  // URL to rendered image
+  
+  // Progress tracking
+  progress    Int      @default(0) // 0-100
+  
+  createdAt   DateTime @default(now())
+  completedAt DateTime?
+}
+
+model UserImage {
+  id          String   @id @default(cuid())
+  filename    String
+  originalUrl String
+  processedUrl String? // After background removal
+  width       Int?
+  height      Int?
+  createdAt   DateTime @default(now())
+}
+
+model PSDTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  originalFile String  // Path to original PSD
+  parsedData  Json   // JSON of parsed structure
+  width       Int
+  height      Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model BookTemplate {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  description     String?
+  
+  // Book dimensions
+  coverWidth      Float    @default(5.5)   // inches
+  coverHeight     Float    @default(8.5)   // inches
+  spineWidth      Float    @default(0.5)   // inches
+  
+  // Template images
+  thumbnail       String
+  previewImage    String
+  baseImage       String
+  
+  // Warp preset
+  warpPreset      String   // "flatFront", "angledWithSpine", etc.
+  
+  // Book type
+  bookType        String   @default("paperback") // "hardcover", "paperback", "dust_jacket"
+  
+  // Additional settings
+  showPages       Boolean  @default(true)
+  pageColor       String   @default("#FFFAF0") // Cream/off-white
+  showShadow      Boolean  @default(true)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model CoverDesign {
+  id          String   @id @default(cuid())
+  novelId     String
+  url         String
+  model       String?  // "gpt-image-1", "gpt-image-1-mini"
+  prompt      String?
+  isActive    Boolean  @default(false) // Currently selected cover
+  createdAt   DateTime @default(now())
+}

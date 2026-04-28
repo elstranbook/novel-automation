@@ -1,0 +1,1406 @@
+import streamlit as st
+import os
+import json
+import time
+import html
+from pathlib import Path
+from novel_generator import NovelAutomationTool
+from utils import create_output_directory
+from db_service import NovelDatabaseService
+
+# Set page configuration
+st.set_page_config(
+    page_title="YA Novel Generator",
+    page_icon="📚",
+    layout="wide"
+)
+
+# Create output directory if it doesn't exist
+output_dir = "output"
+create_output_directory(output_dir)
+
+# Check for OpenAI API key
+if "OPENAI_API_KEY" not in os.environ:
+    st.warning("⚠️ OpenAI API key not found in environment variables. Please enter your API key below.")
+    api_key = st.text_input("OpenAI API Key", type="password", help="Your API key starts with 'sk-'")
+    if api_key:
+        os.environ["OPENAI_API_KEY"] = api_key
+        st.success("✅ API key set successfully! You can now generate content.")
+        time.sleep(1)
+        st.rerun()
+
+def display_header():
+    st.title("📚 Young Adult Novel Generator")
+    st.markdown("""
+    Create compelling YA novels with AI assistance. This tool will help you generate:
+    - Young adult story concepts with themes, characters, and conflict
+    - Chapter structures tailored for teen readers (18-25 chapters)
+    - Complete scene-by-scene content with engaging dialogue
+    - Book cover design prompts for professional designers
+    """)
+    
+    # Use a select box for mode selection - this is more reliable than tabs for tracking state
+    if 'mode_tab' not in st.session_state:
+        st.session_state.mode_tab = 0
+        
+    # Use a selectbox to more reliably track mode changes
+    current_mode = st.selectbox(
+        "📚 Novel Generation Mode",
+        ["Single Novel", "Series (up to 5 books)"],
+        index=st.session_state.mode_tab,
+        key="novel_mode_selector"
+    )
+    
+    # Update our state based on the selected mode
+    st.session_state.mode_tab = 0 if current_mode == "Single Novel" else 1
+    
+    # Update series_mode flag
+    if "state" not in st.session_state:
+        st.session_state.state = {}
+    
+    # Single Novel mode
+    if current_mode == "Single Novel":
+        st.session_state.state["series_mode"] = False
+        st.session_state.state["series_id"] = None
+        st.session_state.state["series_book_number"] = None
+        st.info("Create a standalone novel with detailed character development, chapter outlines, and scenes.")
+    
+    # Series mode
+    else:
+        st.session_state.state["series_mode"] = True
+        st.info("Create a series of connected novels with consistent character arcs and evolving themes.")
+        
+        # Series creation form
+        with st.expander("Series Settings", expanded=not bool(st.session_state.get("series_state", {}).get("series_id"))):
+            series_title = st.text_input("Series Title", key="series_title", 
+                                        value=st.session_state.get("series_state", {}).get("series_title", ""))
+            series_description = st.text_area("Series Description", key="series_description", 
+                                            value=st.session_state.get("series_state", {}).get("series_description", ""),
+                                            placeholder="Describe your series concept and overall arc")
+            num_books = st.slider("Number of Books in Series", min_value=1, max_value=5, 
+                                value=st.session_state.get("series_state", {}).get("num_books", 3), key="num_books")
+                
+            if st.button("Create Series", disabled=not series_title):
+                with st.spinner("Creating series structure..."):
+                    try:
+                        # Create a series generator
+                        from novel_generator import SeriesGenerator
+                        series_gen = SeriesGenerator(
+                            series_title=series_title,
+                            series_description=series_description,
+                            num_books=num_books,
+                            model=st.session_state.state.get("model", "gpt-4o")
+                        )
+                        
+                        # Create the series in the database
+                        series_id = series_gen.create_series()
+                        
+                        # Generate the series arc
+                        series_arc = series_gen.generate_series_arc()
+                        
+                        # Store in session state
+                        if "series_state" not in st.session_state:
+                            st.session_state.series_state = {}
+                        
+                        st.session_state.series_state.update({
+                            "series_id": series_id,
+                            "series_title": series_title,
+                            "series_description": series_description,
+                            "num_books": num_books,
+                            "series_arc": series_arc,
+                            "book_titles": series_arc.get("book_titles", [f"Book {i+1}" for i in range(num_books)]),
+                            "current_book": 1
+                        })
+                        
+                        # Set mode to series
+                        st.session_state.mode_tab = 1
+                        
+                        # Make sure to update the state for series mode
+                        if "state" not in st.session_state:
+                            st.session_state.state = {}
+                        st.session_state.state["series_mode"] = True
+                        st.session_state.state["series_id"] = series_id
+                        st.session_state.state["series_book_number"] = 1  # Start with Book 1
+                        
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error creating series: {str(e)}")
+            
+            # Display series information if available
+            if st.session_state.get("series_state", {}).get("series_id"):
+                series_state = st.session_state.series_state
+                st.subheader(f"Series: {series_state.get('series_title')}")
+                
+                # Display series arc overview
+                with st.expander("Series Arc Overview"):
+                    series_arc = series_state.get("series_arc", {})
+                    st.markdown(f"**Overall Arc**: {series_arc.get('overall_arc', 'Not available')}")
+                    
+                    st.markdown("**Character Arcs**")
+                    for char_name, char_arc in series_arc.get("character_arcs", {}).items():
+                        st.markdown(f"- **{char_name}**: {char_arc}")
+                    
+                    st.markdown("**Series Themes**")
+                    for theme in series_arc.get("themes", []):
+                        st.markdown(f"- {theme}")
+                    
+                    if series_arc.get("continuity_notes"):
+                        st.markdown(f"**Continuity Notes**: {series_arc.get('continuity_notes')}")
+                
+                # Book selection
+                book_options = [f"Book {i+1}: {title}" for i, title in 
+                              enumerate(series_state.get("book_titles", [])[:series_state.get("num_books", 0)])]
+                
+                selected_book = st.selectbox(
+                    "Select Book to Work On",
+                    options=book_options,
+                    index=series_state.get("current_book", 1) - 1
+                )
+                
+                # Update current book based on selection
+                if selected_book:
+                    book_num = int(selected_book.split(":")[0].replace("Book ", ""))
+                    series_state["current_book"] = book_num
+                    
+                    # Extract the book title
+                    book_title = selected_book.split(":", 1)[1].strip() if ":" in selected_book else f"Book {book_num}"
+                    
+                    # Update the title in the state
+                    if "state" not in st.session_state:
+                        st.session_state.state = {}
+                    
+                    st.session_state.state["title"] = book_title
+                    st.session_state.state["series_mode"] = True
+                    st.session_state.state["series_book_number"] = book_num
+        
+    # Series/Single mode is now controlled by the selectbox directly
+
+def display_settings():
+    with st.expander("⚙️ Generator Settings", expanded=True):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            title = st.text_input("Novel Title", value="", help="Enter a title for your novel")
+            model = st.selectbox(
+                "AI Model", 
+                options=["gpt-4o", "gpt-4.1", "gpt-4", "gpt-3.5-turbo"],
+                index=0,
+                help="Select the AI model to use for generation"
+            )
+        
+        with col2:
+            max_scene_length = st.slider(
+                "Maximum Scene Length", 
+                min_value=500, 
+                max_value=2000, 
+                value=1000,
+                step=100,
+                help="Maximum word count for each scene"
+            )
+            
+            min_scene_length = st.slider(
+                "Minimum Scene Length", 
+                min_value=100, 
+                max_value=500, 
+                value=300,
+                step=50,
+                help="Minimum word count for each scene"
+            )
+    
+    return {
+        "title": title.strip(),
+        "model": model,
+        "max_scene_length": max_scene_length,
+        "min_scene_length": min_scene_length
+    }
+
+def display_story_details(story_details=None):
+    with st.expander("📝 Young Adult Novel Concept", expanded=not bool(story_details)):
+        if story_details:
+            try:
+                # Display in a more organized format
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.subheader("Core Concept")
+                    st.markdown(f"**Theme:** {story_details.get('story_theme', 'N/A')}")
+                    st.markdown(f"**Genre:** {story_details.get('genre', 'N/A')}")
+                    st.markdown(f"**Central Concept:** {story_details.get('central_concept', 'N/A')}")
+                    st.markdown(f"**Target Age Range:** {story_details.get('target_age_range', 'N/A')}")
+                    st.markdown(f"**Word Count:** {story_details.get('estimated_word_count', 'N/A')}")
+                    st.markdown(f"**Narrative Style:** {story_details.get('narrative_style', 'N/A')}")
+                
+                with col2:
+                    st.subheader("Characters & Setting")
+                    st.markdown(f"**Main Character:** {story_details.get('main_character_name', 'N/A')}")
+                    st.markdown(f"**Central Conflict:** {story_details.get('central_conflict', 'N/A')}")
+                    st.markdown(f"**Setting:** {story_details.get('setting', 'N/A')}")
+                    st.markdown(f"**Time Period:** {story_details.get('time_period', 'N/A')}")
+                
+                st.subheader("Supporting Characters")
+                supporting_chars = story_details.get('supporting_characters', [])
+                if isinstance(supporting_chars, list):
+                    for char in supporting_chars:
+                        if isinstance(char, dict):
+                            st.markdown(f"- **{char.get('name', 'Character')}**: {char.get('description', '')}")
+                        else:
+                            st.markdown(f"- {char}")
+                else:
+                    st.markdown(supporting_chars)
+                
+                st.subheader("Plot Summary")
+                st.markdown(story_details.get('plot_summary', 'No plot summary available.'))
+
+                # Display series context if available
+                if story_details.get('series_context'):
+                    series_context = story_details.get('series_context', {})
+                    with st.expander("📚 Series Context"):
+                        st.subheader(f"Book {series_context.get('book_number', '?')} of {series_context.get('total_books', '?')}")
+                        
+                        st.markdown("**Series Arc**")
+                        st.markdown(series_context.get('series_arc', 'No series arc available.'))
+                        
+                        if series_context.get('character_arcs'):
+                            st.markdown("**Character Arcs Across Series**")
+                            for char_name, char_arc in series_context.get('character_arcs', {}).items():
+                                st.markdown(f"- **{char_name}**: {char_arc}")
+                        
+                        if series_context.get('themes'):
+                            st.markdown("**Series Themes**")
+                            for theme in series_context.get('themes', []):
+                                st.markdown(f"- {theme}")
+                        
+                        if series_context.get('continuity_notes'):
+                            st.markdown("**Continuity Notes**")
+                            st.markdown(series_context.get('continuity_notes', ''))
+                        
+                        if series_context.get('prior_books'):
+                            st.markdown("**Prior Books in Series**")
+                            for book in series_context.get('prior_books', []):
+                                with st.expander(f"📕 {book.get('title', 'Prior Book')}"):
+                                    st.markdown("**Synopsis**")
+                                    st.markdown(book.get('synopsis', 'No synopsis available.'))
+                
+                # Advanced: View raw JSON with a checkbox instead of expander
+                if st.checkbox("View Raw JSON Data", False):
+                    st.json(story_details)
+                    
+                if st.button("♻️ Regenerate Story Details", key="regenerate_story"):
+                    return True
+            except Exception as e:
+                st.error(f"Error displaying story details: {str(e)}")
+                st.json(story_details)
+                if st.button("♻️ Regenerate Story Details", key="regenerate_story_error"):
+                    return True
+        else:
+            st.info("Generate story details to create your YA novel's foundation.")
+        return False
+
+def display_premises_and_endings(premises_data=None):
+    with st.expander("💡 Premises & Endings", expanded=not bool(premises_data)):
+        if premises_data:
+            try:
+                col1, col2 = st.columns([2, 3])
+                
+                with col1:
+                    st.subheader("Potential Premises")
+                    premises = premises_data.get('premises', [])
+                    for i, premise in enumerate(premises, 1):
+                        st.markdown(f"**{i}.** {premise}")
+                
+                with col2:
+                    st.subheader("Chosen Premise")
+                    st.markdown(f"**{premises_data.get('chosen_premise', 'No premise chosen')}**")
+                    
+                    # Display the best ending if it exists
+                    chosen_ending = premises_data.get('chosen_ending', '')
+                    if chosen_ending:
+                        st.subheader("The Ending (For Future Prompts)")
+                        st.markdown(f"**{chosen_ending}**")
+                        st.markdown("---")
+                        
+                    st.subheader("Potential Endings")
+                    endings = premises_data.get('potential_endings', [])
+                    for i, ending in enumerate(endings, 1):
+                        st.markdown(f"**{i}.** {ending}")
+                        
+                if st.button("♻️ Regenerate Premises & Endings", key="regen_premises_btn"):
+                    return True
+            except Exception as e:
+                st.error(f"Error displaying premises and endings: {str(e)}")
+                if st.button("♻️ Regenerate Premises & Endings", key="regen_premises_error_btn"):
+                    return True
+        else:
+            st.info("Generate premises and endings to explore possible story directions.")
+        return False
+
+def display_novel_synopsis(synopsis=None):
+    with st.expander("📑 Novel Synopsis", expanded=not bool(synopsis)):
+        if synopsis:
+            try:
+                st.markdown(synopsis)
+                if st.button("♻️ Regenerate Synopsis", key="regen_synopsis_btn"):
+                    return True
+            except Exception as e:
+                st.error(f"Error displaying synopsis: {str(e)}")
+                if st.button("♻️ Regenerate Synopsis", key="regen_synopsis_error_btn"):
+                    return True
+        else:
+            st.info("Generate a detailed three-act structure synopsis for your novel.")
+        return False
+
+def display_character_profiles(profiles=None):
+    with st.expander("👤 Character Profiles", expanded=not bool(profiles)):
+        if profiles:
+            try:
+                st.markdown(profiles)
+                if st.button("♻️ Regenerate Character Profiles", key="regen_profiles_btn"):
+                    return True
+            except Exception as e:
+                st.error(f"Error displaying character profiles: {str(e)}")
+                if st.button("♻️ Regenerate Character Profiles", key="regen_profiles_error_btn"):
+                    return True
+        else:
+            st.info("Generate comprehensive character profiles for your novel.")
+        return False
+
+def display_novel_plan(plan=None):
+    with st.expander("📋 Novel Plan", expanded=not bool(plan)):
+        if plan:
+            try:
+                st.markdown(plan)
+                if st.button("♻️ Regenerate Novel Plan", key="regen_plan_btn"):
+                    return True
+            except Exception as e:
+                st.error(f"Error displaying novel plan: {str(e)}")
+                if st.button("♻️ Regenerate Novel Plan", key="regen_plan_error_btn"):
+                    return True
+        else:
+            st.info("Generate a detailed novel plan including structure, character arcs, and pacing.")
+        return False
+
+def display_chapter_outline(chapter_outline=None):
+    with st.expander("📑 Chapter Outline", expanded=not bool(chapter_outline)):
+        if chapter_outline:
+            for chapter in chapter_outline:
+                try:
+                    # Check if chapter is a dictionary, otherwise convert it
+                    if isinstance(chapter, str):
+                        try:
+                            chapter = json.loads(chapter)
+                        except json.JSONDecodeError:
+                            st.error(f"Invalid chapter data format: {chapter[:50]}...")
+                            continue
+                    
+                    with st.container():
+                        st.subheader(f"Chapter {chapter.get('number', '?')}: {chapter.get('title', 'Untitled')}")
+                        
+                        # Display POV
+                        if chapter.get('pov'):
+                            st.markdown(f"**POV:** {chapter['pov']}")
+                        
+                        # Display new fields from updated prompt
+                        if chapter.get('summary'):
+                            st.markdown(f"**Summary:** {chapter['summary']}")
+                            
+                        if chapter.get('emotional_development'):
+                            st.markdown(f"**Emotional Development:** {chapter['emotional_development']}")
+                            
+                        if chapter.get('theme_focus'):
+                            st.markdown(f"**Theme Focus:** {chapter['theme_focus']}")
+                        
+                        # Display events
+                        if chapter.get('events'):
+                            st.markdown("**Key Events:**")
+                            for event in chapter['events']:
+                                st.markdown(f"- {event}")
+                        
+                        # Handle both word_count and estimated_word_count
+                        word_count = None
+                        if chapter.get('estimated_word_count'):
+                            word_count = chapter['estimated_word_count']
+                        elif chapter.get('word_count'):
+                            word_count = chapter['word_count']
+                            
+                        if word_count:
+                            st.caption(f"Estimated word count: {word_count}")
+                            
+                        st.divider()
+                except Exception as e:
+                    st.error(f"Error displaying chapter: {str(e)}")
+            
+            if st.button("♻️ Regenerate Chapter Outline", key="regenerate_outline"):
+                return True
+        else:
+            st.info("Generate a chapter outline based on your novel plan.")
+        return False
+
+def display_chapter_guide(chapter_guide=None, chapter_outline=None):
+    with st.expander("📝 Chapter Writing Guide", expanded=not bool(chapter_guide)):
+        if chapter_guide and chapter_outline:
+            # Create tabs for each chapter
+            chapter_numbers = sorted(list(chapter_guide.keys()), key=lambda x: int(x))
+            if not chapter_numbers:
+                st.info("No chapter guide available. Generate a chapter outline first, then create a chapter guide.")
+                return False
+                
+            chapter_tabs = st.tabs([f"Chapter {num}" for num in chapter_numbers])
+            
+            # Display each chapter's guide
+            for i, chapter_num in enumerate(chapter_numbers):
+                with chapter_tabs[i]:
+                    # Find the corresponding chapter from outline
+                    chapter_info = None
+                    for ch in chapter_outline:
+                        if str(ch.get('number')) == chapter_num:
+                            chapter_info = ch
+                            break
+                    
+                    # If chapter found in outline, display title
+                    if chapter_info:
+                        st.subheader(f"Chapter {chapter_num}: {chapter_info.get('title', 'Untitled')}")
+                    else:
+                        st.subheader(f"Chapter {chapter_num}")
+                    
+                    # Display chapter guide elements
+                    chapter_data = chapter_guide[chapter_num]
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("### 🎯 Scene Goal")
+                        st.markdown(chapter_data.get('scene_goal', 'No scene goal specified'))
+                        
+                        st.markdown("### 💬 Key Dialogue")
+                        dialogue = chapter_data.get('key_dialogue', [])
+                        if dialogue:
+                            for line in dialogue:
+                                st.markdown(f"- {line}")
+                        else:
+                            st.markdown("No key dialogue specified")
+                            
+                        st.markdown("### 🔄 Emotional Pacing")
+                        st.markdown(chapter_data.get('emotional_pacing', 'No emotional pacing specified'))
+                    
+                    with col2:
+                        st.markdown("### 🔍 Sensory Details")
+                        sensory = chapter_data.get('sensory_details', [])
+                        if sensory:
+                            for detail in sensory:
+                                st.markdown(f"- {detail}")
+                        else:
+                            st.markdown("No sensory details specified")
+                        
+                        st.markdown("### 🔮 Foreshadowing")
+                        foreshadowing = chapter_data.get('foreshadowing', [])
+                        if foreshadowing:
+                            for hint in foreshadowing:
+                                st.markdown(f"- {hint}")
+                        else:
+                            st.markdown("No foreshadowing specified")
+                        
+                        st.markdown("### 🏺 Symbolism")
+                        symbolism = chapter_data.get('symbolism', [])
+                        if symbolism:
+                            for symbol in symbolism:
+                                st.markdown(f"- {symbol}")
+                        else:
+                            st.markdown("No symbolism specified")
+            
+            if st.button("♻️ Regenerate Chapter Guide", key="regenerate_guide"):
+                return True
+        else:
+            st.info("Generate a chapter guide after creating a chapter outline.")
+        return False
+
+def display_chapter_beats(chapter_beats=None, chapter_outline=None):
+    with st.expander("🔄 Chapter Action Beats", expanded=not bool(chapter_beats)):
+        if chapter_beats and chapter_outline:
+            try:
+                # Create tabs for each chapter
+                chapter_numbers = sorted(list(chapter_beats.keys()), key=lambda x: int(x) if x.isdigit() else float('inf'))
+                if not chapter_numbers:
+                    st.info("No chapter beats available. Generate a chapter guide first, then create action beats.")
+                    return False
+                    
+                chapter_tabs = st.tabs([f"Chapter {num}" for num in chapter_numbers])
+                
+                # Display each chapter's beats
+                for i, chapter_num in enumerate(chapter_numbers):
+                    with chapter_tabs[i]:
+                        # Find the corresponding chapter from outline
+                        chapter_info = None
+                        for ch in chapter_outline:
+                            if str(ch.get('number')) == chapter_num:
+                                chapter_info = ch
+                                break
+                        
+                        # If chapter found in outline, display title
+                        if chapter_info:
+                            st.subheader(f"Chapter {chapter_num}: {chapter_info.get('title', 'Untitled')}")
+                        else:
+                            st.subheader(f"Chapter {chapter_num}")
+                        
+                        # Display beats
+                        beats = chapter_beats[chapter_num]
+                        if beats:
+                            for beat in beats:
+                                with st.container(border=True):
+                                    col1, col2 = st.columns([1, 3])
+                                    with col1:
+                                        st.markdown(f"### Beat {beat.get('beat_number', 'N/A')}")
+                                    with col2:
+                                        st.markdown(f"**Action:** {beat.get('action', 'No action specified')}")
+                                    
+                                    st.markdown(f"**Emotional Impact:** {beat.get('emotional_impact', 'No impact specified')}")
+                                    st.markdown(f"**Tension/Hook:** {beat.get('tension_hook', 'No hook specified')}")
+                        else:
+                            st.warning(f"No action beats available for Chapter {chapter_num}")
+                
+                if st.button("♻️ Regenerate Chapter Beats", key="regen_beats_btn"):
+                    return True
+            except Exception as e:
+                st.error(f"Error displaying chapter beats: {str(e)}")
+                if st.button("♻️ Regenerate Chapter Beats", key="regen_beats_error_btn"):
+                    return True
+        else:
+            st.info("Generate detailed action beats for each chapter with emotional impacts and tension hooks.")
+        return False
+
+def display_scenes(all_scenes=None):
+    with st.expander("📖 Generated Scenes", expanded=not bool(all_scenes)):
+        if all_scenes:
+            try:
+                # Make sure all_scenes is a dictionary
+                if not isinstance(all_scenes, dict):
+                    if isinstance(all_scenes, str):
+                        try:
+                            all_scenes = json.loads(all_scenes)
+                            if not isinstance(all_scenes, dict):
+                                all_scenes = {"Chapter 1": [all_scenes]}
+                        except Exception:
+                            all_scenes = {"Chapter 1": [all_scenes]}
+                    else:
+                        all_scenes = {"Chapter 1": ["Invalid scene data format"]}
+                
+                # Create tabs for each chapter
+                chapter_titles = list(all_scenes.keys())
+                chapter_tabs = st.tabs([title for title in chapter_titles])
+                
+                # Display each chapter's scenes
+                for i, title in enumerate(chapter_titles):
+                    with chapter_tabs[i]:
+                        st.subheader("Scene Summaries")
+                        scenes = all_scenes[title]
+                        if isinstance(scenes, list):
+                            for j, scene in enumerate(scenes, 1):
+                                with st.container(border=True):
+                                    st.caption(f"Scene {j}")
+                                    st.markdown(scene)
+                        else:
+                            st.warning(f"Invalid scene data format for {title}: {type(scenes)}")
+                
+                if st.button("♻️ Regenerate All Scenes", key="regenerate_scenes"):
+                    return True
+            except Exception as e:
+                st.error(f"Error displaying scenes: {str(e)}")
+                if st.button("♻️ Regenerate All Scenes", key="regenerate_scenes_error"):
+                    return True
+        else:
+            st.info("Generate all scenes based on chapter beats for complete novel content.")
+        return False
+
+def display_prose(prose_scenes=None):
+    with st.expander("📝 Generated Prose", expanded=not bool(prose_scenes)):
+        if prose_scenes:
+            try:
+                # Make sure prose_scenes is a dictionary
+                if not isinstance(prose_scenes, dict):
+                    if isinstance(prose_scenes, str):
+                        try:
+                            prose_scenes = json.loads(prose_scenes)
+                            if not isinstance(prose_scenes, dict):
+                                prose_scenes = {"Chapter 1": [prose_scenes]}
+                        except Exception:
+                            prose_scenes = {"Chapter 1": [prose_scenes]}
+                    else:
+                        prose_scenes = {"Chapter 1": ["Invalid prose data format"]}
+                
+                # Sort chapters by chapter number
+                import re
+                
+                def extract_chapter_number(title):
+                    # Try to extract chapter number for sorting
+                    match = re.search(r'Chapter\s+(\d+)', title)
+                    if match:
+                        return int(match.group(1))
+                    # If no "Chapter X" pattern, look for any number
+                    numbers = re.findall(r'\d+', title)
+                    if numbers:
+                        return int(numbers[0])
+                    # If no numbers, return a high value to sort to the end
+                    return 9999
+                
+                # Sort chapter titles by their numerical value
+                chapter_titles = list(prose_scenes.keys())
+                chapter_titles.sort(key=extract_chapter_number)
+                
+                # Create tabs for sorted chapters
+                chapter_tabs = st.tabs([title for title in chapter_titles])
+                
+                # Display each chapter's prose
+                for i, title in enumerate(chapter_titles):
+                    with chapter_tabs[i]:
+                        chapter_prose = prose_scenes[title]
+                        if isinstance(chapter_prose, list):
+                            for j, prose in enumerate(chapter_prose, 1):
+                                with st.container(border=True):
+                                    st.caption(f"Scene {j}")
+                                    st.markdown(prose)
+                        else:
+                            st.warning(f"Invalid prose data format for {title}: {type(chapter_prose)}")
+                
+                if st.button("♻️ Regenerate Prose", key="regenerate_prose"):
+                    st.session_state.state.update({"prose_scenes": None})
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Error displaying prose: {str(e)}")
+                if st.button("♻️ Regenerate Prose", key="regenerate_prose_error"):
+                    st.session_state.state.update({"prose_scenes": None})
+                    st.rerun()
+        else:
+            st.info("Generate prose for all scenes using the 'Generate Prose' button above.")
+        return False
+
+
+
+def display_generation_progress():
+    # Count completed steps
+    state = st.session_state.state
+    total_steps = 9
+    completed_steps = 0
+    
+    if state.get("story_details"):
+        completed_steps += 1
+    if state.get("premises_and_endings"):
+        completed_steps += 1
+    if state.get("novel_synopsis"):
+        completed_steps += 1
+    if state.get("character_profiles"):
+        completed_steps += 1
+    if state.get("novel_plan"):
+        completed_steps += 1
+    if state.get("chapter_outline"):
+        completed_steps += 1
+    if state.get("chapter_guide"):
+        completed_steps += 1
+    if state.get("chapter_beats"):
+        completed_steps += 1
+    if state.get("all_scenes"):
+        completed_steps += 1
+    
+    # Add one more if novel formats is available
+    total_steps += 1 if state.get("novel_formats") else 0
+    
+    # Calculate percentage
+    progress_pct = int((completed_steps / total_steps) * 100)
+    
+    # Display progress bar
+    st.progress(progress_pct, text=f"Generated {completed_steps} of {total_steps} elements ({progress_pct}%)")
+
+def main():
+    display_header()
+    
+    # Initialize session state
+    if "state" not in st.session_state:
+        st.session_state.state = {
+            "novel_id": None,
+            "title": "",
+            "story_details": None,
+            "premises_and_endings": None,
+            "novel_synopsis": None,
+            "character_profiles": None,
+            "novel_plan": None,
+            "chapter_outline": None,
+            "chapter_guide": None,
+            "chapter_beats": None,
+            "all_scenes": None,
+            "prose_scenes": None,
+            "novel_formats": None,
+            "cover_design_prompt": None,
+            "series_mode": False,
+            "series_id": None,
+            "series_book_number": 1,
+            "model": "gpt-4o"
+        }
+    
+    # Sidebar for novel management
+    with st.sidebar:
+        st.header("📂 Novel Management")
+        novels = NovelDatabaseService.list_novels()
+        
+        if novels:
+            novel_options = [f"{novel['title']} (ID: {novel['id']})" for novel in novels]
+            selected_novel = st.selectbox("Load Existing Novel", ["Create New Novel"] + novel_options)
+            
+            if selected_novel != "Create New Novel":
+                novel_id = int(selected_novel.split("ID: ")[1].replace(")", ""))
+                
+                if st.button("Load Novel"):
+                    novel = NovelDatabaseService.get_novel(novel_id)
+                    if novel:
+                        st.session_state.state.update({
+                            "novel_id": novel_id,
+                            "title": novel['title'],
+                            "story_details": novel.get("story_details"),
+                            "premises_and_endings": NovelDatabaseService.get_premises_and_endings(novel_id),
+                            "novel_synopsis": NovelDatabaseService.get_novel_synopsis(novel_id),
+                            "character_profiles": NovelDatabaseService.get_character_profiles(novel_id),
+                            "novel_plan": NovelDatabaseService.get_novel_plan(novel_id),
+                            "chapter_outline": NovelDatabaseService.get_chapter_outline(novel_id),
+                            "chapter_guide": NovelDatabaseService.get_chapter_guide(novel_id),
+                            "chapter_beats": NovelDatabaseService.get_chapter_beats(novel_id),
+                            "all_scenes": NovelDatabaseService.get_all_scenes(novel_id),
+                            "prose_scenes": None,  # Will be regenerated if needed
+                            "novel_formats": NovelDatabaseService.get_novel_formats(novel_id),
+                            "cover_design_prompt": NovelDatabaseService.get_cover_design_prompt(novel_id)
+                        })
+                        st.rerun()
+                
+                if st.button("Delete Novel", type="secondary"):
+                    if NovelDatabaseService.delete_novel(novel_id):
+                        st.rerun()
+
+    # Get settings
+    settings = display_settings()
+    st.session_state.state["title"] = settings["title"]
+    
+    # Display generation progress
+    display_generation_progress()
+    
+    # 1. Story Details - Button followed by display
+    if st.button("Generate Story Details", disabled=not settings["title"], key="gen_story"):
+        with st.spinner("Creating story foundation..."):
+            try:
+                tool = NovelAutomationTool(
+                    title=settings["title"],
+                    model=settings["model"],
+                    max_scene_length=settings["max_scene_length"],
+                    min_scene_length=settings["min_scene_length"],
+                    output_dir=output_dir
+                )
+                
+                if not st.session_state.state.get("novel_id"):
+                    # Check if we're in series mode
+                    if st.session_state.state.get("series_mode") and st.session_state.state.get("series_id"):
+                        # Create a novel in the series
+                        series_id = st.session_state.state.get("series_id")
+                        book_number = st.session_state.state.get("series_book_number", 1)
+                        
+                        novel_id = NovelDatabaseService.create_novel(
+                            title=settings["title"],
+                            model=settings["model"],
+                            max_scene_length=settings["max_scene_length"],
+                            min_scene_length=settings["min_scene_length"],
+                            series_id=series_id,
+                            book_number=book_number
+                        )
+                    else:
+                        # Create a standalone novel
+                        novel_id = NovelDatabaseService.create_novel(
+                            title=settings["title"],
+                            model=settings["model"],
+                            max_scene_length=settings["max_scene_length"],
+                            min_scene_length=settings["min_scene_length"]
+                        )
+                    
+                    st.session_state.state["novel_id"] = novel_id
+                
+                # Check if we're in series mode and need series context
+                if st.session_state.state.get("series_mode") and st.session_state.state.get("series_id"):
+                    try:
+                        # Create a SeriesGenerator to get series context
+                        from novel_generator import SeriesGenerator
+                        series_state = st.session_state.get("series_state", {})
+                        series_gen = SeriesGenerator(
+                            series_title=series_state.get("series_title", "Untitled Series"),
+                            series_description=series_state.get("series_description", ""),
+                            num_books=series_state.get("num_books", 3),
+                            model=settings["model"]
+                        )
+                        series_gen.series_id = st.session_state.state.get("series_id")
+                        
+                        # Get the context for this specific book in the series
+                        book_number = st.session_state.state.get("series_book_number", 1)
+                        series_context = series_gen.get_series_context(book_number)
+                        
+                        # Add context to story details generation
+                        story_details = tool.generate_story_details()
+                        
+                        # Add series context to the story details
+                        story_details["series_context"] = series_context
+                        
+                    except Exception as e:
+                        st.warning(f"Issue with series context: {str(e)}. Continuing with standalone story generation.")
+                        story_details = tool.generate_story_details()
+                else:
+                    # Regular standalone novel generation
+                    story_details = tool.generate_story_details()
+                
+                st.session_state.state["story_details"] = story_details
+                NovelDatabaseService.save_story_details(st.session_state.state["novel_id"], story_details)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error generating story: {str(e)}")
+    
+    # Check regeneration requests for Story Details
+    if display_story_details(st.session_state.state.get("story_details")):
+        st.session_state.state.update({
+            "story_details": None,
+            "premises_and_endings": None,
+            "novel_synopsis": None,
+            "character_profiles": None,
+            "novel_plan": None,
+            "chapter_outline": None,
+            "chapter_guide": None,
+            "chapter_beats": None,
+            "all_scenes": None,
+            "novel_formats": None
+        })
+        st.rerun()
+    
+    # 2. Premises & Endings - Button followed by display
+    if st.button("Generate Premises & Endings", 
+                disabled=not st.session_state.state.get("story_details"),
+                key="gen_premises"):
+        with st.spinner("Creating novel premises and possible endings..."):
+            try:
+                tool = NovelAutomationTool(
+                    title=settings["title"],
+                    model=settings["model"],
+                    max_scene_length=settings["max_scene_length"],
+                    min_scene_length=settings["min_scene_length"],
+                    output_dir=output_dir
+                )
+                
+                premises_data = tool.generate_premises_and_endings(st.session_state.state["story_details"])
+                st.session_state.state["premises_and_endings"] = premises_data
+                NovelDatabaseService.save_premises_and_endings(st.session_state.state["novel_id"], premises_data)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error generating premises and endings: {str(e)}")
+    
+    # Check regeneration requests for Premises & Endings        
+    if display_premises_and_endings(st.session_state.state.get("premises_and_endings")):
+        st.session_state.state.update({
+            "premises_and_endings": None,
+            "novel_synopsis": None,
+            "character_profiles": None,
+            "novel_plan": None,
+            "chapter_outline": None,
+            "chapter_guide": None,
+            "all_scenes": None,
+            "novel_formats": None
+        })
+        st.rerun()
+    
+    # 3. Novel Synopsis - Button followed by display
+    if st.button("Generate Novel Synopsis", 
+                disabled=not st.session_state.state.get("premises_and_endings"),
+                key="gen_synopsis"):
+        with st.spinner("Creating detailed three-act novel synopsis..."):
+            try:
+                tool = NovelAutomationTool(
+                    title=settings["title"],
+                    model=settings["model"],
+                    max_scene_length=settings["max_scene_length"],
+                    min_scene_length=settings["min_scene_length"],
+                    output_dir=output_dir
+                )
+                
+                # Pass the premises and endings data to the tool
+                if st.session_state.state.get("premises_and_endings"):
+                    tool._premises_and_endings = st.session_state.state["premises_and_endings"]
+                
+                novel_synopsis = tool.generate_novel_synopsis(st.session_state.state["story_details"])
+                st.session_state.state["novel_synopsis"] = novel_synopsis
+                NovelDatabaseService.save_novel_synopsis(st.session_state.state["novel_id"], novel_synopsis)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error generating novel synopsis: {str(e)}")
+    
+    # Check regeneration requests for Novel Synopsis
+    if display_novel_synopsis(st.session_state.state.get("novel_synopsis")):
+        st.session_state.state.update({
+            "novel_synopsis": None,
+            "character_profiles": None,
+            "novel_plan": None,
+            "chapter_outline": None,
+            "chapter_guide": None,
+            "chapter_beats": None,
+            "all_scenes": None,
+            "novel_formats": None
+        })
+        st.rerun()
+    
+    # 4. Character Profiles - Button followed by display
+    if st.button("Generate Character Profiles", 
+                disabled=not st.session_state.state.get("novel_synopsis"),
+                key="gen_profiles"):
+        with st.spinner("Creating comprehensive character profiles..."):
+            try:
+                tool = NovelAutomationTool(
+                    title=settings["title"],
+                    model=settings["model"],
+                    max_scene_length=settings["max_scene_length"],
+                    min_scene_length=settings["min_scene_length"],
+                    output_dir=output_dir
+                )
+                
+                # Pass the premises and endings data to the tool
+                if st.session_state.state.get("premises_and_endings"):
+                    tool._premises_and_endings = st.session_state.state["premises_and_endings"]
+                
+                # Pass the novel synopsis to the tool
+                if st.session_state.state.get("novel_synopsis"):
+                    tool._novel_synopsis = st.session_state.state["novel_synopsis"]
+                
+                character_profiles = tool.generate_character_profiles(st.session_state.state["story_details"])
+                st.session_state.state["character_profiles"] = character_profiles
+                NovelDatabaseService.save_character_profiles(st.session_state.state["novel_id"], character_profiles)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error generating character profiles: {str(e)}")
+    
+    # Check regeneration requests for Character Profiles
+    if display_character_profiles(st.session_state.state.get("character_profiles")):
+        st.session_state.state.update({
+            "character_profiles": None,
+            "novel_plan": None,
+            "chapter_outline": None,
+            "chapter_guide": None,
+            "chapter_beats": None,
+            "all_scenes": None,
+            "novel_formats": None
+        })
+        st.rerun()
+    
+    # 5. Novel Plan - Button followed by display
+    if st.button("Generate Novel Plan", 
+                disabled=not st.session_state.state.get("character_profiles"),
+                key="gen_plan"):
+        with st.spinner("Creating structured novel plan..."):
+            try:
+                tool = NovelAutomationTool(
+                    title=settings["title"],
+                    model=settings["model"],
+                    max_scene_length=settings["max_scene_length"],
+                    min_scene_length=settings["min_scene_length"],
+                    output_dir=output_dir
+                )
+                
+                # Pass the premises and endings data to the tool
+                if st.session_state.state.get("premises_and_endings"):
+                    tool._premises_and_endings = st.session_state.state["premises_and_endings"]
+                
+                # Pass the novel synopsis and character profiles to the tool
+                if st.session_state.state.get("novel_synopsis"):
+                    tool._novel_synopsis = st.session_state.state["novel_synopsis"]
+                if st.session_state.state.get("character_profiles"):
+                    tool._character_profiles = st.session_state.state["character_profiles"]
+                
+                novel_plan = tool.generate_novel_plan(st.session_state.state["story_details"])
+                st.session_state.state["novel_plan"] = novel_plan
+                NovelDatabaseService.save_novel_plan(st.session_state.state["novel_id"], novel_plan)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error generating novel plan: {str(e)}")
+    
+    # Check regeneration requests for Novel Plan        
+    if display_novel_plan(st.session_state.state.get("novel_plan")):
+        st.session_state.state.update({
+            "novel_plan": None,
+            "chapter_outline": None,
+            "chapter_guide": None,
+            "chapter_beats": None,
+            "all_scenes": None,
+            "novel_formats": None
+        })
+        st.rerun()
+    
+    # 6. Chapter Outline - Button followed by display
+    if st.button("Generate Chapter Outline", 
+                disabled=not st.session_state.state.get("novel_plan"),
+                key="gen_chapters"):
+        with st.spinner("Creating detailed chapter outline..."):
+            try:
+                tool = NovelAutomationTool(
+                    title=settings["title"],
+                    model=settings["model"],
+                    max_scene_length=settings["max_scene_length"],
+                    min_scene_length=settings["min_scene_length"],
+                    output_dir=output_dir
+                )
+                
+                # Pass the premises and endings data to the tool
+                if st.session_state.state.get("premises_and_endings"):
+                    tool._premises_and_endings = st.session_state.state["premises_and_endings"]
+                
+                # Pass the novel synopsis and character profiles to the tool
+                if st.session_state.state.get("novel_synopsis"):
+                    tool._novel_synopsis = st.session_state.state["novel_synopsis"]
+                if st.session_state.state.get("character_profiles"):
+                    tool._character_profiles = st.session_state.state["character_profiles"]
+                if st.session_state.state.get("novel_plan"):
+                    tool._novel_plan = st.session_state.state["novel_plan"]
+                    
+                chapter_outline = tool.generate_chapter_outline(st.session_state.state["story_details"])
+                st.session_state.state["chapter_outline"] = chapter_outline
+                NovelDatabaseService.save_chapter_outline(st.session_state.state["novel_id"], chapter_outline)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error generating chapter outline: {str(e)}")
+    
+    # Check regeneration requests for Chapter Outline    
+    if display_chapter_outline(st.session_state.state.get("chapter_outline")):
+        st.session_state.state.update({
+            "chapter_outline": None,
+            "chapter_guide": None,
+            "chapter_beats": None,
+            "all_scenes": None,
+            "novel_formats": None
+        })
+        st.rerun()
+    
+    # 7. Chapter Guide - Button followed by display
+    if st.button("Generate Chapter Guide", 
+               disabled=not st.session_state.state.get("chapter_outline"),
+               key="gen_chapter_guide"):
+        with st.spinner("Creating detailed chapter-by-chapter guide..."):
+            try:
+                tool = NovelAutomationTool(
+                    title=settings["title"],
+                    model=settings["model"],
+                    max_scene_length=settings["max_scene_length"],
+                    min_scene_length=settings["min_scene_length"],
+                    output_dir=output_dir
+                )
+                
+                # Pass the premises and endings data to the tool
+                if st.session_state.state.get("premises_and_endings"):
+                    tool._premises_and_endings = st.session_state.state["premises_and_endings"]
+                
+                # Pass the novel synopsis and character profiles to the tool
+                if st.session_state.state.get("novel_synopsis"):
+                    tool._novel_synopsis = st.session_state.state["novel_synopsis"]
+                if st.session_state.state.get("character_profiles"):
+                    tool._character_profiles = st.session_state.state["character_profiles"]
+                if st.session_state.state.get("novel_plan"):
+                    tool._novel_plan = st.session_state.state["novel_plan"]
+                
+                chapter_guide = tool.generate_chapter_guide(st.session_state.state["chapter_outline"])
+                st.session_state.state["chapter_guide"] = chapter_guide
+                NovelDatabaseService.save_chapter_guide(st.session_state.state["novel_id"], chapter_guide)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error generating chapter guide: {str(e)}")
+    
+    # Check regeneration requests for Chapter Guide
+    if display_chapter_guide(st.session_state.state.get("chapter_guide"), st.session_state.state.get("chapter_outline")):
+        st.session_state.state.update({
+            "chapter_guide": None,
+            "chapter_beats": None,
+            "all_scenes": None,
+            "novel_formats": None
+        })
+        st.rerun()
+    
+    # 8. Chapter Beats - Button followed by display
+    if st.button("Generate Chapter Beats", 
+               disabled=not st.session_state.state.get("chapter_guide"),
+               key="gen_chapter_beats"):
+        with st.spinner("Creating detailed action beats for each chapter..."):
+            try:
+                tool = NovelAutomationTool(
+                    title=settings["title"],
+                    model=settings["model"],
+                    max_scene_length=settings["max_scene_length"],
+                    min_scene_length=settings["min_scene_length"],
+                    output_dir=output_dir
+                )
+                
+                # Pass the premises and endings data to the tool
+                if st.session_state.state.get("premises_and_endings"):
+                    tool._premises_and_endings = st.session_state.state["premises_and_endings"]
+                
+                # Pass the novel synopsis and character profiles to the tool
+                if st.session_state.state.get("novel_synopsis"):
+                    tool._novel_synopsis = st.session_state.state["novel_synopsis"]
+                if st.session_state.state.get("character_profiles"):
+                    tool._character_profiles = st.session_state.state["character_profiles"]
+                if st.session_state.state.get("novel_plan"):
+                    tool._novel_plan = st.session_state.state["novel_plan"]
+                
+                chapter_beats = tool.generate_chapter_beats(
+                    st.session_state.state["chapter_outline"],
+                    st.session_state.state["chapter_guide"]
+                )
+                st.session_state.state["chapter_beats"] = chapter_beats
+                NovelDatabaseService.save_chapter_beats(st.session_state.state["novel_id"], chapter_beats)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error generating chapter beats: {str(e)}")
+    
+    # Check regeneration requests for Chapter Beats
+    if display_chapter_beats(st.session_state.state.get("chapter_beats"), st.session_state.state.get("chapter_outline")):
+        st.session_state.state.update({
+            "chapter_beats": None,
+            "all_scenes": None,
+            "novel_formats": None
+        })
+        st.rerun()
+    
+    # 9. All Scenes - Button followed by display
+    if st.button("Generate All Scenes", 
+                disabled=not st.session_state.state.get("chapter_beats"),
+                key="gen_scenes"):
+        with st.spinner("Generating all scenes (this may take a while)..."):
+            try:
+                tool = NovelAutomationTool(
+                    title=settings["title"],
+                    model=settings["model"],
+                    max_scene_length=settings["max_scene_length"],
+                    min_scene_length=settings["min_scene_length"],
+                    output_dir=output_dir
+                )
+                
+                # Pass the premises and endings data to the tool
+                if st.session_state.state.get("premises_and_endings"):
+                    tool._premises_and_endings = st.session_state.state["premises_and_endings"]
+                
+                # Pass context data to tool
+                if st.session_state.state.get("novel_synopsis"):
+                    tool._novel_synopsis = st.session_state.state["novel_synopsis"]
+                
+                if st.session_state.state.get("character_profiles"):
+                    tool._character_profiles = st.session_state.state["character_profiles"]
+                    
+                if st.session_state.state.get("novel_plan"):
+                    tool._novel_plan = st.session_state.state["novel_plan"]
+                
+                # Generate all scenes using chapter beats
+                all_scenes = tool.generate_all_scenes(
+                    st.session_state.state["story_details"],
+                    st.session_state.state["chapter_outline"],
+                    st.session_state.state["chapter_beats"]
+                )
+                st.session_state.state["all_scenes"] = all_scenes
+                NovelDatabaseService.save_scenes(st.session_state.state["novel_id"], all_scenes)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error generating scenes: {str(e)}")
+    
+    # Check regeneration requests for All Scenes
+    if display_scenes(st.session_state.state.get("all_scenes")):
+        st.session_state.state.update({
+            "all_scenes": None,
+            "prose_scenes": None,
+            "novel_formats": None
+        })
+        st.rerun()
+    
+    # Add new button for Generating Prose (Prompt 10)
+    if st.button("Generate Prose", 
+                disabled=not st.session_state.state.get("all_scenes"),
+                key="gen_prose"):
+        with st.spinner("Generating prose for all scenes using Prompt 10 (this may take a while)..."):
+            try:
+                tool = NovelAutomationTool(
+                    title=settings["title"],
+                    model=settings["model"],
+                    max_scene_length=settings["max_scene_length"],
+                    min_scene_length=settings["min_scene_length"],
+                    output_dir=output_dir
+                )
+                
+                # Pass context data to tool
+                if st.session_state.state.get("premises_and_endings"):
+                    tool._premises_and_endings = st.session_state.state["premises_and_endings"]
+                
+                if st.session_state.state.get("novel_synopsis"):
+                    tool._novel_synopsis = st.session_state.state["novel_synopsis"]
+                
+                if st.session_state.state.get("character_profiles"):
+                    tool._character_profiles = st.session_state.state["character_profiles"]
+                    
+                if st.session_state.state.get("novel_plan"):
+                    tool._novel_plan = st.session_state.state["novel_plan"]
+                
+                # Store the current scene summaries
+                scene_summaries = st.session_state.state["all_scenes"]
+                
+                # Regenerate all scenes with Prompt 10 focus on prose
+                prose_scenes = {}
+                
+                # Process each chapter to generate prose for every scene
+                for chapter_title, scenes in scene_summaries.items():
+                    st.info(f"Generating prose for {chapter_title}...")
+                    
+                    # Find chapter number and info from chapter outline
+                    chapter_num = None
+                    chapter_info = None
+                    
+                    # Extract chapter number from title (handles multiple formats)
+                    # Format could be "Chapter X: Title", "Chapter X" or just have a number in it
+                    import re
+                    
+                    # First try the standard format "Chapter X: Title"
+                    if ":" in chapter_title and "Chapter" in chapter_title.split(":")[0]:
+                        chapter_prefix = chapter_title.split(":")[0].strip()
+                        try:
+                            chapter_num = int(chapter_prefix.replace("Chapter", "").strip())
+                        except ValueError:
+                            chapter_num = None
+                    
+                    # If that didn't work, try to find "Chapter X" pattern anywhere in the title
+                    if chapter_num is None:
+                        chapter_match = re.search(r'Chapter\s+(\d+)', chapter_title)
+                        if chapter_match:
+                            try:
+                                chapter_num = int(chapter_match.group(1))
+                            except ValueError:
+                                chapter_num = None
+                    
+                    # If still no chapter number, try to extract the first number found
+                    if chapter_num is None:
+                        numbers = re.findall(r'\d+', chapter_title)
+                        if numbers:
+                            try:
+                                chapter_num = int(numbers[0])
+                            except ValueError:
+                                chapter_num = None
+                    
+                    # If we still don't have a chapter number, use the position in the chapter list
+                    if chapter_num is None and st.session_state.state.get("chapter_outline"):
+                        # Try to match by title similarity
+                        for i, ch in enumerate(st.session_state.state["chapter_outline"], 1):
+                            ch_title = ch.get("title", "")
+                            # If titles are similar, use the chapter number
+                            if (ch_title.lower() in chapter_title.lower() or 
+                                chapter_title.lower() in ch_title.lower()):
+                                chapter_num = ch.get("number", i)
+                                break
+                        
+                        # If no match by title, just use the position in the list as a fallback
+                        if chapter_num is None:
+                            # Find position of this chapter title in the dictionary keys
+                            keys = list(scene_summaries.keys())
+                            if chapter_title in keys:
+                                chapter_num = keys.index(chapter_title) + 1
+                    
+                    # Find matching chapter in outline for more details if needed
+                    if chapter_num and st.session_state.state.get("chapter_outline"):
+                        for ch in st.session_state.state["chapter_outline"]:
+                            if ch.get("number") == chapter_num:
+                                chapter_info = ch
+                                break
+                    
+                    # Generate prose for each scene in this chapter
+                    chapter_prose = []
+                    for i, scene_summary in enumerate(scenes, 1):
+                        scene_prompt = f"""
+Begin writing Chapter {chapter_num if chapter_num else 'X'}, Scene {i} of "{settings['title']}" using the detailed scene summary provided.
+
+The writing should naturally reflect the scene's genre, tone, point of view, setting, and key characters—all of which can be inferred from the scene summary provided.
+
+Writing Guidelines:
+– Focus on a slow, deliberate buildup, allowing the emotional tone and character stakes to deepen gradually.
+– Use intimate, vivid moments to show the emotional toll of the scene and allow readers to connect with the characters.
+– Let dialogue reveal dynamics, tension, or internal struggles. Keep it natural, grounded, and full of subtext.
+– Emphasize "show, don't tell" storytelling. Let physical actions, choices, and setting carry emotional and thematic weight.
+– Use strong verbs, sensory-rich description, and a deep POV (if applicable) to fully immerse the reader.
+– Allow the scene to naturally lead toward its conclusion and, if appropriate, transition smoothly into the next.
+
+Narrative Style:
+* Point of View: First-person for the main character.
+* Tense: Past
+
+Write up to {settings["max_scene_length"]} words of character-driven, emotionally layered prose. 
+
+Let the scene summary guide your tone, structure, pacing, and character focus.
+
+Scene Summary:
+{scene_summary}
+"""
+                        # Generate the prose for this scene
+                        try:
+                            scene_prose = tool._ai_completion(scene_prompt, 
+                                system_message="You are an expert fiction writer specializing in deep, emotionally resonant first-person prose. Write immersive, character-driven scenes that follow 'show, don't tell' principles. DO NOT include scene numbers, headers or any formatting in your response - just the pure prose text.", 
+                                max_tokens=8000)
+                            chapter_prose.append(scene_prose)
+                        except Exception as e:
+                            st.warning(f"Error generating prose for scene {i} in {chapter_title}: {str(e)}")
+                            chapter_prose.append(f"Error generating prose: {str(e)}")
+                    
+                    # Store all prose for this chapter
+                    prose_scenes[chapter_title] = chapter_prose
+                
+                # Save the generated prose
+                st.session_state.state["prose_scenes"] = prose_scenes
+                
+                # Update the database with the scenes
+                # Note: For now, we're still using the same database field for both summaries and prose
+                # In a future update, we might want to create a separate table for prose
+                NovelDatabaseService.save_scenes(st.session_state.state["novel_id"], scene_summaries)
+                
+                st.success("Successfully generated prose for all scenes!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error generating prose: {str(e)}")
+    
+    # Display generated prose if available
+    display_prose(st.session_state.state.get("prose_scenes"))
+    
+    # Display function for cover design prompt
+    def display_cover_design_prompt(cover_prompt=None):
+        with st.expander("🎨 Cover Design Prompt", expanded=not bool(cover_prompt)):
+            if cover_prompt:
+                st.markdown("## Cover Design Request")
+                st.markdown(cover_prompt)
+                
+                # Download button for the prompt
+                st.download_button(
+                    label="Download Cover Design Prompt",
+                    data=cover_prompt,
+                    file_name=f"{settings['title']}_cover_design.txt",
+                    mime="text/plain",
+                )
+            else:
+                st.info("Generate a professional cover design prompt that could be sent to a designer.")
+    
+    # 10. Generate Cover Design Prompt (replaced Format Manuscript)
+    if st.button("Generate Cover Design Prompt", 
+                disabled=not st.session_state.state.get("story_details"),
+                key="gen_cover_prompt"):
+        with st.spinner("Creating a professional cover design prompt..."):
+            try:
+                tool = NovelAutomationTool(
+                    title=settings["title"],
+                    model=settings["model"],
+                    max_scene_length=settings["max_scene_length"],
+                    min_scene_length=settings["min_scene_length"],
+                    output_dir=output_dir
+                )
+                
+                cover_prompt = tool.generate_cover_design_prompt(st.session_state.state["story_details"])
+                st.session_state.state["cover_design_prompt"] = cover_prompt
+                NovelDatabaseService.save_cover_design_prompt(st.session_state.state["novel_id"], cover_prompt)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error generating cover design prompt: {str(e)}")
+    
+    # Display cover design prompt if available
+    display_cover_design_prompt(st.session_state.state.get("cover_design_prompt"))
+
+if __name__ == "__main__":
+    main()
