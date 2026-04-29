@@ -37,6 +37,43 @@ type ChapterBeats = Record<string, Array<Record<string, unknown>>>;
 
 type ScenesMap = Record<string, string[]>;
 
+/** scenes / prose_scenes select("chapter_title,scene_content,scene_order,chapter_order") */
+type SceneTableRow = {
+  chapter_title: string;
+  scene_content: unknown;
+  scene_order: number;
+  chapter_order: number;
+};
+
+/** book_descriptions select("description_type,length_type,content") */
+type BookDescriptionRow = {
+  description_type: string;
+  length_type: string;
+  content: string;
+};
+
+/** novel_formats select("format_name,content") */
+type NovelFormatRow = {
+  format_name: string;
+  content: string;
+};
+
+/** series_books select("book_number,title") */
+type SeriesBookOptionRow = {
+  book_number: number;
+  title: string | null;
+};
+
+/** promotional_articles row subset */
+type PromotionalArticleRow = {
+  article_type: string;
+  length_type: string;
+  tone: string | null;
+  cta_type: string | null;
+  title: string | null;
+  content: string | null;
+};
+
 type NovelFormats = Record<string, string>;
 
 type BookDescriptions = Record<string, string>;
@@ -1044,9 +1081,10 @@ function StudioContent() {
       .order("scene_order", { ascending: true });
 
     if (scenesRows) {
+      const sceneList = scenesRows as SceneTableRow[];
       const grouped: ScenesMap = {};
       const chapterOrderSeen: string[] = [];
-      scenesRows.forEach((row) => {
+      sceneList.forEach((row) => {
         if (!grouped[row.chapter_title]) {
           grouped[row.chapter_title] = [];
           chapterOrderSeen.push(row.chapter_title);
@@ -1079,9 +1117,10 @@ function StudioContent() {
       .order("scene_order", { ascending: true });
 
     if (proseRows) {
+      const proseList = proseRows as SceneTableRow[];
       const groupedProse: ScenesMap = {};
       const chapterOrderSeen: string[] = [];
-      proseRows.forEach((row) => {
+      proseList.forEach((row) => {
         if (!groupedProse[row.chapter_title]) {
           groupedProse[row.chapter_title] = [];
           chapterOrderSeen.push(row.chapter_title);
@@ -1120,7 +1159,7 @@ function StudioContent() {
       .eq("novel_id", novelIdValue);
     if (descriptions) {
       const mapped: BookDescriptions = {};
-      descriptions.forEach((row) => {
+      descriptions.forEach((row: BookDescriptionRow) => {
         mapped[`${row.description_type}_${row.length_type}`] = row.content;
       });
       setBookDescriptions(mapped);
@@ -1143,7 +1182,7 @@ function StudioContent() {
       console.warn("Failed to load promotional articles", promotionalArticlesError);
     } else if (promotionalArticlesRows) {
       setPromotionalArticles(
-        promotionalArticlesRows.map((row) => ({
+        promotionalArticlesRows.map((row: PromotionalArticleRow) => ({
           article_type: row.article_type,
           length_type: row.length_type,
           tone: row.tone,
@@ -1175,7 +1214,7 @@ function StudioContent() {
 
     if (formatRows) {
       const formatted: Record<string, string> = {};
-      formatRows.forEach((row) => {
+      formatRows.forEach((row: NovelFormatRow) => {
         formatted[row.format_name] = row.content;
       });
       setNovelFormats(formatted);
@@ -1215,7 +1254,7 @@ function StudioContent() {
             .eq("series_id", seriesId)
             .order("book_number", { ascending: true });
           setSeriesBookOptions(
-            (bookRows ?? []).map((row) => ({
+            (bookRows ?? []).map((row: SeriesBookOptionRow) => ({
               book_number: Number(row.book_number),
               title: String(row.title ?? `Book ${row.book_number}`),
             }))
@@ -1920,9 +1959,10 @@ function StudioContent() {
           .order("scene_order", { ascending: true });
 
         if (proseRows && proseRows.length > 0) {
+          const proseList = proseRows as SceneTableRow[];
           const groupedProse: ScenesMap = {};
           const chapterOrderSeen: string[] = [];
-          proseRows.forEach((row) => {
+          proseList.forEach((row) => {
             if (!groupedProse[row.chapter_title]) {
               groupedProse[row.chapter_title] = [];
               chapterOrderSeen.push(row.chapter_title);
@@ -1947,9 +1987,10 @@ function StudioContent() {
           .order("scene_order", { ascending: true });
 
         if (sceneRows && sceneRows.length > 0) {
+          const sceneList = sceneRows as SceneTableRow[];
           const groupedScenes: ScenesMap = {};
           const chapterOrderSeen: string[] = [];
-          sceneRows.forEach((row) => {
+          sceneList.forEach((row) => {
             if (!groupedScenes[row.chapter_title]) {
               groupedScenes[row.chapter_title] = [];
               chapterOrderSeen.push(row.chapter_title);
