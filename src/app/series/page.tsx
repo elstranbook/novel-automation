@@ -13,6 +13,23 @@ type SeriesSummary = {
   num_books: number;
 };
 
+/** Row shape returned by series_books insert + select(...) */
+type SeriesBookInsertedRow = {
+  id: string;
+  series_id: string;
+  book_number: number;
+  title: string | null;
+  status: string | null;
+  summary: string | null;
+};
+
+/** Row shape returned by novels insert + select("id,series_id,book_number") */
+type NovelInsertedRow = {
+  id: string;
+  series_id: string;
+  book_number: number;
+};
+
 export default function SeriesPage() {
   const supabase = createSupabaseBrowserClient();
   const [userId, setUserId] = useState<string | null>(null);
@@ -804,7 +821,8 @@ export default function SeriesPage() {
                         .insert(rows)
                         .select("id,series_id,book_number,title,status,summary");
                       if (inserted) {
-                        const novelRows = inserted.map((bookRow) => ({
+                        const insertedBooks = inserted as SeriesBookInsertedRow[];
+                        const novelRows = insertedBooks.map((bookRow) => ({
                           user_id: userId,
                           title: bookRow.title ?? `Book ${bookRow.book_number}`,
                           series_id: bookRow.series_id,
@@ -814,9 +832,10 @@ export default function SeriesPage() {
                           .from("novels")
                           .insert(novelRows)
                           .select("id,series_id,book_number");
-                        if (novelsInserted) {
+                        const novels = (novelsInserted ?? []) as NovelInsertedRow[];
+                        if (novels.length) {
                           await Promise.all(
-                            novelsInserted.map((novelRow) =>
+                            novels.map((novelRow) =>
                               supabase
                                 .from("series_books")
                                 .update({ novel_id: novelRow.id })
@@ -826,10 +845,10 @@ export default function SeriesPage() {
                           );
                         }
                         setSeriesBooks(
-                          inserted.map((bookRow) => ({
+                          insertedBooks.map((bookRow) => ({
                             ...bookRow,
                             novel_id:
-                              novelsInserted?.find(
+                              novels.find(
                                 (novelRow) =>
                                   novelRow.series_id === bookRow.series_id &&
                                   novelRow.book_number === bookRow.book_number
