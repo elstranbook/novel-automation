@@ -2430,6 +2430,31 @@ function StudioContent() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-12 lg:flex-row">
         <aside className="sticky top-24 hidden h-[calc(100vh-6rem)] w-[280px] flex-shrink-0 flex-col gap-4 self-start overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 lg:flex">
+          <button
+            onClick={() => {
+              resetPipeline();
+              setNovelId(null);
+              setSelectedNovelId(null);
+              setTitle("");
+              setNovelAbout("");
+              setModel(modelOptions[0]);
+              setMaxSceneLength(1000);
+              setMinSceneLength(300);
+              setGeneratedCoverUrl(null);
+              setCoverUrl("");
+              setGeneratedCovers([]);
+              setCoverPrompt(null);
+              setProseScenes(null);
+              setIsPublished(false);
+              setPublishPublicId(null);
+              setMessage(null);
+              setError(null);
+            }}
+            className="flex items-center justify-center gap-2 rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-3 py-2.5 text-sm font-semibold text-emerald-300 transition hover:border-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-200"
+          >
+            <Plus className="h-4 w-4" />
+            Write New Novel
+          </button>
           <div className="flex flex-col gap-2">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
               Saved novels
