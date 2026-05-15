@@ -443,6 +443,8 @@ function StudioContent() {
   const [imageModel, setImageModel] = useState("gpt-image-1");
   const [generatedCoverUrl, setGeneratedCoverUrl] = useState<string | null>(null);
   const [generatedCovers, setGeneratedCovers] = useState<Array<{ id: string; url: string; createdAt: string }>>([]);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [isDraggingCover, setIsDraggingCover] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
   const [publishPublicId, setPublishPublicId] = useState<string | null>(null);
   const [novelIdCopied, setNovelIdCopied] = useState(false);
@@ -2180,6 +2182,65 @@ function StudioContent() {
     } finally {
       setLoadingStep(null);
     }
+  };
+
+  const uploadCoverImage = async (file: File) => {
+    if (!novelId) {
+      setError("Please create a novel first before uploading a cover.");
+      return;
+    }
+    setIsUploadingCover(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("novelId", novelId);
+
+      const response = await fetch("/api/novel/covers/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Failed to upload cover image");
+      }
+
+      const data = await response.json();
+      setGeneratedCoverUrl(data.imageUrl);
+      setCoverUrl(data.imageUrl);
+      setGeneratedCovers((prev) => [{ id: data.coverId || `upload-${Date.now()}`, url: data.imageUrl, createdAt: new Date().toISOString() }, ...prev]);
+      setMessage("Cover image uploaded and saved successfully!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setIsUploadingCover(false);
+    }
+  };
+
+  const handleCoverFileDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingCover(false);
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const file = files[0];
+      if (file.type.startsWith("image/")) {
+        uploadCoverImage(file);
+      } else {
+        setError("Please drop an image file (PNG, JPEG, or WebP).");
+      }
+    }
+  };
+
+  const handleCoverFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      uploadCoverImage(files[0]);
+    }
+    // Reset the input so the same file can be re-selected
+    e.target.value = "";
   };
 
   const generateMockup = async (e: React.FormEvent) => {
@@ -4194,7 +4255,67 @@ function StudioContent() {
   <div className="space-y-8 animate-in fade-in duration-700">
     <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl">
       <SectionHeading title="🎨 Cover Design" step="Cover" />
-      <p className="mt-2 text-sm text-zinc-500">Generate a high-quality AI cover image for your novel.</p>
+      <p className="mt-2 text-sm text-zinc-500">Upload your own cover image or generate one with AI.</p>
+
+      {/* Upload Cover Section */}
+      <div
+        className={`mt-6 relative rounded-2xl border-2 border-dashed transition-all duration-200 ${
+          isDraggingCover
+            ? "border-emerald-400 bg-emerald-500/10"
+            : "border-zinc-700 bg-zinc-950/40 hover:border-zinc-500"
+        }`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDraggingCover(true);
+        }}
+        onDragEnter={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDraggingCover(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDraggingCover(false);
+        }}
+        onDrop={handleCoverFileDrop}
+      >
+        <div className="flex flex-col items-center justify-center py-8 px-4">
+          {isUploadingCover ? (
+            <div className="flex flex-col items-center gap-3">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />
+              <p className="text-sm font-medium text-zinc-300">Uploading cover...</p>
+            </div>
+          ) : (
+            <>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-10 w-10 text-zinc-500">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+              <p className="mt-3 text-sm font-semibold text-zinc-300">
+                {isDraggingCover ? "Drop your cover image here" : "Drag & drop a cover image here"}
+              </p>
+              <p className="mt-1 text-xs text-zinc-500">PNG, JPEG, or WebP up to 10MB</p>
+              <label className="mt-4 cursor-pointer rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-colors">
+                Browse Files
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={handleCoverFileSelect}
+                  className="hidden"
+                />
+              </label>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div className="mt-8 flex items-center gap-4">
+        <div className="h-px flex-1 bg-zinc-800" />
+        <span className="text-xs font-bold uppercase tracking-widest text-zinc-600">Or generate with AI</span>
+        <div className="h-px flex-1 bg-zinc-800" />
+      </div>
       
       <div className="mt-6">
         <label className="flex flex-col gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
