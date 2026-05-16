@@ -447,6 +447,8 @@ function StudioContent() {
   const [isDraggingCover, setIsDraggingCover] = useState(false);
   const [reimaginedPrompt, setReimaginedPrompt] = useState<string | null>(null);
   const [isReimagining, setIsReimagining] = useState(false);
+  const [facebookImageUrl, setFacebookImageUrl] = useState<string | null>(null);
+  const [isGeneratingFacebook, setIsGeneratingFacebook] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
   const [publishPublicId, setPublishPublicId] = useState<string | null>(null);
   const [novelIdCopied, setNovelIdCopied] = useState(false);
@@ -931,6 +933,7 @@ function StudioContent() {
       // Reset cover state — will be set from cover_design_prompts query below
       setGeneratedCoverUrl(null);
       setCoverUrl("");
+      setFacebookImageUrl(null);
 
       // Fetch all generated covers from cover_design_prompts table
       let coversData = null;
@@ -1008,6 +1011,24 @@ function StudioContent() {
       } else {
         setGeneratedCovers([]);
         console.log("ℹ️ No cover data found for novel", novelIdValue);
+      }
+
+      // Load Facebook promotional image from cover_design_prompts (model starts with "facebook-")
+      try {
+        const { data: fbData, error: fbError } = await supabase
+          .from("cover_design_prompts")
+          .select("url,model")
+          .eq("novel_id", novelIdValue)
+          .like("model", "facebook-%")
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (!fbError && fbData && fbData.length > 0 && fbData[0].url) {
+          setFacebookImageUrl(fbData[0].url);
+          console.log("✅ Loaded saved Facebook promotional image");
+        }
+      } catch (fbLoadErr) {
+        console.warn("⚠️ Could not load Facebook image:", fbLoadErr);
       }
 
     }
@@ -2217,6 +2238,38 @@ function StudioContent() {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setLoadingStep(null);
+    }
+  };
+
+  const generateFacebookImage = async () => {
+    const promptToUse = reimaginedPrompt || coverPrompt;
+    if (!promptToUse) {
+      setError("Please generate or enter a cover prompt first.");
+      return;
+    }
+    setIsGeneratingFacebook(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/generate/facebook-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: promptToUse,
+          model: imageModel,
+          novelId: novelId,
+        }),
+      });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Failed to generate Facebook image");
+      }
+      const data = await response.json();
+      setFacebookImageUrl(data.imageUrl);
+      setMessage("Facebook promotional image generated successfully!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setIsGeneratingFacebook(false);
     }
   };
 
@@ -4481,6 +4534,36 @@ function StudioContent() {
           </div>
         </div>
       )}
+
+      {/* Step 4: Generate Facebook Promotional Image */}
+      <div className="border-t border-zinc-800 pt-8 mt-8">
+        <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-6">Step 4 — Facebook Promotional Image</h3>
+        <div className="grid gap-8 md:grid-cols-2">
+          <div className="space-y-4">
+            <button
+              onClick={generateFacebookImage}
+              disabled={(!coverPrompt && !reimaginedPrompt) || isGeneratingFacebook}
+              className="w-full rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 py-4 text-sm font-black uppercase tracking-widest text-white hover:from-blue-500 hover:to-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isGeneratingFacebook ? "Creating Facebook Image..." : "4. Generate Facebook Image"}
+            </button>
+            {reimaginedPrompt && (
+              <p className="text-xs text-emerald-400 text-center">Will use GPT-5 reimagined prompt</p>
+            )}
+            <p className="text-xs text-zinc-600 text-center">Generates a 4:5 vertical image optimized for Facebook feed ads</p>
+          </div>
+          <div className="aspect-[4/5] w-full max-w-sm mx-auto overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950 flex items-center justify-center shadow-2xl">
+            {facebookImageUrl ? (
+              <img src={facebookImageUrl} alt="Facebook Promotional Image" className="h-full w-full object-cover" />
+            ) : (
+              <div className="text-center p-12 opacity-20">
+                <span className="text-6xl">📱</span>
+                <p className="text-xs text-zinc-500 mt-2">Facebook 4:5</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </section>
   </div>
 )}
