@@ -119,7 +119,9 @@ Output Requirements:
     // 2. Generate Image from OpenAI API using the enhanced prompt
     let requestBody: Record<string, unknown>;
 
-    if (model.includes("gpt-image-1")) {
+    if (model.includes("gpt-image-2")) {
+      requestBody = { model, prompt: enhancedPrompt, quality: "high" };
+    } else if (model.includes("gpt-image-1")) {
       requestBody = { model, prompt: enhancedPrompt, quality: "high" };
     } else {
       requestBody = { model, prompt: enhancedPrompt, n: 1, size: "1024x1024", quality: "standard" };

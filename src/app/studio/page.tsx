@@ -440,7 +440,7 @@ function StudioContent() {
   const [showPipelineMap, setShowPipelineMap] = useState(false);
   const [showPromotionalMap, setShowPromotionalMap] = useState(false);
   const [coverPrompt, setCoverPrompt] = useState<string | null>(null);
-  const [imageModel, setImageModel] = useState("gpt-image-1");
+  const [imageModel, setImageModel] = useState("gpt-image-2");
   const [generatedCoverUrl, setGeneratedCoverUrl] = useState<string | null>(null);
   const [generatedCovers, setGeneratedCovers] = useState<Array<{ id: string; url: string; createdAt: string }>>([]);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
@@ -4350,20 +4350,6 @@ function StudioContent() {
         <div className="h-px flex-1 bg-zinc-800" />
       </div>
       
-      <div className="mt-6">
-        <label className="flex flex-col gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
-          Generation Model
-          <select 
-            value={imageModel}
-            onChange={(e) => setImageModel(e.target.value)}
-            className="mt-2 max-w-xs rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-100 focus:border-zinc-500 focus:outline-none transition-colors"
-          >
-            <option value="gpt-image-1">GPT Image 1.5 (High Quality)</option>
-            <option value="gpt-image-1-mini">GPT Image 1 Mini (Fast)</option>
-          </select>
-        </label>
-      </div>
-      
       <div className="mt-8 space-y-6">
         {/* Step 1: Generate Prompt */}
         <div className="space-y-4">
@@ -4404,6 +4390,18 @@ function StudioContent() {
         {/* Step 3: Generate Cover Image */}
         <div className="grid gap-8 md:grid-cols-2">
           <div className="space-y-4">
+            <label className="flex flex-col gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+              Image Generation Model
+              <select 
+                value={imageModel}
+                onChange={(e) => setImageModel(e.target.value)}
+                className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-100 focus:border-zinc-500 focus:outline-none transition-colors"
+              >
+                <option value="gpt-image-2">GPT Image 2 (Best Quality)</option>
+                <option value="gpt-image-1">GPT Image 1.5 (High Quality)</option>
+                <option value="gpt-image-1-mini">GPT Image 1 Mini (Fast)</option>
+              </select>
+            </label>
             <button 
               onClick={generateCoverImage}
               disabled={(!coverPrompt && !reimaginedPrompt) || loadingStep === "cover-image"}
