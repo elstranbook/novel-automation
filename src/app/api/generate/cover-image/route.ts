@@ -116,15 +116,32 @@ Output Requirements:
       console.warn("⚠️ Prompt reimagination failed, using original prompt:", reimagineError instanceof Error ? reimagineError.message : reimagineError);
     }
 
-    // 2. Generate Image from OpenAI API using the enhanced prompt
+    // 2. Wrap the enhanced prompt with style requirements for image generation
+    const imagePrompt = `Create a professional vertical novel cover using this description:
+
+${enhancedPrompt}
+
+Style requirements:
+- modern bestselling book cover
+- cinematic composition
+- readable title area
+- high detail
+- dramatic lighting
+- visually clean
+- emotionally compelling
+- typography-friendly layout
+- no watermark
+- no extra text`;
+
+    // 3. Generate Image from OpenAI API using the wrapped prompt
     let requestBody: Record<string, unknown>;
 
     if (model.includes("gpt-image-2")) {
-      requestBody = { model, prompt: enhancedPrompt, quality: "high" };
+      requestBody = { model, prompt: imagePrompt, quality: "high" };
     } else if (model.includes("gpt-image-1")) {
-      requestBody = { model, prompt: enhancedPrompt, quality: "high" };
+      requestBody = { model, prompt: imagePrompt, quality: "high" };
     } else {
-      requestBody = { model, prompt: enhancedPrompt, n: 1, size: "1024x1024", quality: "standard" };
+      requestBody = { model, prompt: imagePrompt, n: 1, size: "1024x1024", quality: "standard" };
     }
 
     const response = await fetch("https://api.openai.com/v1/images/generations", {
