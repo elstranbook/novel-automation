@@ -1080,10 +1080,19 @@ function StudioContent() {
       ]);
 
     if (premises) {
+      // Safely parse premises and potential_endings — they may be stored as JSON strings
+      let parsedPremises = premises.premises ?? [];
+      if (typeof parsedPremises === "string") {
+        try { parsedPremises = JSON.parse(parsedPremises); } catch { parsedPremises = []; }
+      }
+      let parsedEndings = premises.potential_endings ?? [];
+      if (typeof parsedEndings === "string") {
+        try { parsedEndings = JSON.parse(parsedEndings); } catch { parsedEndings = []; }
+      }
       setPremisesAndEndings({
-        premises: premises.premises ?? [],
+        premises: Array.isArray(parsedPremises) ? parsedPremises : [],
         chosen_premise: premises.chosen_premise ?? "",
-        potential_endings: premises.potential_endings ?? [],
+        potential_endings: Array.isArray(parsedEndings) ? parsedEndings : [],
         chosen_ending: premises.chosen_ending ?? "",
       });
     }
@@ -3164,7 +3173,7 @@ function StudioContent() {
                     </p>
                     <div className="mt-3 space-y-2">
                       <p className="text-[10px] uppercase text-zinc-500">Select a premise</p>
-                      {premisesAndEndings.premises.map((premise, index) => (
+                      {Array.isArray(premisesAndEndings.premises) && premisesAndEndings.premises.map((premise, index) => (
                         <button
                           key={`premise-select-${index}`}
                           onClick={async () => {
@@ -3209,7 +3218,7 @@ function StudioContent() {
                     </p>
                     <div className="mt-3 space-y-2">
                       <p className="text-[10px] uppercase text-zinc-500">Select an ending</p>
-                      {premisesAndEndings.potential_endings.map((ending, index) => (
+                      {Array.isArray(premisesAndEndings.potential_endings) && premisesAndEndings.potential_endings.map((ending, index) => (
                         <button
                           key={`ending-select-${index}`}
                           onClick={async () => {
