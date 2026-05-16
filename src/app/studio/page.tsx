@@ -981,8 +981,10 @@ function StudioContent() {
               console.log(`  Row ${i}: url=${row.url ? row.url.substring(0, 50) + '...' : 'null'}, is_active=${row.is_active}, model=${row.model}, has_prompt=${!!row.prompt}`);
             });
           }
-          // Load the most recent non-empty prompt
-          const latestPromptRow = data?.find((row: any) => row.prompt);
+          // Load the most recent AI-generated prompt (skip custom-upload placeholder prompts)
+          const aiPromptRow = data?.find((row: any) => row.prompt && row.model !== "custom-upload" && !String(row.model || "").startsWith("facebook-") && !String(row.model || "").startsWith("instagram-"));
+          // Fallback: use any prompt if no AI-generated one exists
+          const latestPromptRow = aiPromptRow || data?.find((row: any) => row.prompt);
           if (latestPromptRow?.prompt) {
             setCoverPrompt(latestPromptRow.prompt);
             console.log("✅ Loaded saved cover prompt");
