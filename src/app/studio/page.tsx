@@ -4712,15 +4712,326 @@ function StudioContent() {
   </div>
 )}
 {view === "publish" && (
-  <div className="flex flex-col items-center justify-center py-20 animate-in fade-in zoom-in-95 duration-700">
-    <section className="max-w-2xl w-full rounded-[3rem] border border-zinc-800 bg-zinc-900/20 p-16 text-center backdrop-blur-3xl shadow-2xl">
-      <div className="mx-auto h-20 w-20 text-5xl mb-8 grayscale hover:grayscale-0 transition-all cursor-default">🚀</div>
-      <h2 className="text-4xl font-black tracking-tight text-zinc-100">Finalize & Publish</h2>
-      <p className="mt-6 text-zinc-400 leading-relaxed text-lg">Promote your novel from the Studio to the Public library.</p>
-      
-      <div className="mt-12 space-y-6">
+  <div className="space-y-8 animate-in fade-in duration-700">
+    {/* Header */}
+    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl">
+      <div className="flex items-center gap-4">
+        <span className="text-5xl">🚀</span>
+        <div>
+          <h2 className="text-3xl font-black tracking-tight text-zinc-100">Finalize & Publish</h2>
+          <p className="mt-1 text-zinc-400">Review everything produced and select what to publish to your website.</p>
+        </div>
+      </div>
+    </section>
+
+    {/* Novel Preview Card */}
+    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl">
+      <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-6">Novel Preview</h3>
+      <div className="flex flex-col md:flex-row gap-8">
+        {/* Cover Preview */}
+        <div className="shrink-0">
+          <div className="aspect-[2/3] w-48 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 flex items-center justify-center shadow-2xl">
+            {generatedCoverUrl ? (
+              <img src={generatedCoverUrl} alt="Cover" className="h-full w-full object-cover" />
+            ) : (
+              <div className="text-center p-6 opacity-20">
+                <span className="text-4xl">🎨</span>
+                <p className="text-xs mt-2">No cover</p>
+              </div>
+            )}
+          </div>
+        </div>
+        {/* Novel Info */}
+        <div className="flex-1 space-y-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Title</p>
+            <p className="text-2xl font-bold text-zinc-100">{title || "Untitled Novel"}</p>
+          </div>
+          {storyDetails?.genre && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Genre</p>
+              <p className="text-sm text-zinc-300">{storyDetails.genre}</p>
+            </div>
+          )}
+          {novelSynopsis && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Synopsis</p>
+              <p className="text-sm text-zinc-400 leading-relaxed line-clamp-6">{novelSynopsis}</p>
+            </div>
+          )}
+          {novelKeywords && novelKeywords.length > 0 && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Keywords</p>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {novelKeywords.map((kw, i) => (
+                  <span key={i} className="rounded-full border border-zinc-700 px-2.5 py-0.5 text-xs text-zinc-400">{kw}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+
+    {/* Manuscript Content */}
+    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl">
+      <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-6">Manuscript</h3>
+      {proseScenes && Object.keys(proseScenes).length > 0 ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-zinc-300">
+              <span className="font-semibold text-emerald-400">{Object.keys(proseScenes).length}</span> chapters with prose
+            </p>
+            <div className="flex gap-2">
+              {novelFormats["txt"] && (
+                <button
+                  onClick={() => downloadText(`${title || "novel"}_novel.txt`, novelFormats["txt"])}
+                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300 hover:border-zinc-500"
+                >
+                  TXT
+                </button>
+              )}
+              {novelFormats["md"] && (
+                <button
+                  onClick={() => downloadText(`${title || "novel"}_novel.md`, novelFormats["md"])}
+                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300 hover:border-zinc-500"
+                >
+                  Markdown
+                </button>
+              )}
+              {novelFormats["html"] && (
+                <button
+                  onClick={() => downloadText(`${title || "novel"}_novel.html`, novelFormats["html"])}
+                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300 hover:border-zinc-500"
+                >
+                  HTML
+                </button>
+              )}
+              {novelFormats["docx"] && (
+                <button
+                  onClick={() => {
+                    const byteChars = atob(novelFormats["docx"]);
+                    const byteNumbers = new Array(byteChars.length);
+                    for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
+                    const blob = new Blob([new Uint8Array(byteNumbers)], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `${title || "novel"}_novel.docx`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300 hover:border-zinc-500"
+                >
+                  DOCX
+                </button>
+              )}
+            </div>
+          </div>
+          <Collapsible label="Preview manuscript">
+            <div className="max-h-96 overflow-y-auto space-y-6 pr-2">
+              {Object.entries(proseScenes).map(([chapter, scenes], idx) => (
+                <div key={idx}>
+                  <p className="text-xs font-bold uppercase tracking-widest text-emerald-500 mb-2">{chapter}</p>
+                  {scenes.map((scene, sIdx) => (
+                    <p key={sIdx} className="text-xs text-zinc-400 leading-relaxed mb-2">{scene}</p>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </Collapsible>
+        </div>
+      ) : (
+        <p className="text-sm text-zinc-600 italic">No manuscript content generated yet. Complete the writing pipeline first.</p>
+      )}
+    </section>
+
+    {/* Cover Images */}
+    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl">
+      <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-6">Cover Images</h3>
+      {generatedCovers.length > 0 ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {generatedCovers.map((cover, index) => (
+            <div key={index} className="relative group">
+              <div className={`aspect-[2/3] rounded-xl overflow-hidden border-2 transition-all ${
+                generatedCoverUrl === cover.url ? "border-emerald-400 shadow-lg shadow-emerald-500/20" : "border-zinc-800"
+              }`}>
+                <img src={cover.url} alt={`Cover ${index + 1}`} className="h-full w-full object-cover" />
+              </div>
+              <div className="mt-2 flex items-center justify-between">
+                <button
+                  onClick={async () => {
+                    setGeneratedCoverUrl(cover.url);
+                    setCoverUrl(cover.url);
+                    setMockupUserImage(cover.url);
+                    if (novelId) {
+                      try {
+                        await fetch("/api/novel/covers/activate", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ novelId, coverId: cover.id, coverUrl: cover.url }),
+                        });
+                      } catch (err) {
+                        console.error("Failed to activate cover:", err);
+                      }
+                    }
+                  }}
+                  className={`text-xs font-semibold ${generatedCoverUrl === cover.url ? "text-emerald-400" : "text-zinc-500 hover:text-zinc-300"}`}
+                >
+                  {generatedCoverUrl === cover.url ? "✓ Selected" : "Select"}
+                </button>
+                <button
+                  onClick={() => {
+                    const link = document.createElement("a");
+                    link.href = cover.url;
+                    link.download = `cover_${index + 1}.png`;
+                    link.click();
+                  }}
+                  className="text-xs text-zinc-600 hover:text-zinc-300"
+                >
+                  Download
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-zinc-600 italic">No cover images generated yet. Use the Cover tab to create one.</p>
+      )}
+    </section>
+
+    {/* Mockup Renders */}
+    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl">
+      <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-6">Mockup Renders</h3>
+      {mockupRenderResultUrl ? (
+        <div className="space-y-4">
+          <div className="max-w-md">
+            <div className="rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-950">
+              <img src={mockupRenderResultUrl} alt="Mockup render" className="h-full w-full object-contain" />
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => {
+                  const link = document.createElement("a");
+                  link.href = mockupRenderResultUrl;
+                  link.download = `${title || "novel"}_mockup.png`;
+                  link.click();
+                }}
+                className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300 hover:border-zinc-500"
+              >
+                Download Mockup
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-zinc-600 italic">No mockup renders yet. Use the Mockups tab to generate product renders.</p>
+      )}
+    </section>
+
+    {/* Story Details & Pipeline Content */}
+    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl">
+      <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-6">Story & Marketing Content</h3>
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Story Details */}
+        {storyDetails && (
+          <Collapsible label="Story Details">
+            <pre className="whitespace-pre-wrap text-xs text-zinc-400 leading-relaxed">{formatReadable(storyDetails)}</pre>
+          </Collapsible>
+        )}
+        {/* Premises & Endings */}
+        {premisesAndEndings && (
+          <Collapsible label="Premises & Endings">
+            <div className="space-y-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 mb-1">Chosen Premise</p>
+                <p className="text-xs text-zinc-400">{premisesAndEndings.chosen_premise}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 mb-1">Chosen Ending</p>
+                <p className="text-xs text-zinc-400">{premisesAndEndings.chosen_ending}</p>
+              </div>
+            </div>
+          </Collapsible>
+        )}
+        {/* Character Profiles */}
+        {characterProfiles && (
+          <Collapsible label="Character Profiles">
+            <pre className="whitespace-pre-wrap text-xs text-zinc-400 leading-relaxed">{characterProfiles}</pre>
+          </Collapsible>
+        )}
+        {/* Book Descriptions */}
+        {bookDescriptions && (
+          <Collapsible label="Book Descriptions">
+            <div className="space-y-3">
+              {Object.entries(bookDescriptions).map(([key, value]) => (
+                <div key={key}>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 mb-1">{key.replace(/_/g, " ")}</p>
+                  <p className="text-xs text-zinc-400 leading-relaxed">{value}</p>
+                </div>
+              ))}
+            </div>
+          </Collapsible>
+        )}
+        {/* BISAC Categories */}
+        {novelBisac && novelBisac.length > 0 && (
+          <Collapsible label="BISAC Categories">
+            <div className="flex flex-wrap gap-1.5">
+              {novelBisac.map((cat, i) => (
+                <span key={i} className="rounded-full border border-zinc-700 px-2.5 py-0.5 text-xs text-zinc-400">{cat}</span>
+              ))}
+            </div>
+          </Collapsible>
+        )}
+        {/* Quotes */}
+        {novelQuotes && novelQuotes.length > 0 && (
+          <Collapsible label="Notable Quotes">
+            <div className="space-y-2">
+              {novelQuotes.map((quote, i) => (
+                <p key={i} className="text-xs text-zinc-400 italic leading-relaxed border-l-2 border-zinc-700 pl-3">"{quote}"</p>
+              ))}
+            </div>
+          </Collapsible>
+        )}
+        {/* Social Snippets */}
+        {socialSnippetsByPlatform && Object.keys(socialSnippetsByPlatform).length > 0 && (
+          <Collapsible label="Social Media Snippets">
+            <div className="space-y-3">
+              {Object.entries(socialSnippetsByPlatform).map(([platform, content]) => (
+                <div key={platform}>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 mb-1">{platform}</p>
+                  <p className="text-xs text-zinc-400 leading-relaxed">{content}</p>
+                </div>
+              ))}
+            </div>
+          </Collapsible>
+        )}
+        {/* Promotional Articles */}
+        {promotionalArticles && promotionalArticles.length > 0 && (
+          <Collapsible label="Promotional Articles">
+            <div className="space-y-4">
+              {promotionalArticles.map((article, i) => (
+                <div key={i} className="border-l-2 border-zinc-700 pl-3">
+                  <p className="text-xs font-semibold text-zinc-300">{article.title || `Article ${i + 1}`}</p>
+                  <p className="text-[10px] text-zinc-600 mt-0.5">{article.article_type} · {article.length_type} · {article.tone}</p>
+                  <p className="text-xs text-zinc-400 leading-relaxed mt-1">{article.content}</p>
+                </div>
+              ))}
+            </div>
+          </Collapsible>
+        )}
+      </div>
+      {/* Empty state if nothing generated */}
+      {!storyDetails && !premisesAndEndings && !characterProfiles && !bookDescriptions && !novelBisac && !novelQuotes && !socialSnippetsByPlatform && !promotionalArticles && (
+        <p className="text-sm text-zinc-600 italic">No story or marketing content generated yet. Complete the pipeline steps first.</p>
+      )}
+    </section>
+
+    {/* Publish Action */}
+    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl text-center">
+      <div className="max-w-md mx-auto space-y-6">
         {novelId && (
-          <div className="mx-auto max-w-md rounded-2xl border border-zinc-700 bg-zinc-950/50 px-5 py-4 text-left">
+          <div className="rounded-2xl border border-zinc-700 bg-zinc-950/50 px-5 py-4 text-left">
             <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
               Novel ID (for elstranbooks import)
             </p>
@@ -4747,7 +5058,7 @@ function StudioContent() {
         <button
           onClick={publishNovelAction}
           disabled={!novelId || isPublished || !!loadingStep}
-          className={`w-full max-w-md rounded-full px-10 py-6 text-xl font-black uppercase tracking-widest transition-all shadow-2xl ${
+          className={`w-full rounded-full px-10 py-6 text-xl font-black uppercase tracking-widest transition-all shadow-2xl ${
             isPublished 
             ? "bg-emerald-500 text-white cursor-default" 
             : "bg-white text-zinc-900 hover:scale-105 active:scale-95 hover:shadow-white/10"
