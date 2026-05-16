@@ -38,18 +38,20 @@ async function ensureCoverBucket(): Promise<boolean> {
 
 /**
  * POST /api/novel/covers/upload
- * Upload a custom cover image from the user's device to Supabase Storage
+ * Upload a custom image from the user's device to Supabase Storage
  * and save a record in the cover_design_prompts table.
  *
  * Accepts multipart/form-data with:
  *   - file: the image file (png, jpg, webp)
  *   - novelId: the novel UUID
+ *   - type: optional — "cover" (default), "facebook", or "instagram"
  */
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const novelId = formData.get("novelId") as string | null;
+    const type = (formData.get("type") as string) || "cover"; // cover | facebook | instagram
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -107,9 +109,17 @@ export async function POST(req: Request) {
     // Determine file extension
     const ext = file.type === "image/png" ? "png" : file.type === "image/jpeg" ? "jpg" : "webp";
 
-    // Upload to Supabase Storage
-    const fileName = `${novelId}/cover_uploaded_${Date.now()}.${ext}`;
+    // Determine file name and model prefix based on type
+    const prefix = type === "facebook" ? "facebook" : type === "instagram" ? "instagram" : "cover";
+    const fileName = `${novelId}/${prefix}_uploaded_${Date.now()}.${ext}`;
+    const modelValue = type === "facebook" ? "facebook-custom-upload" : type === "instagram" ? "instagram-custom-upload" : "custom-upload";
+    const promptValue = type === "facebook"
+      ? "Custom uploaded Facebook promotional image"
+      : type === "instagram"
+        ? "Custom uploaded Instagram promotional image"
+        : "Custom uploaded cover image";
 
+    // Upload to Supabase Storage
     const { error: uploadError } = await supabaseAdmin
       .storage
       .from("novel-covers")
@@ -132,16 +142,18 @@ export async function POST(req: Request) {
       .from("novel-covers")
       .getPublicUrl(fileName);
 
-    console.log("✅ Custom cover uploaded to storage:", publicUrl);
+    console.log(`✅ Custom ${type} image uploaded to storage:`, publicUrl);
 
-    // Deactivate existing covers for this novel
-    const { error: deactivateError } = await supabaseAdmin
-      .from("cover_design_prompts")
-      .update({ is_active: false })
-      .eq("novel_id", novelId);
+    // Only deactivate existing covers for the cover type
+    if (type === "cover") {
+      const { error: deactivateError } = await supabaseAdmin
+        .from("cover_design_prompts")
+        .update({ is_active: false })
+        .eq("novel_id", novelId);
 
-    if (deactivateError) {
-      console.warn("⚠️ Could not deactivate existing covers:", deactivateError.message);
+      if (deactivateError) {
+        console.warn("⚠️ Could not deactivate existing covers:", deactivateError.message);
+      }
     }
 
     // Save cover record to database
@@ -151,8 +163,8 @@ export async function POST(req: Request) {
         novel_id: novelId,
         user_id: userId,
         url: publicUrl,
-        model: "custom-upload",
-        prompt: "Custom uploaded cover image",
+        model: modelValue,
+        prompt: promptValue,
         is_active: true,
       })
       .select("id, url, is_active")
@@ -166,12 +178,13 @@ export async function POST(req: Request) {
       );
     }
 
-    console.log("✅ Custom cover record saved to database for novel:", novelId);
+    console.log(`✅ Custom ${type} record saved to database for novel:`, novelId);
 
     return NextResponse.json({
       imageUrl: publicUrl,
       saved: true,
       coverId: insertData.id,
+      type,
     });
   } catch (error) {
     console.error("❌ Cover upload error:", error);

@@ -451,6 +451,10 @@ function StudioContent() {
   const [isGeneratingFacebook, setIsGeneratingFacebook] = useState(false);
   const [instagramImageUrl, setInstagramImageUrl] = useState<string | null>(null);
   const [isGeneratingInstagram, setIsGeneratingInstagram] = useState(false);
+  const [isUploadingFacebook, setIsUploadingFacebook] = useState(false);
+  const [isDraggingFacebook, setIsDraggingFacebook] = useState(false);
+  const [isUploadingInstagram, setIsUploadingInstagram] = useState(false);
+  const [isDraggingInstagram, setIsDraggingInstagram] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
   const [publishPublicId, setPublishPublicId] = useState<string | null>(null);
   const [novelIdCopied, setNovelIdCopied] = useState(false);
@@ -1016,7 +1020,7 @@ function StudioContent() {
         console.log("ℹ️ No cover data found for novel", novelIdValue);
       }
 
-      // Load Facebook promotional image from cover_design_prompts (model starts with "facebook-")
+      // Load Facebook promotional image from cover_design_prompts (model starts with "facebook-" or "facebook-custom-upload")
       try {
         const { data: fbData, error: fbError } = await supabase
           .from("cover_design_prompts")
@@ -2323,6 +2327,72 @@ function StudioContent() {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setIsGeneratingInstagram(false);
+    }
+  };
+
+  const uploadFacebookImage = async (file: File) => {
+    if (!novelId) {
+      setError("Please create a novel first before uploading a Facebook image.");
+      return;
+    }
+    setIsUploadingFacebook(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("novelId", novelId);
+      formData.append("type", "facebook");
+
+      const response = await fetch("/api/novel/covers/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Failed to upload Facebook image");
+      }
+
+      const data = await response.json();
+      setFacebookImageUrl(data.imageUrl);
+      setMessage("Facebook promotional image uploaded successfully!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setIsUploadingFacebook(false);
+    }
+  };
+
+  const uploadInstagramImage = async (file: File) => {
+    if (!novelId) {
+      setError("Please create a novel first before uploading an Instagram image.");
+      return;
+    }
+    setIsUploadingInstagram(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("novelId", novelId);
+      formData.append("type", "instagram");
+
+      const response = await fetch("/api/novel/covers/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Failed to upload Instagram image");
+      }
+
+      const data = await response.json();
+      setInstagramImageUrl(data.imageUrl);
+      setMessage("Instagram promotional image uploaded successfully!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setIsUploadingInstagram(false);
     }
   };
 
@@ -4591,6 +4661,84 @@ function StudioContent() {
       {/* Step 4: Generate Facebook Promotional Image */}
       <div className="border-t border-zinc-800 pt-8 mt-8">
         <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-6">Step 4 — Facebook Promotional Image</h3>
+
+        {/* Upload Facebook Image */}
+        <div
+          className={`relative rounded-2xl border-2 border-dashed transition-all duration-200 mb-6 ${
+            isDraggingFacebook
+              ? "border-blue-400 bg-blue-500/10"
+              : "border-zinc-700 bg-zinc-950/40 hover:border-zinc-500"
+          }`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDraggingFacebook(true);
+          }}
+          onDragEnter={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDraggingFacebook(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDraggingFacebook(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDraggingFacebook(false);
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+              const file = files[0];
+              if (file.type.startsWith("image/")) {
+                uploadFacebookImage(file);
+              } else {
+                setError("Please drop an image file (PNG, JPEG, or WebP).");
+              }
+            }
+          }}
+        >
+          <div className="flex flex-col items-center justify-center py-6 px-4">
+            {isUploadingFacebook ? (
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-blue-400" />
+                <p className="text-sm font-medium text-zinc-300">Uploading Facebook image...</p>
+              </div>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-8 w-8 text-zinc-500">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                </svg>
+                <p className="mt-2 text-sm font-semibold text-zinc-300">
+                  {isDraggingFacebook ? "Drop your Facebook image here" : "Drag & drop a Facebook image here"}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">PNG, JPEG, or WebP up to 10MB</p>
+                <label className="mt-3 cursor-pointer rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:from-blue-500 hover:to-indigo-500 transition-colors">
+                  Browse Files
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={(e) => {
+                      const files = e.target.files;
+                      if (files && files.length > 0) uploadFacebookImage(files[0]);
+                      e.target.value = "";
+                    }}
+                    className="hidden"
+                  />
+                </label>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="flex items-center gap-4 mb-6">
+          <div className="h-px flex-1 bg-zinc-800" />
+          <span className="text-xs font-bold uppercase tracking-widest text-zinc-600">Or generate with AI</span>
+          <div className="h-px flex-1 bg-zinc-800" />
+        </div>
+
         <div className="grid gap-8 md:grid-cols-2">
           <div className="space-y-4">
             <button
@@ -4621,6 +4769,84 @@ function StudioContent() {
       {/* Step 5: Generate Instagram Promotional Image */}
       <div className="border-t border-zinc-800 pt-8 mt-8">
         <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-6">Step 5 — Instagram Promotional Image</h3>
+
+        {/* Upload Instagram Image */}
+        <div
+          className={`relative rounded-2xl border-2 border-dashed transition-all duration-200 mb-6 ${
+            isDraggingInstagram
+              ? "border-pink-400 bg-pink-500/10"
+              : "border-zinc-700 bg-zinc-950/40 hover:border-zinc-500"
+          }`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDraggingInstagram(true);
+          }}
+          onDragEnter={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDraggingInstagram(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDraggingInstagram(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDraggingInstagram(false);
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+              const file = files[0];
+              if (file.type.startsWith("image/")) {
+                uploadInstagramImage(file);
+              } else {
+                setError("Please drop an image file (PNG, JPEG, or WebP).");
+              }
+            }
+          }}
+        >
+          <div className="flex flex-col items-center justify-center py-6 px-4">
+            {isUploadingInstagram ? (
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-600 border-t-pink-400" />
+                <p className="text-sm font-medium text-zinc-300">Uploading Instagram image...</p>
+              </div>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-8 w-8 text-zinc-500">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                </svg>
+                <p className="mt-2 text-sm font-semibold text-zinc-300">
+                  {isDraggingInstagram ? "Drop your Instagram image here" : "Drag & drop an Instagram image here"}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">PNG, JPEG, or WebP up to 10MB</p>
+                <label className="mt-3 cursor-pointer rounded-full bg-gradient-to-r from-pink-600 to-purple-600 px-5 py-2 text-sm font-semibold text-white hover:from-pink-500 hover:to-purple-500 transition-colors">
+                  Browse Files
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={(e) => {
+                      const files = e.target.files;
+                      if (files && files.length > 0) uploadInstagramImage(files[0]);
+                      e.target.value = "";
+                    }}
+                    className="hidden"
+                  />
+                </label>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="flex items-center gap-4 mb-6">
+          <div className="h-px flex-1 bg-zinc-800" />
+          <span className="text-xs font-bold uppercase tracking-widest text-zinc-600">Or generate with AI</span>
+          <div className="h-px flex-1 bg-zinc-800" />
+        </div>
+
         <div className="grid gap-8 md:grid-cols-2">
           <div className="space-y-4">
             <button
