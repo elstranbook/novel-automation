@@ -4747,12 +4747,12 @@ function StudioContent() {
             <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Title</p>
             <p className="text-2xl font-bold text-zinc-100">{title || "Untitled Novel"}</p>
           </div>
-          {storyDetails?.genre && typeof storyDetails.genre === "string" && (
+          {typeof storyDetails?.genre === "string" ? (
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Genre</p>
-              <p className="text-sm text-zinc-300">{storyDetails.genre as string}</p>
+              <p className="text-sm text-zinc-300">{storyDetails.genre}</p>
             </div>
-          )}
+          ) : null}
           {novelSynopsis && (
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Synopsis</p>
@@ -5012,9 +5012,9 @@ function StudioContent() {
             <div className="space-y-4">
               {promotionalArticles.map((article, i) => (
                 <div key={i} className="border-l-2 border-zinc-700 pl-3">
-                  <p className="text-xs font-semibold text-zinc-300">{article.title || `Article ${i + 1}`}</p>
-                  <p className="text-[10px] text-zinc-600 mt-0.5">{article.article_type} · {article.length_type} · {article.tone}</p>
-                  <p className="text-xs text-zinc-400 leading-relaxed mt-1">{article.content}</p>
+                  <p className="text-xs font-semibold text-zinc-300">{typeof article.title === "string" ? article.title : `Article ${i + 1}`}</p>
+                  <p className="text-[10px] text-zinc-600 mt-0.5">{typeof article.article_type === "string" ? article.article_type : ""} · {typeof article.length_type === "string" ? article.length_type : ""} · {typeof article.tone === "string" ? article.tone : ""}</p>
+                  <p className="text-xs text-zinc-400 leading-relaxed mt-1">{typeof article.content === "string" ? article.content : ""}</p>
                 </div>
               ))}
             </div>
