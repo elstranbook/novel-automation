@@ -994,7 +994,7 @@ function StudioContent() {
 
       if (coversData && coversData.length > 0) {
         const covers = coversData
-          .filter((c: any) => c.url) // Only include records that have a URL
+          .filter((c: any) => c.url && !String(c.model || "").startsWith("facebook-") && !String(c.model || "").startsWith("instagram-")) // Only cover images, not social media
           .map((c: any) => ({
             id: c.id,
             url: c.url,
@@ -1003,9 +1003,9 @@ function StudioContent() {
         setGeneratedCovers(covers);
         console.log("🖼️ Covers with URLs:", covers.length);
 
-        // Prefer the active cover, otherwise use the most recent one with a URL
-        const activeCover = coversData.find((c: any) => c.is_active && c.url);
-        const latestCoverWithUrl = coversData.find((c: any) => c.url);
+        // Prefer the active cover, otherwise use the most recent one with a URL (excluding social media images)
+        const activeCover = coversData.find((c: any) => c.is_active && c.url && !String(c.model || "").startsWith("facebook-") && !String(c.model || "").startsWith("instagram-"));
+        const latestCoverWithUrl = coversData.find((c: any) => c.url && !String(c.model || "").startsWith("facebook-") && !String(c.model || "").startsWith("instagram-"));
         const coverToUse = activeCover || latestCoverWithUrl;
 
         if (coverToUse) {
