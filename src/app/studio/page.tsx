@@ -4747,10 +4747,10 @@ function StudioContent() {
             <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Title</p>
             <p className="text-2xl font-bold text-zinc-100">{title || "Untitled Novel"}</p>
           </div>
-          {storyDetails?.genre && (
+          {storyDetails?.genre && typeof storyDetails.genre === "string" && (
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Genre</p>
-              <p className="text-sm text-zinc-300">{storyDetails.genre}</p>
+              <p className="text-sm text-zinc-300">{storyDetails.genre as string}</p>
             </div>
           )}
           {novelSynopsis && (
