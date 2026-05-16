@@ -445,6 +445,8 @@ function StudioContent() {
   const [generatedCovers, setGeneratedCovers] = useState<Array<{ id: string; url: string; createdAt: string }>>([]);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [isDraggingCover, setIsDraggingCover] = useState(false);
+  const [reimaginedPrompt, setReimaginedPrompt] = useState<string | null>(null);
+  const [isReimagining, setIsReimagining] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
   const [publishPublicId, setPublishPublicId] = useState<string | null>(null);
   const [novelIdCopied, setNovelIdCopied] = useState(false);
@@ -1908,6 +1910,7 @@ function StudioContent() {
       if (!response.ok) throw new Error("Failed to generate cover prompt");
       const data = await response.json();
       setCoverPrompt(data.prompt);
+      setReimaginedPrompt(null); // Reset reimagination when a new prompt is generated
       // Save cover prompt WITHOUT deleting rows that may have cover image URLs.
       // Use upsert pattern: find an existing prompt-only row to update, or insert a new one.
       const { data: existingRows } = await supabase
@@ -2154,8 +2157,34 @@ function StudioContent() {
     }
   };
 
-  const generateCoverImage = async () => {
+  const reimagineCoverPrompt = async () => {
     if (!coverPrompt) return;
+    setIsReimagining(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/generate/cover-reimagine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: coverPrompt }),
+      });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Failed to reimagine prompt");
+      }
+      const data = await response.json();
+      setReimaginedPrompt(data.reimaginedPrompt);
+      setMessage("Prompt reimagined by GPT-5 successfully!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setIsReimagining(false);
+    }
+  };
+
+  const generateCoverImage = async () => {
+    // Use the reimagined prompt if available, otherwise use the original
+    const promptToUse = reimaginedPrompt || coverPrompt;
+    if (!promptToUse) return;
     setLoadingStep("cover-image");
     setError(null);
     try {
@@ -2163,7 +2192,7 @@ function StudioContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
-          prompt: coverPrompt, 
+          prompt: promptToUse, 
           model: imageModel,
           novelId: novelId // Pass novel ID for saving
         }),
@@ -2175,12 +2204,12 @@ function StudioContent() {
       const data = await response.json();
       setGeneratedCoverUrl(data.imageUrl);
       setCoverUrl(data.imageUrl);
-      // If the prompt was reimagined by GPT-5, update the displayed prompt
+      // If the prompt was reimagined by GPT-5 (via API), update the displayed prompt
       if (data.enhancedPrompt) {
         setCoverPrompt(data.enhancedPrompt);
       }
       setGeneratedCovers((prev) => [{ id: data.coverId || `new-${Date.now()}`, url: data.imageUrl, createdAt: new Date().toISOString() }, ...prev]);
-      setMessage(data.enhancedPrompt ? "Cover image generated with enhanced prompt and saved successfully!" : "Cover image generated and saved successfully!");
+      setMessage("Cover image generated and saved successfully!");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -4335,7 +4364,8 @@ function StudioContent() {
         </label>
       </div>
       
-      <div className="mt-8 grid gap-8 md:grid-cols-2">
+      <div className="mt-8 space-y-6">
+        {/* Step 1: Generate Prompt */}
         <div className="space-y-4">
           <button 
             onClick={generateCoverPrompt}
@@ -4344,19 +4374,47 @@ function StudioContent() {
           >
             {loadingStep === "cover" ? "Generating Prompt..." : "1. Refresh Design Prompt"}
           </button>
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6 min-h-[200px]">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6 min-h-[120px]">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 mb-2">Original Prompt</p>
             <pre className="whitespace-pre-wrap text-xs text-zinc-400 leading-relaxed">{coverPrompt || "Generate a prompt in the Write view first..."}</pre>
           </div>
         </div>
 
-        <div className="space-y-6">
+        {/* Step 2: Reimagine with GPT-5 */}
+        <div className="space-y-4">
           <button 
-            onClick={generateCoverImage}
-            disabled={!coverPrompt || loadingStep === "cover-image"}
-            className="w-full rounded-2xl bg-white py-4 text-sm font-black uppercase tracking-widest text-zinc-950 hover:bg-zinc-200 transition-all"
+            onClick={reimagineCoverPrompt}
+            disabled={!coverPrompt || isReimagining}
+            className="w-full rounded-2xl bg-zinc-800 py-4 text-sm font-bold uppercase tracking-widest text-white hover:bg-zinc-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loadingStep === "cover-image" ? "Creating Image..." : "2. Generate AI Cover Image"}
+            {isReimagining ? "Reimagining with GPT-5..." : "2. Reimagine Prompt with GPT-5"}
           </button>
+          {reimaginedPrompt ? (
+            <div className="rounded-2xl border border-emerald-800/40 bg-emerald-950/20 p-6 min-h-[120px]">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 mb-2">Reimagined Prompt (GPT-5 Enhanced)</p>
+              <pre className="whitespace-pre-wrap text-xs text-zinc-300 leading-relaxed">{reimaginedPrompt}</pre>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6 min-h-[80px]">
+              <p className="text-xs text-zinc-600 italic">Click above to reimagine your prompt with GPT-5 for cinematic quality. This step transforms your basic prompt into a detailed, genre-aware, visually rich image generation prompt.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Step 3: Generate Cover Image */}
+        <div className="grid gap-8 md:grid-cols-2">
+          <div className="space-y-4">
+            <button 
+              onClick={generateCoverImage}
+              disabled={(!coverPrompt && !reimaginedPrompt) || loadingStep === "cover-image"}
+              className="w-full rounded-2xl bg-white py-4 text-sm font-black uppercase tracking-widest text-zinc-950 hover:bg-zinc-200 transition-all"
+            >
+              {loadingStep === "cover-image" ? "Creating Image..." : "3. Generate AI Cover Image"}
+            </button>
+            {reimaginedPrompt && (
+              <p className="text-xs text-emerald-400 text-center">Will use GPT-5 reimagined prompt</p>
+            )}
+          </div>
           <div className="aspect-[2/3] w-full max-w-sm mx-auto overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950 flex items-center justify-center shadow-2xl">
             {generatedCoverUrl ? (
               <img src={generatedCoverUrl} alt="Generated Cover" className="h-full w-full object-cover" />
@@ -4366,62 +4424,62 @@ function StudioContent() {
               </div>
             )}
           </div>
-          
-          {generatedCovers.length > 0 && (
-            <div className="mt-8">
-              <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-4">Generated Covers</h3>
-              <div className="grid grid-cols-3 gap-3">
-                {generatedCovers.map((cover, index) => (
-                  <div key={index} className="relative group aspect-[2/3] rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950">
-                    <img src={cover.url} alt={`Cover ${index + 1}`} className="h-full w-full object-cover" />
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                      <button
-                        onClick={() => {
-                          const link = document.createElement("a");
-                          link.href = cover.url;
-                          link.download = `cover_${index + 1}.png`;
-                          link.click();
-                        }}
-                        className="p-2 bg-white rounded-lg text-zinc-900 hover:bg-zinc-200"
-                        title="Download"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M12 12.75l-3-3m0 0l-3 3m3-3v5.25" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={async () => {
-                          setGeneratedCoverUrl(cover.url);
-                          setCoverUrl(cover.url);
-                          // Persist the selection in the database
-                          if (novelId) {
-                            try {
-                              await fetch("/api/novel/covers/activate", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ novelId, coverId: cover.id, coverUrl: cover.url }),
-                              });
-                              console.log("✅ Cover selection persisted");
-                            } catch (err) {
-                              console.error("❌ Failed to persist cover selection:", err);
-                            }
-                          }
-                        }}
-                        className={`p-2 rounded-lg text-white ${generatedCoverUrl === cover.url ? 'bg-emerald-600 ring-2 ring-emerald-400' : 'bg-emerald-500 hover:bg-emerald-600'}`}
-                        title="Use as cover"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 12l4.5-4.5m0 0l4.5 4.5m-4.5-4.5V21" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
+
+      {generatedCovers.length > 0 && (
+        <div className="mt-8">
+          <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-4">Generated Covers</h3>
+          <div className="grid grid-cols-3 gap-3">
+            {generatedCovers.map((cover, index) => (
+              <div key={index} className="relative group aspect-[2/3] rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950">
+                <img src={cover.url} alt={`Cover ${index + 1}`} className="h-full w-full object-cover" />
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => {
+                      const link = document.createElement("a");
+                      link.href = cover.url;
+                      link.download = `cover_${index + 1}.png`;
+                      link.click();
+                    }}
+                    className="p-2 bg-white rounded-lg text-zinc-900 hover:bg-zinc-200"
+                    title="Download"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M12 12.75l-3-3m0 0l-3 3m3-3v5.25" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setGeneratedCoverUrl(cover.url);
+                      setCoverUrl(cover.url);
+                      // Persist the selection in the database
+                      if (novelId) {
+                        try {
+                          await fetch("/api/novel/covers/activate", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ novelId, coverId: cover.id, coverUrl: cover.url }),
+                          });
+                          console.log("✅ Cover selection persisted");
+                        } catch (err) {
+                          console.error("❌ Failed to persist cover selection:", err);
+                        }
+                      }
+                    }}
+                    className={`p-2 rounded-lg text-white ${generatedCoverUrl === cover.url ? 'bg-emerald-600 ring-2 ring-emerald-400' : 'bg-emerald-500 hover:bg-emerald-600'}`}
+                    title="Use as cover"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 12l4.5-4.5m0 0l4.5 4.5m-4.5-4.5V21" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   </div>
 )}

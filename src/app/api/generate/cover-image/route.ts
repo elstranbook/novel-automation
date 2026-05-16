@@ -61,7 +61,7 @@ export async function POST(req: Request) {
     try {
       console.log("🧠 Reimagining cover prompt with GPT-5...");
       const reimagined = await runChatCompletion({
-        model: "gpt-4.1",
+        model: "gpt-5",
         system: `You are an elite creative director and cinematic book cover prompt engineer.
 
 Your task is to transform simple or weak book cover prompts into highly detailed, emotionally compelling, visually cinematic AI image prompts suitable for premium-quality novel covers.
