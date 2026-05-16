@@ -71,7 +71,7 @@ Include subtle visual metaphors if relevant (reflections, shadows, broken shapes
 
 9. TYPOGRAPHY PLACEMENT
 - Title "${title}" at top center in modern serif/sans-serif, high contrast or soft glow
-- Author "Elstran Books" at bottom, minimal clean font
+- Author "Elstran Books" at bottom, large clean font
 
 10. OUTPUT QUALITY
 End with:
