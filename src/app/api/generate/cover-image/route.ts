@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { runChatCompletion } from "@/lib/openaiClient";
 
 /**
  * Ensure the novel-covers storage bucket exists. Creates it if missing.
@@ -55,13 +56,73 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "OpenAI API Key not configured" }, { status: 500 });
     }
 
-    // 1. Generate Image from OpenAI API
+    // 1. Reimagine the prompt with GPT-5 for cinematic quality
+    let enhancedPrompt = prompt;
+    try {
+      console.log("🧠 Reimagining cover prompt with GPT-5...");
+      const reimagined = await runChatCompletion({
+        model: "gpt-4.1",
+        system: `You are an elite creative director and cinematic book cover prompt engineer.
+
+Your task is to transform simple or weak book cover prompts into highly detailed, emotionally compelling, visually cinematic AI image prompts suitable for premium-quality novel covers.
+
+The rewritten prompt must:
+- Preserve the original story concept and genre
+- Dramatically improve visual storytelling
+- Add cinematic atmosphere and emotional depth
+- Improve composition, lighting, symbolism, mood, wardrobe, environment, and color harmony
+- Make the cover feel like a bestselling modern novel cover
+- Include professional art direction language
+- Avoid generic or flat descriptions
+- Avoid cluttered scenes
+- Keep the focus visually strong and marketable
+
+When rewriting:
+- Identify the genre automatically
+- Match the tone to the genre
+  - Romance → emotional, warm, intimate
+  - Thriller → tense, dark, mysterious
+  - Fantasy → epic, magical, atmospheric
+  - Sci-fi → futuristic, sleek, dramatic
+  - Christian → hopeful, uplifting, spiritual
+  - Horror → unsettling, moody, cinematic
+- Create strong focal points
+- Use visually rich details
+- Add realistic lighting and camera direction
+- Include depth, texture, and cinematic framing
+- Make characters visually expressive
+- Include typography placement suggestions naturally if appropriate
+- Make the final result optimized for vertical book cover generation
+
+Output Requirements:
+- Return ONLY the improved image-generation prompt
+- Do NOT explain anything
+- Do NOT use bullet points
+- Write in one polished cinematic paragraph
+- Keep it between 150–350 words
+- Make it highly descriptive but coherent`,
+        prompt: `Here is the original prompt to reimagine:\n\n${prompt}`,
+        jsonResponse: false,
+        maxTokens: 1500,
+      });
+
+      if (reimagined && typeof reimagined === "string" && reimagined.trim().length > 50) {
+        enhancedPrompt = reimagined.trim();
+        console.log("✅ Prompt reimagined successfully. Enhanced length:", enhancedPrompt.length);
+      } else {
+        console.warn("⚠️ Reimagined prompt was too short or empty, using original prompt");
+      }
+    } catch (reimagineError) {
+      console.warn("⚠️ Prompt reimagination failed, using original prompt:", reimagineError instanceof Error ? reimagineError.message : reimagineError);
+    }
+
+    // 2. Generate Image from OpenAI API using the enhanced prompt
     let requestBody: Record<string, unknown>;
 
     if (model.includes("gpt-image-1")) {
-      requestBody = { model, prompt, quality: "high" };
+      requestBody = { model, prompt: enhancedPrompt, quality: "high" };
     } else {
-      requestBody = { model, prompt, n: 1, size: "1024x1024", quality: "standard" };
+      requestBody = { model, prompt: enhancedPrompt, n: 1, size: "1024x1024", quality: "standard" };
     }
 
     const response = await fetch("https://api.openai.com/v1/images/generations", {
@@ -91,7 +152,7 @@ export async function POST(req: Request) {
     const rawBase64 = imageData.b64_json || "";
     const rawUrl = imageData.url || "";
 
-    // 2. Prepare image buffer for upload
+    // 3. Prepare image buffer for upload
     let imageBuffer: Buffer | null = null;
     if (hasBase64) {
       imageBuffer = Buffer.from(rawBase64, "base64");
@@ -101,7 +162,7 @@ export async function POST(req: Request) {
       imageBuffer = Buffer.from(await imageBlob.arrayBuffer());
     }
 
-    // 3. Upload to Supabase Storage
+    // 4. Upload to Supabase Storage
     let finalUrl = "";
     let storageUploadSucceeded = false;
 
@@ -140,7 +201,7 @@ export async function POST(req: Request) {
         console.error("❌ Storage bucket 'novel-covers' is not available and could not be created");
       }
 
-      // 4. Save cover record to database
+      // 5. Save cover record to database
       // Only save a persistent URL (storage public URL), NOT base64 data URLs (too large)
       if (!finalUrl) {
         // Storage failed — we don't have a persistent URL to save.
@@ -182,7 +243,7 @@ export async function POST(req: Request) {
                 user_id: userId,
                 url: finalUrl,
                 model: model,
-                prompt: prompt.substring(0, 5000), // Truncate very long prompts
+                prompt: enhancedPrompt.substring(0, 5000), // Save the enhanced prompt
                 is_active: true,
               });
 
@@ -208,6 +269,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       imageUrl: finalUrl,
       saved: storageUploadSucceeded,
+      enhancedPrompt: enhancedPrompt !== prompt ? enhancedPrompt : undefined,
     });
   } catch (error) {
     console.error("❌ Cover image generation error:", error);

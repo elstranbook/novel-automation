@@ -2175,8 +2175,12 @@ function StudioContent() {
       const data = await response.json();
       setGeneratedCoverUrl(data.imageUrl);
       setCoverUrl(data.imageUrl);
+      // If the prompt was reimagined by GPT-5, update the displayed prompt
+      if (data.enhancedPrompt) {
+        setCoverPrompt(data.enhancedPrompt);
+      }
       setGeneratedCovers((prev) => [{ id: data.coverId || `new-${Date.now()}`, url: data.imageUrl, createdAt: new Date().toISOString() }, ...prev]);
-      setMessage("Cover image generated and saved successfully!");
+      setMessage(data.enhancedPrompt ? "Cover image generated with enhanced prompt and saved successfully!" : "Cover image generated and saved successfully!");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
