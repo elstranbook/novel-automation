@@ -449,6 +449,8 @@ function StudioContent() {
   const [isReimagining, setIsReimagining] = useState(false);
   const [facebookImageUrl, setFacebookImageUrl] = useState<string | null>(null);
   const [isGeneratingFacebook, setIsGeneratingFacebook] = useState(false);
+  const [instagramImageUrl, setInstagramImageUrl] = useState<string | null>(null);
+  const [isGeneratingInstagram, setIsGeneratingInstagram] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
   const [publishPublicId, setPublishPublicId] = useState<string | null>(null);
   const [novelIdCopied, setNovelIdCopied] = useState(false);
@@ -934,6 +936,7 @@ function StudioContent() {
       setGeneratedCoverUrl(null);
       setCoverUrl("");
       setFacebookImageUrl(null);
+      setInstagramImageUrl(null);
 
       // Fetch all generated covers from cover_design_prompts table
       let coversData = null;
@@ -1029,6 +1032,24 @@ function StudioContent() {
         }
       } catch (fbLoadErr) {
         console.warn("⚠️ Could not load Facebook image:", fbLoadErr);
+      }
+
+      // Load Instagram promotional image from cover_design_prompts (model starts with "instagram-")
+      try {
+        const { data: igData, error: igError } = await supabase
+          .from("cover_design_prompts")
+          .select("url,model")
+          .eq("novel_id", novelIdValue)
+          .like("model", "instagram-%")
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (!igError && igData && igData.length > 0 && igData[0].url) {
+          setInstagramImageUrl(igData[0].url);
+          console.log("✅ Loaded saved Instagram promotional image");
+        }
+      } catch (igLoadErr) {
+        console.warn("⚠️ Could not load Instagram image:", igLoadErr);
       }
 
     }
@@ -2270,6 +2291,38 @@ function StudioContent() {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setIsGeneratingFacebook(false);
+    }
+  };
+
+  const generateInstagramImage = async () => {
+    const promptToUse = reimaginedPrompt || coverPrompt;
+    if (!promptToUse) {
+      setError("Please generate or enter a cover prompt first.");
+      return;
+    }
+    setIsGeneratingInstagram(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/generate/instagram-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: promptToUse,
+          model: imageModel,
+          novelId: novelId,
+        }),
+      });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Failed to generate Instagram image");
+      }
+      const data = await response.json();
+      setInstagramImageUrl(data.imageUrl);
+      setMessage("Instagram promotional image generated successfully!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setIsGeneratingInstagram(false);
     }
   };
 
@@ -4559,6 +4612,36 @@ function StudioContent() {
               <div className="text-center p-12 opacity-20">
                 <span className="text-6xl">📱</span>
                 <p className="text-xs text-zinc-500 mt-2">Facebook 4:5</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Step 5: Generate Instagram Promotional Image */}
+      <div className="border-t border-zinc-800 pt-8 mt-8">
+        <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-6">Step 5 — Instagram Promotional Image</h3>
+        <div className="grid gap-8 md:grid-cols-2">
+          <div className="space-y-4">
+            <button
+              onClick={generateInstagramImage}
+              disabled={(!coverPrompt && !reimaginedPrompt) || isGeneratingInstagram}
+              className="w-full rounded-2xl bg-gradient-to-r from-pink-600 to-purple-600 py-4 text-sm font-black uppercase tracking-widest text-white hover:from-pink-500 hover:to-purple-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isGeneratingInstagram ? "Creating Instagram Image..." : "5. Generate Instagram Image"}
+            </button>
+            {reimaginedPrompt && (
+              <p className="text-xs text-emerald-400 text-center">Will use GPT-5 reimagined prompt</p>
+            )}
+            <p className="text-xs text-zinc-600 text-center">Generates a 4:5 portrait image optimized for Instagram feed engagement</p>
+          </div>
+          <div className="aspect-[4/5] w-full max-w-sm mx-auto overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950 flex items-center justify-center shadow-2xl">
+            {instagramImageUrl ? (
+              <img src={instagramImageUrl} alt="Instagram Promotional Image" className="h-full w-full object-cover" />
+            ) : (
+              <div className="text-center p-12 opacity-20">
+                <span className="text-6xl">📸</span>
+                <p className="text-xs text-zinc-500 mt-2">Instagram 4:5</p>
               </div>
             )}
           </div>
