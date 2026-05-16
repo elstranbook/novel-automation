@@ -2158,7 +2158,10 @@ function StudioContent() {
   };
 
   const reimagineCoverPrompt = async () => {
-    if (!coverPrompt) return;
+    if (!coverPrompt) {
+      setError("Please generate a cover prompt first (Step 1).");
+      return;
+    }
     setIsReimagining(true);
     setError(null);
     try {
@@ -4370,7 +4373,7 @@ function StudioContent() {
         <div className="space-y-4">
           <button 
             onClick={reimagineCoverPrompt}
-            disabled={!coverPrompt || isReimagining}
+            disabled={isReimagining}
             className="w-full rounded-2xl bg-zinc-800 py-4 text-sm font-bold uppercase tracking-widest text-white hover:bg-zinc-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isReimagining ? "Reimagining with GPT-5..." : "2. Reimagine Prompt with GPT-5"}
