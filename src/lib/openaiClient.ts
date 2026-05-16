@@ -59,7 +59,7 @@ export const runChatCompletion = async ({
   const response = await openaiClient.chat.completions.create({
     model,
     messages,
-    max_tokens: maxTokens ?? 4000,
+    max_completion_tokens: maxTokens ?? 4000,
     response_format: jsonResponse ? { type: "json_object" } : undefined,
   });
 

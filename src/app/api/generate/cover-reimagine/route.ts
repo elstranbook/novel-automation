@@ -79,8 +79,10 @@ Output Requirements:
     return NextResponse.json({ reimaginedPrompt: reimagined.trim() });
   } catch (error) {
     console.error("❌ Cover prompt reimagination error:", error);
+    const message = error instanceof Error ? error.message : "Failed to reimagine prompt";
+    // Return more detail so we can debug on the client side
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to reimagine prompt" },
+      { error: message },
       { status: 500 }
     );
   }
