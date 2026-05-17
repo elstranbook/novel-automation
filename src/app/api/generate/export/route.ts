@@ -286,6 +286,7 @@ function buildDocx(body: ExportRequestBody): Document {
     // "COPYRIGHT © {year} BY {AUTHOR NAME}" — 9pt bold centered
     new Paragraph({
       alignment: AlignmentType.CENTER,
+      spacing: { after: 120 },
       children: [
         new TextRun({
           text: `COPYRIGHT \u00A9 ${currentYear} BY ${authorName.toUpperCase()}`,
@@ -299,9 +300,10 @@ function buildDocx(body: ExportRequestBody): Document {
     // Copyright notice — 9pt italic centered
     new Paragraph({
       alignment: AlignmentType.CENTER,
+      spacing: { after: 120 },
       children: [
         new TextRun({
-          text: 'All rights reserved. No part of this publication may be reproduced, distributed, or transmitted in any form or by any means, including photocopying, recording, or other electronic or mechanical methods, without the prior written permission of the publisher, except in the case of brief quotations embodied in critical reviews and certain other noncommercial uses permitted by copyright law.',
+          text: 'No part of this book may be reproduced, distributed, or transmitted in any form or by any means, including photocopying, recording, or other electronic or mechanical methods, without the prior written permission of the author, except in the case of brief quotations embodied in critical reviews and certain other noncommercial uses permitted by copyright law.',
           italics: true,
           size: 18,
           font: 'Times New Roman',
@@ -312,6 +314,7 @@ function buildDocx(body: ExportRequestBody): Document {
     // ֍ separator — centered
     new Paragraph({
       alignment: AlignmentType.CENTER,
+      spacing: { after: 120 },
       children: [
         new TextRun({
           text: '\u058D',
@@ -324,6 +327,7 @@ function buildDocx(body: ExportRequestBody): Document {
     // Fiction disclaimer — 9pt italic centered
     new Paragraph({
       alignment: AlignmentType.CENTER,
+      spacing: { after: 200 },
       children: [
         new TextRun({
           text: 'This is a work of fiction. Names, characters, places, and incidents either are the product of the author\u2019s imagination or are used fictitiously. Any resemblance to actual persons, living or dead, events, or locales is entirely coincidental.',
@@ -334,18 +338,38 @@ function buildDocx(body: ExportRequestBody): Document {
       ],
     }),
 
-    // "By:" + publisher name — 9pt bold centered
+    // 2 empty lines before By:
+    emptyCenteredPara(),
+    emptyCenteredPara(),
+
+    // "By:" — 9pt bold centered
     new Paragraph({
       alignment: AlignmentType.CENTER,
       children: [
         new TextRun({
-          text: `By: ${publisherName}`,
+          text: 'By:',
           bold: true,
           size: 18,
           font: 'Times New Roman',
         }),
       ],
     }),
+
+    // Publisher name — 9pt bold centered
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      children: [
+        new TextRun({
+          text: publisherName,
+          bold: true,
+          size: 18,
+          font: 'Times New Roman',
+        }),
+      ],
+    }),
+
+    // 1 empty line
+    emptyCenteredPara(),
 
     // "First Printing Edition, {year}" — 9pt bold centered
     new Paragraph({
