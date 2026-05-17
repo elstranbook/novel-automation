@@ -96,16 +96,6 @@ function addBlankPageAfter(): FileChild[] {
   ];
 }
 
-/**
- * Blank page at end of section:
- * PageBreak → empty para
- */
-function addBlankPageEndOfSection(): FileChild[] {
-  return [
-    new Paragraph({ children: [new PageBreak()] }),
-    emptyPara(),
-  ];
-}
 
 /**
  * Parse markdown-style bold/italic from a string and return TextRun[].
@@ -384,8 +374,6 @@ function buildDocx(body: ExportRequestBody): Document {
       ],
     }),
 
-    // Blank page at end of section
-    ...addBlankPageEndOfSection(),
   ];
 
   // ========================================================================
@@ -458,9 +446,6 @@ function buildDocx(body: ExportRequestBody): Document {
     })
   );
 
-  // Blank page after TOC (1 blank page; next section starts on fresh page automatically)
-  section2Children.push(...addBlankPageAfter());
-
   // Section 2 footer — Roman numeral page numbers centered 9pt
   const section2Footer = new Footer({
     children: [
@@ -486,9 +471,6 @@ function buildDocx(body: ExportRequestBody): Document {
   const section3Children: FileChild[] = [];
 
   if (aboutAuthor.trim()) {
-    // 4 empty lines above heading (consistent with chapter layout)
-    section3Children.push(...Array.from({ length: 4 }, () => emptyCenteredPara()));
-
     // About the Author heading — 16pt bold centered with outlineLevel
     section3Children.push(
       new Paragraph({
@@ -527,8 +509,6 @@ function buildDocx(body: ExportRequestBody): Document {
 
     section3Children.push(...aboutAuthorParagraphs);
 
-    // Blank page at end of section 3
-    section3Children.push(...addBlankPageEndOfSection());
   }
 
   // Section 3 footer — same Roman numeral style
@@ -595,9 +575,6 @@ function buildDocx(body: ExportRequestBody): Document {
     // Body paragraphs
     chapterChildren.push(...buildBodyParagraphs(chapter.content));
 
-    // Blank page at end of section (end of chapter)
-    chapterChildren.push(...addBlankPageEndOfSection());
-
     // Even header — book title 9pt centered
     const evenHeader = new Header({
       children: [
@@ -663,6 +640,8 @@ function buildDocx(body: ExportRequestBody): Document {
       },
       footers: {
         default: chapterFooter,
+        even: chapterFooter,
+        first: chapterFooter,
       },
       headers: {
         default: defaultHeader,
@@ -743,6 +722,7 @@ function buildDocx(body: ExportRequestBody): Document {
         footers: {
           default: section2Footer,
           first: new Footer({ children: [emptyPara()] }),
+          even: section2Footer,
         },
         children: section2Children,
       },
@@ -759,6 +739,7 @@ function buildDocx(body: ExportRequestBody): Document {
               },
               footers: {
                 default: section3Footer,
+                even: section3Footer,
               },
               children: section3Children,
             },
