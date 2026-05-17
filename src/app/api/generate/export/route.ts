@@ -425,8 +425,7 @@ function buildDocx(body: ExportRequestBody): Document {
         new TextRun({
           text: 'Contents',
           bold: true,
-          italics: true,
-          size: 18, // 9pt
+          size: 28, // 14pt
           font: 'Times New Roman',
         }),
       ],
