@@ -1,6 +1,5 @@
 "use client";
 
-import { Document, HeadingLevel, Packer, Paragraph, PageBreak } from "docx";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -214,29 +213,17 @@ const formatProseHtml = (prose: ScenesMap) =>
     })
     .join("\n\n")}\n</body>\n</html>`;
 
-const buildDocxDocument = (prose: ScenesMap) => {
-  const children: Paragraph[] = [];
-  sortScenesEntries(prose).forEach(([chapter, scenes], index) => {
-    children.push(
-      new Paragraph({
-        text: `Chapter ${index + 1}: ${chapter}`,
-        heading: HeadingLevel.HEADING_1,
-      })
-    );
-    scenes.forEach((scene) => {
-      scene.split(/\n{2,}/).forEach((paragraph) => {
-        if (paragraph.trim().length > 0) {
-          children.push(new Paragraph(paragraph.trim()));
-        }
-      });
-      children.push(new Paragraph(""));
-    });
-    if (index < Object.keys(prose).length - 1) {
-      children.push(new Paragraph({ children: [new PageBreak()] }));
-    }
+const proseScenesToChapters = (prose: ScenesMap): Array<{ number: number; title: string; content: string }> => {
+  return sortScenesEntries(prose).map(([chapter, scenes], index) => {
+    const [numberPart, ...titleParts] = chapter.split(":");
+    const number = parseInt(numberPart?.trim() ?? "1", 10) || index + 1;
+    const name = titleParts.join(":").trim() || chapter;
+    return {
+      number,
+      title: name,
+      content: scenes.join("\n\n"),
+    };
   });
-
-  return new Document({ sections: [{ children }] });
 };
 
 const parseSocialSnippets = (content: string) => {
@@ -1936,16 +1923,6 @@ function StudioContent() {
       if (proseRows.length) {
         await supabase.from("prose_scenes").insert(proseRows);
       }
-
-      const formats = await generateExportFormats();
-      if (formats) {
-        setNovelFormats((prev) => ({
-          ...prev,
-          txt: formats.txt,
-          md: formats.markdown,
-          html: formats.html,
-        }));
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -2585,79 +2562,40 @@ function StudioContent() {
     }
   };
 
-  const generateExportFormats = async () => {
-    if (!proseScenes) return null;
-    const response = await fetch("/api/generate/formats", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        scenes: proseScenes,
-        title: title || storyDetails?.title || "Untitled Novel",
-      }),
-    });
-    if (!response.ok) {
-      throw new Error("Failed to generate formats");
-    }
-    const data = await response.json();
-    const formats = data.formats as {
-      txt: string;
-      markdown: string;
-      html: string;
-    };
-
-    try {
-      const user = await requireUser();
-      const novelIdValue = await ensureNovel(user.id);
-      await supabase
-        .from("novel_formats")
-        .delete()
-        .eq("novel_id", novelIdValue)
-        .in("format_name", ["txt", "md", "html"]);
-      await supabase.from("novel_formats").insert([
-        {
-          novel_id: novelIdValue,
-          user_id: user.id,
-          format_name: "txt",
-          content: formats.txt,
-        },
-        {
-          novel_id: novelIdValue,
-          user_id: user.id,
-          format_name: "md",
-          content: formats.markdown,
-        },
-        {
-          novel_id: novelIdValue,
-          user_id: user.id,
-          format_name: "html",
-          content: formats.html,
-        },
-      ]);
-      setLastSavedAt(new Date().toLocaleString());
-      setNovelFormats((prev) => ({
-        ...prev,
-        txt: formats.txt,
-        md: formats.markdown,
-        html: formats.html,
-      }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-    }
-
-    return formats;
-  };
-
-  const saveDocxExport = async () => {
+  const downloadExport = async (format: 'docx' | 'pdf') => {
     if (!proseScenes) return;
-    setSavingExport("docx");
+    setSavingExport(format);
     setError(null);
     try {
-      const doc = buildDocxDocument(proseScenes);
-      const blob = await Packer.toBlob(doc);
-      const base64 = await blobToBase64(blob);
-      await saveNovelFormat("docx", base64, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+      const chapters = proseScenesToChapters(proseScenes);
+      const response = await fetch(`/api/generate/export?format=${format}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookTitle: title || "Untitled Novel",
+          authorName: "Elstran Books",
+          publisherName: "Elstran Books",
+          dedication: "",
+          aboutAuthor: "",
+          chapters,
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "Failed to generate document");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${(title || "Untitled_Novel").replace(/\s+/g, "_")}_Formatted.${format}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      setError(err instanceof Error ? err.message : "Failed to generate document");
+    } finally {
       setSavingExport(null);
     }
   };
@@ -3756,132 +3694,23 @@ function StudioContent() {
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <SectionHeading title="11. Formats & exports" step="Exports" />
           <p className="mt-2 text-sm text-zinc-400">
-            Export the full novel prose (all scenes stitched together).
+            Download your formatted novel for publishing.
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             <button
-              onClick={async () => {
-                if (!proseScenes) return;
-                const formats = await generateExportFormats();
-                if (!formats) return;
-                await saveNovelFormat("txt", formats.txt, "text/plain");
-              }}
-              disabled={!proseScenes || savingExport === "txt"}
-              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
-            >
-              {savingExport === "txt" ? "Saving..." : "Save TXT"}
-            </button>
-            <button
-              onClick={async () => {
-                if (!proseScenes) return;
-                const formats = await generateExportFormats();
-                if (!formats) return;
-                await saveNovelFormat("md", formats.markdown, "text/markdown");
-              }}
-              disabled={!proseScenes || savingExport === "md"}
-              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
-            >
-              {savingExport === "md" ? "Saving..." : "Save Markdown"}
-            </button>
-            <button
-              onClick={async () => {
-                if (!proseScenes) return;
-                const formats = await generateExportFormats();
-                if (!formats) return;
-                await saveNovelFormat("html", formats.html, "text/html");
-              }}
-              disabled={!proseScenes || savingExport === "html"}
-              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
-            >
-              {savingExport === "html" ? "Saving..." : "Save HTML"}
-            </button>
-            <button
-              onClick={saveDocxExport}
+              onClick={() => downloadExport("docx")}
               disabled={!proseScenes || savingExport === "docx"}
-              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+              className="rounded-full border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 px-6 py-3 text-sm font-medium text-zinc-100 transition-colors disabled:opacity-50"
             >
-              {savingExport === "docx" ? "Saving..." : "Save DOCX"}
+              {savingExport === "docx" ? "Generating..." : "Download Word"}
             </button>
-          </div>
-          <div className="mt-4 rounded-lg border border-dashed border-zinc-800 p-4 text-xs text-zinc-400">
-            {novelFormats.txt && (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span>TXT saved</span>
-                <button
-                  onClick={() =>
-                    downloadText(
-                      `${title || "story"}_novel.txt`,
-                      novelFormats.txt
-                    )
-                  }
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
-                >
-                  Download TXT
-                </button>
-              </div>
-            )}
-            {novelFormats.md && (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span>Markdown saved</span>
-                <button
-                  onClick={() =>
-                    downloadText(
-                      `${title || "story"}_novel.md`,
-                      novelFormats.md,
-                      "text/markdown"
-                    )
-                  }
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
-                >
-                  Download Markdown
-                </button>
-              </div>
-            )}
-            {novelFormats.html && (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span>HTML saved</span>
-                <button
-                  onClick={() =>
-                    downloadText(
-                      `${title || "story"}_novel.html`,
-                      novelFormats.html,
-                      "text/html"
-                    )
-                  }
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
-                >
-                  Download HTML
-                </button>
-              </div>
-            )}
-            {novelFormats.docx && (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span>DOCX saved</span>
-                <button
-                  onClick={() => {
-                    const blob = base64ToBlob(
-                      novelFormats.docx,
-                      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                    );
-                    const url = URL.createObjectURL(blob);
-                    const anchor = document.createElement("a");
-                    anchor.href = url;
-                    anchor.download = `${title || "story"}_novel.docx`;
-                    anchor.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
-                >
-                  Download DOCX
-                </button>
-              </div>
-            )}
-            {!novelFormats.txt &&
-              !novelFormats.md &&
-              !novelFormats.html &&
-              !novelFormats.docx && (
-                <p>No saved exports yet. Save a format to store it.</p>
-              )}
+            <button
+              onClick={() => downloadExport("pdf")}
+              disabled={!proseScenes || savingExport === "pdf"}
+              className="rounded-full border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 px-6 py-3 text-sm font-medium text-zinc-100 transition-colors disabled:opacity-50"
+            >
+              {savingExport === "pdf" ? "Generating..." : "Download PDF"}
+            </button>
           </div>
         </section>
 
