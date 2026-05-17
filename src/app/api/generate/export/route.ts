@@ -826,7 +826,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate required fields
+    console.log('[export] Received body:', JSON.stringify({ bookTitle: body.bookTitle, authorName: body.authorName, chapterCount: body.chapters?.length, firstChapter: body.chapters?.[0] ? { number: body.chapters[0].number, title: body.chapters[0].title, contentType: typeof body.chapters[0].content, contentLength: typeof body.chapters[0].content === 'string' ? body.chapters[0].content.length : 'N/A' } : 'none' }));
+
     if (!body.bookTitle || typeof body.bookTitle !== 'string' || !body.bookTitle.trim()) {
+      console.log('[export] Validation failed: bookTitle missing or empty');
       return NextResponse.json(
         { error: 'bookTitle is required.' },
         { status: 400 }
@@ -834,6 +837,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!body.authorName || typeof body.authorName !== 'string' || !body.authorName.trim()) {
+      console.log('[export] Validation failed: authorName missing or empty');
       return NextResponse.json(
         { error: 'authorName is required.' },
         { status: 400 }
@@ -841,6 +845,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!body.chapters || !Array.isArray(body.chapters) || body.chapters.length === 0) {
+      console.log('[export] Validation failed: chapters missing or empty array');
       return NextResponse.json(
         { error: 'At least 1 chapter is required.' },
         { status: 400 }
