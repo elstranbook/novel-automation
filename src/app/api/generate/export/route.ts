@@ -374,6 +374,8 @@ function buildDocx(body: ExportRequestBody): Document {
       ],
     }),
 
+    // Blank page after copyright page (verso page before next section)
+    ...addBlankPageAfter(),
   ];
 
   // ========================================================================
@@ -446,6 +448,9 @@ function buildDocx(body: ExportRequestBody): Document {
     })
   );
 
+  // Blank page after TOC (verso page before About the Author)
+  section2Children.push(...addBlankPageAfter());
+
   // Section 2 footer — Roman numeral page numbers centered 9pt
   const section2Footer = new Footer({
     children: [
@@ -509,6 +514,8 @@ function buildDocx(body: ExportRequestBody): Document {
 
     section3Children.push(...aboutAuthorParagraphs);
 
+    // Blank page after About the Author (verso page before first chapter)
+    section3Children.push(...addBlankPageAfter());
   }
 
   // Section 3 footer — same Roman numeral style
