@@ -435,11 +435,8 @@ function buildDocx(body: ExportRequestBody): Document {
     })
   );
 
-  // Blank page after TOC
+  // Blank page after TOC (1 blank page; next section starts on fresh page automatically)
   section2Children.push(...addBlankPageAfter());
-
-  // Blank page at end of section 2
-  section2Children.push(...addBlankPageEndOfSection());
 
   // Section 2 footer — Roman numeral page numbers centered 9pt
   const section2Footer = new Footer({
