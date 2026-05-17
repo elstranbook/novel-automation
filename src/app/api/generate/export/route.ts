@@ -847,11 +847,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate each chapter
-    for (const ch of body.chapters) {
-      if (typeof ch.number !== 'number' || !ch.title || typeof ch.title !== 'string' || !ch.content || typeof ch.content !== 'string') {
+    // Validate each chapter — content can be empty (chapter not yet generated)
+    for (let i = 0; i < body.chapters.length; i++) {
+      const ch = body.chapters[i];
+      if (typeof ch.number !== 'number') {
         return NextResponse.json(
-          { error: 'Each chapter must have a number (number), title (string), and content (string).' },
+          { error: `Chapter ${i + 1}: "number" must be a number.` },
+          { status: 400 }
+        );
+      }
+      if (!ch.title || typeof ch.title !== 'string') {
+        return NextResponse.json(
+          { error: `Chapter ${i + 1}: "title" must be a non-empty string.` },
+          { status: 400 }
+        );
+      }
+      // Coerce content to string (allow empty or missing)
+      if (ch.content == null) ch.content = '';
+      if (typeof ch.content !== 'string') {
+        return NextResponse.json(
+          { error: `Chapter ${i + 1} ("${ch.title}"): "content" must be a string.` },
           { status: 400 }
         );
       }
