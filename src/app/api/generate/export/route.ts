@@ -800,8 +800,19 @@ async function postProcessDocx(buffer: Buffer): Promise<Buffer> {
 
 function docxToPdf(docxBuffer: Buffer): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error('PDF conversion timed out. LibreOffice may not be installed on the server.'));
+    }, 120000); // 2 minute timeout
+
     libreofficeConvert(docxBuffer, '.pdf', undefined, (err: Error | null, pdfBuffer: Buffer) => {
-      if (err) return reject(err);
+      clearTimeout(timeout);
+      if (err) {
+        console.error('[export] LibreOffice conversion error:', err.message);
+        reject(new Error(
+          'PDF conversion failed. LibreOffice may not be installed on the server. Please download the Word document instead and convert it locally.'
+        ));
+        return;
+      }
       resolve(Buffer.from(pdfBuffer));
     });
   });
@@ -919,8 +930,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[export] Error generating document:', error);
+    const message = error instanceof Error ? error.message : 'Failed to generate document.';
     return NextResponse.json(
-      { error: 'Failed to generate document.' },
+      { error: message },
       { status: 500 }
     );
   }
