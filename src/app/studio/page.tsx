@@ -2585,6 +2585,36 @@ function StudioContent() {
         throw new Error(err.error || "Failed to generate document");
       }
       const blob = await response.blob();
+
+      // Save to Supabase as base64
+      try {
+        const arrayBuffer = await blob.arrayBuffer();
+        const base64 = btoa(
+          new Uint8Array(arrayBuffer).reduce(
+            (data, byte) => data + String.fromCharCode(byte),
+            ""
+          )
+        );
+        const formatName = `export_${format}`;
+        const user = await requireUser();
+        const novelIdValue = await ensureNovel(user.id);
+        await supabase
+          .from("novel_formats")
+          .delete()
+          .eq("novel_id", novelIdValue)
+          .eq("format_name", formatName);
+        await supabase.from("novel_formats").insert({
+          novel_id: novelIdValue,
+          user_id: user.id,
+          format_name: formatName,
+          content: base64,
+        });
+        setNovelFormats((prev) => ({ ...prev, [formatName]: base64 }));
+      } catch (saveErr) {
+        console.warn("Failed to save export to Supabase:", saveErr);
+      }
+
+      // Download the file
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -2597,6 +2627,34 @@ function StudioContent() {
       setError(err instanceof Error ? err.message : "Failed to generate document");
     } finally {
       setSavingExport(null);
+    }
+  };
+
+  /** Download a previously saved export from Supabase */
+  const downloadSavedExport = async (format: 'docx' | 'pdf') => {
+    const formatName = `export_${format}`;
+    const base64 = novelFormats[formatName];
+    if (!base64) return;
+
+    try {
+      // Decode base64 to binary
+      const binaryString = atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const mimeType = format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      const blob = new Blob([bytes], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${(title || "Untitled_Novel").replace(/\s+/g, "_")}_Formatted.${format}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to download saved document");
     }
   };
 
@@ -3702,16 +3760,40 @@ function StudioContent() {
               disabled={!proseScenes || savingExport === "docx"}
               className="rounded-full border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 px-6 py-3 text-sm font-medium text-zinc-100 transition-colors disabled:opacity-50"
             >
-              {savingExport === "docx" ? "Generating..." : "Download Word"}
+              {savingExport === "docx" ? "Generating..." : "Generate & Download Word"}
             </button>
             <button
               onClick={() => downloadExport("pdf")}
               disabled={!proseScenes || savingExport === "pdf"}
               className="rounded-full border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 px-6 py-3 text-sm font-medium text-zinc-100 transition-colors disabled:opacity-50"
             >
-              {savingExport === "pdf" ? "Generating..." : "Download PDF"}
+              {savingExport === "pdf" ? "Generating..." : "Generate & Download PDF"}
             </button>
           </div>
+          {/* Saved documents */}
+          {(novelFormats["export_docx"] || novelFormats["export_pdf"]) && (
+            <div className="mt-5 border-t border-zinc-700 pt-4">
+              <p className="text-sm font-medium text-zinc-300 mb-3">Previously saved documents</p>
+              <div className="flex flex-wrap gap-3">
+                {novelFormats["export_docx"] && (
+                  <button
+                    onClick={() => downloadSavedExport("docx")}
+                    className="rounded-full border border-zinc-600 bg-zinc-700/50 hover:bg-zinc-700 px-5 py-2.5 text-sm font-medium text-zinc-200 transition-colors"
+                  >
+                    Saved Word
+                  </button>
+                )}
+                {novelFormats["export_pdf"] && (
+                  <button
+                    onClick={() => downloadSavedExport("pdf")}
+                    className="rounded-full border border-zinc-600 bg-zinc-700/50 hover:bg-zinc-700 px-5 py-2.5 text-sm font-medium text-zinc-200 transition-colors"
+                  >
+                    Saved PDF
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
