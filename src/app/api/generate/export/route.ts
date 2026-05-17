@@ -365,7 +365,7 @@ function buildDocx(body: ExportRequestBody): Document {
   ];
 
   // ========================================================================
-  // SECTION 2 — Dedication + TOC + About the Author
+  // SECTION 2 — Dedication + TOC
   // ========================================================================
   const section2Children: FileChild[] = [];
 
@@ -435,43 +435,8 @@ function buildDocx(body: ExportRequestBody): Document {
     })
   );
 
-  // About the Author heading — 16pt bold centered with bookmark + outlineLevel
-  section2Children.push(
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { before: 0, after: 40 },
-      outlineLevel: 1,
-      children: [
-        new TextRun({
-          text: 'ABOUT THE AUTHOR',
-          bold: true,
-          size: 32, // 16pt
-          font: 'Times New Roman',
-        }),
-      ],
-    })
-  );
-
-  // About author body paragraphs — 12pt justified
-  const aboutAuthorParagraphs = aboutAuthor
-    .split(/\n{2,}/)
-    .filter((p) => p.trim())
-    .map(
-      (p) =>
-        new Paragraph({
-          alignment: AlignmentType.JUSTIFIED,
-          spacing: { before: 120, after: 120 },
-          children: [
-            new TextRun({
-              text: p.trim().replace(/\n/g, ' '),
-              size: 24, // 12pt
-              font: 'Times New Roman',
-            }),
-          ],
-        })
-    );
-
-  section2Children.push(...aboutAuthorParagraphs);
+  // Blank page after TOC
+  section2Children.push(...addBlankPageAfter());
 
   // Blank page at end of section 2
   section2Children.push(...addBlankPageEndOfSection());
@@ -496,7 +461,62 @@ function buildDocx(body: ExportRequestBody): Document {
   const section2Header = new Header({ children: [emptyPara()] });
 
   // ========================================================================
-  // SECTIONS 3+ — One per chapter
+  // SECTION 3 — About the Author (own section guarantees fresh page)
+  // ========================================================================
+  const section3Children: FileChild[] = [];
+
+  if (aboutAuthor.trim()) {
+    // 4 empty lines above heading (consistent with chapter layout)
+    section3Children.push(...Array.from({ length: 4 }, () => emptyCenteredPara()));
+
+    // About the Author heading — 16pt bold centered with outlineLevel
+    section3Children.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: 40 },
+        outlineLevel: 1,
+        children: [
+          new TextRun({
+            text: 'ABOUT THE AUTHOR',
+            bold: true,
+            size: 32, // 16pt
+            font: 'Times New Roman',
+          }),
+        ],
+      })
+    );
+
+    // About author body paragraphs — 12pt justified
+    const aboutAuthorParagraphs = aboutAuthor
+      .split(/\n{2,}/)
+      .filter((p) => p.trim())
+      .map(
+        (p) =>
+          new Paragraph({
+            alignment: AlignmentType.JUSTIFIED,
+            spacing: { before: 120, after: 120 },
+            children: [
+              new TextRun({
+                text: p.trim().replace(/\n/g, ' '),
+                size: 24, // 12pt
+                font: 'Times New Roman',
+              }),
+            ],
+          })
+      );
+
+    section3Children.push(...aboutAuthorParagraphs);
+
+    // Blank page at end of section 3
+    section3Children.push(...addBlankPageEndOfSection());
+  }
+
+  // Section 3 footer — same Roman numeral style
+  const section3Footer = section2Footer;
+  const section3Header = section2Header;
+
+  // ========================================================================
+  // SECTIONS 4+ — One per chapter
   // ========================================================================
   const chapterSections = chapters.map((chapter, idx) => {
     const chapterChildren: FileChild[] = [];
@@ -682,7 +702,7 @@ function buildDocx(body: ExportRequestBody): Document {
         },
         children: section1Children,
       },
-      // Section 2: Dedication + TOC + About the Author
+      // Section 2: Dedication + TOC
       {
         properties: {
           ...sectionPageProps(),
@@ -706,6 +726,24 @@ function buildDocx(body: ExportRequestBody): Document {
         },
         children: section2Children,
       },
+      // Section 3: About the Author (own section guarantees fresh page)
+      ...(aboutAuthor.trim()
+        ? [
+            {
+              properties: {
+                ...sectionPageProps(),
+              },
+              headers: {
+                default: section3Header,
+                even: section3Header,
+              },
+              footers: {
+                default: section3Footer,
+              },
+              children: section3Children,
+            },
+          ]
+        : []),
       // Chapter sections
       ...chapterSections,
     ],
