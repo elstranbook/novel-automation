@@ -3762,16 +3762,9 @@ function StudioContent() {
             >
               {savingExport === "docx" ? "Generating..." : "Generate & Download Word"}
             </button>
-            <button
-              onClick={() => downloadExport("pdf")}
-              disabled={!proseScenes || savingExport === "pdf"}
-              className="rounded-full border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 px-6 py-3 text-sm font-medium text-zinc-100 transition-colors disabled:opacity-50"
-            >
-              {savingExport === "pdf" ? "Generating..." : "Generate & Download PDF"}
-            </button>
           </div>
           {/* Saved documents */}
-          {(novelFormats["export_docx"] || novelFormats["export_pdf"]) && (
+          {(novelFormats["export_docx"]) && (
             <div className="mt-5 border-t border-zinc-700 pt-4">
               <p className="text-sm font-medium text-zinc-300 mb-3">Previously saved documents</p>
               <div className="flex flex-wrap gap-3">
@@ -3781,14 +3774,6 @@ function StudioContent() {
                     className="rounded-full border border-zinc-600 bg-zinc-700/50 hover:bg-zinc-700 px-5 py-2.5 text-sm font-medium text-zinc-200 transition-colors"
                   >
                     Saved Word
-                  </button>
-                )}
-                {novelFormats["export_pdf"] && (
-                  <button
-                    onClick={() => downloadSavedExport("pdf")}
-                    className="rounded-full border border-zinc-600 bg-zinc-700/50 hover:bg-zinc-700 px-5 py-2.5 text-sm font-medium text-zinc-200 transition-colors"
-                  >
-                    Saved PDF
                   </button>
                 )}
               </div>
