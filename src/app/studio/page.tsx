@@ -448,12 +448,8 @@ function StudioContent() {
   const [novelIdCopied, setNovelIdCopied] = useState(false);
   const [proseScenes, setProseScenes] = useState<ScenesMap | null>(null);
 
-  // Blog publish state
-  const [blogTitle, setBlogTitle] = useState("");
-  const [blogExcerpt, setBlogExcerpt] = useState("");
-  const [blogContent, setBlogContent] = useState("");
-  const [blogCategory, setBlogCategory] = useState("Fiction");
-  const [blogTags, setBlogTags] = useState("");
+  // Blog publish state — per-article editable overrides
+  const [blogArticleEdits, setBlogArticleEdits] = useState<Record<number, { title: string; excerpt: string; category: string; tags: string }>>({});
 
   // Mockup App State
   const {
@@ -520,19 +516,7 @@ function StudioContent() {
     }
   }, [generatedCoverUrl, setMockupUserImage]);
 
-  // Pre-populate blog fields from novel data
-  useEffect(() => {
-    setBlogTitle(title || "");
-    if (bookDescriptions) {
-      setBlogExcerpt(bookDescriptions.marketing_short ?? bookDescriptions.marketing_standard ?? "");
-    }
-    if (proseScenes) {
-      setBlogContent(formatProseHtml(proseScenes));
-    }
-    if (novelKeywords) {
-      setBlogTags(novelKeywords.join(", "));
-    }
-  }, [title, bookDescriptions, proseScenes, novelKeywords]);
+
 
   // Fetch mockup templates
   useEffect(() => {
@@ -5255,79 +5239,131 @@ function StudioContent() {
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
       <h3 className="text-lg font-bold text-zinc-100 mb-6 flex items-center gap-2">
         <span className="text-xl">📝</span> Blog
+        {promotionalArticles && promotionalArticles.length > 0 && (
+          <span className="inline-flex rounded-full border border-emerald-400/40 px-2 py-0.5 text-[10px] text-emerald-200">
+            {promotionalArticles.length} article{promotionalArticles.length !== 1 ? "s" : ""}
+          </span>
+        )}
       </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
-        {/* Title */}
-        <div>
-          <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Title</label>
-          <Input
-            value={blogTitle}
-            onChange={(e) => setBlogTitle(e.target.value)}
-            className="mt-1 bg-zinc-800/50 border-zinc-700 text-zinc-100"
-            placeholder="Blog post title"
-          />
+      {(!promotionalArticles || promotionalArticles.length === 0) ? (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-8 text-center">
+          <p className="text-zinc-500 text-sm">No promotional articles generated yet.</p>
+          <p className="text-zinc-600 text-xs mt-1">Generate articles in the Promotional tab first.</p>
         </div>
-        {/* Slug (auto-generated) */}
-        <div>
-          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Slug</p>
-          <p className="text-sm text-zinc-200 mt-2 font-mono">
-            {blogTitle ? blogTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "—"}
-          </p>
+      ) : (
+        <div className="space-y-6">
+          {promotionalArticles.map((article, articleIndex) => {
+            const articleTitle = blogArticleEdits[articleIndex]?.title ?? String(article.title ?? "Untitled Article");
+            const articleSlug = articleTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+            const articleContent = String(article.content ?? "");
+            const articleExcerpt = blogArticleEdits[articleIndex]?.excerpt ?? articleContent.split("\n").filter((line: string) => line.trim().length > 0).slice(0, 3).join(" ").substring(0, 300);
+            const articleCategory = blogArticleEdits[articleIndex]?.category ?? String(article.article_type ?? "Fiction");
+            const articleTags = blogArticleEdits[articleIndex]?.tags ?? (novelKeywords ? novelKeywords.join(", ") : "");
+            const articleHtml = articleContent.split("\n\n").map((p: string) => `<p>${p.replace(/\n+/g, "</p><p>")}</p>`).join("\n");
+
+            return (
+              <div key={articleIndex} className="rounded-xl border border-zinc-700/60 bg-zinc-950/40 p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-zinc-800 text-xs font-bold text-zinc-300">{articleIndex + 1}</span>
+                  <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{titleize(String(article.article_type ?? "article"))}</span>
+                  <span className="text-[10px] text-zinc-600">•</span>
+                  <span className="text-[10px] text-zinc-600">{String(article.length_type ?? "medium")} • {String(article.tone ?? "formal")}</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+                  {/* Title */}
+                  <div>
+                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Title</label>
+                    <Input
+                      value={articleTitle}
+                      onChange={(e) => {
+                        setBlogArticleEdits((prev) => ({
+                          ...prev,
+                          [articleIndex]: { ...prev[articleIndex] ?? { title: articleTitle, excerpt: articleExcerpt, category: articleCategory, tags: articleTags }, title: e.target.value },
+                        }));
+                      }}
+                      className="mt-1 bg-zinc-800/50 border-zinc-700 text-zinc-100"
+                      placeholder="Article title"
+                    />
+                  </div>
+                  {/* Slug (auto-generated) */}
+                  <div>
+                    <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Slug</p>
+                    <p className="text-sm text-zinc-200 mt-2 font-mono">{articleSlug || "—"}</p>
+                  </div>
+                  {/* Excerpt */}
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Excerpt</label>
+                    <textarea
+                      value={articleExcerpt}
+                      onChange={(e) => {
+                        setBlogArticleEdits((prev) => ({
+                          ...prev,
+                          [articleIndex]: { ...prev[articleIndex] ?? { title: articleTitle, excerpt: articleExcerpt, category: articleCategory, tags: articleTags }, excerpt: e.target.value },
+                        }));
+                      }}
+                      rows={3}
+                      className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y"
+                      placeholder="Article excerpt"
+                    />
+                  </div>
+                  {/* Content (HTML) */}
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Content (HTML)</label>
+                    <textarea
+                      value={articleHtml}
+                      readOnly
+                      rows={8}
+                      className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y font-mono cursor-text"
+                      placeholder="Article content (HTML)"
+                    />
+                  </div>
+                  {/* Category */}
+                  <div>
+                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Category</label>
+                    <Input
+                      value={articleCategory}
+                      onChange={(e) => {
+                        setBlogArticleEdits((prev) => ({
+                          ...prev,
+                          [articleIndex]: { ...prev[articleIndex] ?? { title: articleTitle, excerpt: articleExcerpt, category: articleCategory, tags: articleTags }, category: e.target.value },
+                        }));
+                      }}
+                      className="mt-1 bg-zinc-800/50 border-zinc-700 text-zinc-100"
+                      placeholder="Blog category"
+                    />
+                  </div>
+                  {/* Tags */}
+                  <div>
+                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Tags</label>
+                    <Input
+                      value={articleTags}
+                      onChange={(e) => {
+                        setBlogArticleEdits((prev) => ({
+                          ...prev,
+                          [articleIndex]: { ...prev[articleIndex] ?? { title: articleTitle, excerpt: articleExcerpt, category: articleCategory, tags: articleTags }, tags: e.target.value },
+                        }));
+                      }}
+                      className="mt-1 bg-zinc-800/50 border-zinc-700 text-zinc-100"
+                      placeholder="Comma-separated tags"
+                    />
+                  </div>
+                  {/* Cover Image */}
+                  <div className="md:col-span-2">
+                    <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Cover Image</p>
+                    {generatedCoverUrl ? (
+                      <img src={generatedCoverUrl} alt="Blog cover" className="max-w-48 rounded-lg border border-zinc-800 shadow-lg" />
+                    ) : (
+                      <div className="w-48 h-32 rounded-lg border border-zinc-800 bg-zinc-950/50 flex items-center justify-center">
+                        <p className="text-xs text-zinc-600 italic">No cover image</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
-        {/* Excerpt */}
-        <div className="md:col-span-2">
-          <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Excerpt</label>
-          <textarea
-            value={blogExcerpt}
-            onChange={(e) => setBlogExcerpt(e.target.value)}
-            rows={3}
-            className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y"
-            placeholder="Blog excerpt"
-          />
-        </div>
-        {/* Content (HTML) */}
-        <div className="md:col-span-2">
-          <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Content (HTML)</label>
-          <textarea
-            value={blogContent}
-            onChange={(e) => setBlogContent(e.target.value)}
-            rows={8}
-            className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y font-mono"
-            placeholder="Blog content (HTML)"
-          />
-        </div>
-        {/* Category */}
-        <div>
-          <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Category</label>
-          <Input
-            value={blogCategory}
-            onChange={(e) => setBlogCategory(e.target.value)}
-            className="mt-1 bg-zinc-800/50 border-zinc-700 text-zinc-100"
-            placeholder="Blog category"
-          />
-        </div>
-        {/* Tags */}
-        <div>
-          <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Tags</label>
-          <Input
-            value={blogTags}
-            onChange={(e) => setBlogTags(e.target.value)}
-            className="mt-1 bg-zinc-800/50 border-zinc-700 text-zinc-100"
-            placeholder="Comma-separated tags"
-          />
-        </div>
-        {/* Cover Image */}
-        <div className="md:col-span-2">
-          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Cover Image</p>
-          {generatedCoverUrl ? (
-            <img src={generatedCoverUrl} alt="Blog cover" className="max-w-48 rounded-lg border border-zinc-800 shadow-lg" />
-          ) : (
-            <div className="w-48 h-32 rounded-lg border border-zinc-800 bg-zinc-950/50 flex items-center justify-center">
-              <p className="text-xs text-zinc-600 italic">No cover image</p>
-            </div>
-          )}
-        </div>
-      </div>
+      )}
     </section>
 
     {/* Publish Action */}
