@@ -448,6 +448,13 @@ function StudioContent() {
   const [novelIdCopied, setNovelIdCopied] = useState(false);
   const [proseScenes, setProseScenes] = useState<ScenesMap | null>(null);
 
+  // Blog publish state
+  const [blogTitle, setBlogTitle] = useState("");
+  const [blogExcerpt, setBlogExcerpt] = useState("");
+  const [blogContent, setBlogContent] = useState("");
+  const [blogCategory, setBlogCategory] = useState("Fiction");
+  const [blogTags, setBlogTags] = useState("");
+
   // Mockup App State
   const {
     selectedTemplate,
@@ -512,6 +519,20 @@ function StudioContent() {
       console.log("⚠️ Generated cover URL is null/not set");
     }
   }, [generatedCoverUrl, setMockupUserImage]);
+
+  // Pre-populate blog fields from novel data
+  useEffect(() => {
+    setBlogTitle(title || "");
+    if (bookDescriptions) {
+      setBlogExcerpt(bookDescriptions.marketing_short ?? bookDescriptions.marketing_standard ?? "");
+    }
+    if (proseScenes) {
+      setBlogContent(formatProseHtml(proseScenes));
+    }
+    if (novelKeywords) {
+      setBlogTags(novelKeywords.join(", "));
+    }
+  }, [title, bookDescriptions, proseScenes, novelKeywords]);
 
   // Fetch mockup templates
   useEffect(() => {
@@ -5121,324 +5142,199 @@ function StudioContent() {
 {view === "publish" && (
   <div className="space-y-8 animate-in fade-in duration-700">
     {/* Header */}
-    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl">
-      <div className="flex items-center gap-4">
-        <span className="text-5xl">🚀</span>
-        <div>
-          <h2 className="text-3xl font-black tracking-tight text-zinc-100">Finalize & Publish</h2>
-          <p className="mt-1 text-zinc-400">Review everything produced and select what to publish to your website.</p>
-        </div>
+    <div className="flex items-center gap-4 mb-2">
+      <span className="text-5xl">🚀</span>
+      <div>
+        <h2 className="text-3xl font-black tracking-tight text-zinc-100">Finalize &amp; Publish</h2>
+        <p className="mt-1 text-zinc-400">Review your novel data and blog post before publishing.</p>
       </div>
-    </section>
+    </div>
 
-    {/* Novel Preview Card */}
-    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl">
-      <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-6">Novel Preview</h3>
-      <div className="flex flex-col md:flex-row gap-8">
-        {/* Cover Preview */}
-        <div className="shrink-0">
-          <div className="aspect-[2/3] w-48 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 flex items-center justify-center shadow-2xl">
-            {generatedCoverUrl ? (
-              <img src={generatedCoverUrl} alt="Cover" className="h-full w-full object-cover" />
+    {/* Section 1 - Novel */}
+    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+      <h3 className="text-lg font-bold text-zinc-100 mb-6 flex items-center gap-2">
+        <span className="text-xl">📖</span> Novel
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+        {/* Title */}
+        <div>
+          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Title</p>
+          <p className="text-sm text-zinc-200 mt-1">{title || "—"}</p>
+        </div>
+        {/* Slug */}
+        <div>
+          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Slug</p>
+          <p className="text-sm text-zinc-200 mt-1 font-mono">
+            {title ? title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "—"}
+          </p>
+        </div>
+        {/* Short Description (Marketing Short) */}
+        <div className="md:col-span-2">
+          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Short Description (Marketing Short)</p>
+          {(bookDescriptions?.marketing_short ?? bookDescriptions?.marketing_standard ?? "") ? (
+            <div className="mt-1 rounded-lg border border-zinc-800 bg-zinc-950/50 p-3 max-h-32 overflow-y-auto">
+              <p className="text-sm text-zinc-200 whitespace-pre-wrap">{bookDescriptions?.marketing_short ?? bookDescriptions?.marketing_standard ?? ""}</p>
+            </div>
+          ) : (
+            <p className="text-sm text-zinc-600 mt-1 italic">No short description available</p>
+          )}
+        </div>
+        {/* Full Description (Back Cover) */}
+        <div className="md:col-span-2">
+          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Full Description (Back Cover)</p>
+          {(bookDescriptions?.backcover_long ?? bookDescriptions?.backcover_standard ?? "") ? (
+            <div className="mt-1 rounded-lg border border-zinc-800 bg-zinc-950/50 p-3 max-h-48 overflow-y-auto">
+              <p className="text-sm text-zinc-200 whitespace-pre-wrap">{bookDescriptions?.backcover_long ?? bookDescriptions?.backcover_standard ?? ""}</p>
+            </div>
+          ) : (
+            <p className="text-sm text-zinc-600 mt-1 italic">No back cover description available</p>
+          )}
+        </div>
+        {/* Category */}
+        <div>
+          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Category</p>
+          <p className="text-sm text-zinc-200 mt-1">{typeof storyDetails?.genre === "string" ? storyDetails.genre : "—"}</p>
+        </div>
+        {/* Genre */}
+        <div>
+          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Genre</p>
+          <p className="text-sm text-zinc-200 mt-1">{typeof storyDetails?.genre === "string" ? storyDetails.genre : "—"}</p>
+        </div>
+        {/* Main Cover Image */}
+        <div>
+          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Main Cover Image</p>
+          {generatedCoverUrl ? (
+            <img src={generatedCoverUrl} alt="Cover" className="max-w-48 rounded-lg border border-zinc-800 shadow-lg" />
+          ) : (
+            <div className="w-48 h-32 rounded-lg border border-zinc-800 bg-zinc-950/50 flex items-center justify-center">
+              <p className="text-xs text-zinc-600 italic">No cover image</p>
+            </div>
+          )}
+        </div>
+        {/* Search Terms (Novel Keywords) */}
+        <div>
+          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Search Terms (Novel Keywords)</p>
+          <p className="text-sm text-zinc-200 mt-1">{novelKeywords && novelKeywords.length > 0 ? novelKeywords.join(", ") : "—"}</p>
+        </div>
+        {/* Target Audience Age */}
+        <div>
+          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Target Audience Age</p>
+          <p className="text-sm text-zinc-200 mt-1">{typeof storyDetails?.target_age_range === "string" ? storyDetails.target_age_range : "Young Adult"}</p>
+        </div>
+        {/* BISACS */}
+        <div>
+          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">BISACS</p>
+          <p className="text-sm text-zinc-200 mt-1">{novelBisac && novelBisac.length > 0 ? novelBisac.join(", ") : "—"}</p>
+        </div>
+        {/* Full Novel (Formatted Novel Word) */}
+        <div>
+          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Full Novel (Formatted Novel Word)</p>
+          <div className="mt-1 space-y-2">
+            {novelFormats["export_docx"] ? (
+              <>
+                <button
+                  onClick={() => downloadSavedExport("docx")}
+                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800/60 px-4 py-2 text-sm font-medium text-zinc-100 hover:border-zinc-500 hover:bg-zinc-800 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Download Novel (.docx)
+                </button>
+                <p className="text-xs text-emerald-400/80">✓ Export file available</p>
+              </>
             ) : (
-              <div className="text-center p-6 opacity-20">
-                <span className="text-4xl">🎨</span>
-                <p className="text-xs mt-2">No cover</p>
-              </div>
+              <p className="text-sm text-zinc-600 italic">Not yet generated</p>
             )}
           </div>
         </div>
-        {/* Novel Info */}
-        <div className="flex-1 space-y-4">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Title</p>
-            <p className="text-2xl font-bold text-zinc-100">{title || "Untitled Novel"}</p>
-          </div>
-          {typeof storyDetails?.genre === "string" ? (
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Genre</p>
-              <p className="text-sm text-zinc-300">{storyDetails.genre}</p>
-            </div>
-          ) : null}
-          {novelSynopsis && (
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Synopsis</p>
-              <p className="text-sm text-zinc-400 leading-relaxed line-clamp-6">{novelSynopsis}</p>
-            </div>
-          )}
-          {novelKeywords && novelKeywords.length > 0 && (
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Keywords</p>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {novelKeywords.map((kw, i) => (
-                  <span key={i} className="rounded-full border border-zinc-700 px-2.5 py-0.5 text-xs text-zinc-400">{kw}</span>
-                ))}
-              </div>
+      </div>
+    </section>
+
+    {/* Section 2 - Blog */}
+    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+      <h3 className="text-lg font-bold text-zinc-100 mb-6 flex items-center gap-2">
+        <span className="text-xl">📝</span> Blog
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+        {/* Title */}
+        <div>
+          <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Title</label>
+          <Input
+            value={blogTitle}
+            onChange={(e) => setBlogTitle(e.target.value)}
+            className="mt-1 bg-zinc-800/50 border-zinc-700 text-zinc-100"
+            placeholder="Blog post title"
+          />
+        </div>
+        {/* Slug (auto-generated) */}
+        <div>
+          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Slug</p>
+          <p className="text-sm text-zinc-200 mt-2 font-mono">
+            {blogTitle ? blogTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "—"}
+          </p>
+        </div>
+        {/* Excerpt */}
+        <div className="md:col-span-2">
+          <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Excerpt</label>
+          <textarea
+            value={blogExcerpt}
+            onChange={(e) => setBlogExcerpt(e.target.value)}
+            rows={3}
+            className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y"
+            placeholder="Blog excerpt"
+          />
+        </div>
+        {/* Content (HTML) */}
+        <div className="md:col-span-2">
+          <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Content (HTML)</label>
+          <textarea
+            value={blogContent}
+            onChange={(e) => setBlogContent(e.target.value)}
+            rows={8}
+            className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y font-mono"
+            placeholder="Blog content (HTML)"
+          />
+        </div>
+        {/* Category */}
+        <div>
+          <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Category</label>
+          <Input
+            value={blogCategory}
+            onChange={(e) => setBlogCategory(e.target.value)}
+            className="mt-1 bg-zinc-800/50 border-zinc-700 text-zinc-100"
+            placeholder="Blog category"
+          />
+        </div>
+        {/* Tags */}
+        <div>
+          <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Tags</label>
+          <Input
+            value={blogTags}
+            onChange={(e) => setBlogTags(e.target.value)}
+            className="mt-1 bg-zinc-800/50 border-zinc-700 text-zinc-100"
+            placeholder="Comma-separated tags"
+          />
+        </div>
+        {/* Cover Image */}
+        <div className="md:col-span-2">
+          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Cover Image</p>
+          {generatedCoverUrl ? (
+            <img src={generatedCoverUrl} alt="Blog cover" className="max-w-48 rounded-lg border border-zinc-800 shadow-lg" />
+          ) : (
+            <div className="w-48 h-32 rounded-lg border border-zinc-800 bg-zinc-950/50 flex items-center justify-center">
+              <p className="text-xs text-zinc-600 italic">No cover image</p>
             </div>
           )}
         </div>
       </div>
-    </section>
-
-    {/* Manuscript Content */}
-    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl">
-      <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-6">Manuscript</h3>
-      {proseScenes && Object.keys(proseScenes).length > 0 ? (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-zinc-300">
-              <span className="font-semibold text-emerald-400">{Object.keys(proseScenes).length}</span> chapters with prose
-            </p>
-            <div className="flex gap-2">
-              {novelFormats["txt"] && (
-                <button
-                  onClick={() => downloadText(`${title || "novel"}_novel.txt`, novelFormats["txt"])}
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300 hover:border-zinc-500"
-                >
-                  TXT
-                </button>
-              )}
-              {novelFormats["md"] && (
-                <button
-                  onClick={() => downloadText(`${title || "novel"}_novel.md`, novelFormats["md"])}
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300 hover:border-zinc-500"
-                >
-                  Markdown
-                </button>
-              )}
-              {novelFormats["html"] && (
-                <button
-                  onClick={() => downloadText(`${title || "novel"}_novel.html`, novelFormats["html"])}
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300 hover:border-zinc-500"
-                >
-                  HTML
-                </button>
-              )}
-              {novelFormats["docx"] && (
-                <button
-                  onClick={() => {
-                    const byteChars = atob(novelFormats["docx"]);
-                    const byteNumbers = new Array(byteChars.length);
-                    for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
-                    const blob = new Blob([new Uint8Array(byteNumbers)], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = `${title || "novel"}_novel.docx`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300 hover:border-zinc-500"
-                >
-                  DOCX
-                </button>
-              )}
-            </div>
-          </div>
-          <Collapsible label="Preview manuscript">
-            <div className="max-h-96 overflow-y-auto space-y-6 pr-2">
-              {Object.entries(proseScenes).map(([chapter, scenes], idx) => (
-                <div key={idx}>
-                  <p className="text-xs font-bold uppercase tracking-widest text-emerald-500 mb-2">{chapter}</p>
-                  {scenes.map((scene, sIdx) => (
-                    <p key={sIdx} className="text-xs text-zinc-400 leading-relaxed mb-2">{scene}</p>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </Collapsible>
-        </div>
-      ) : (
-        <p className="text-sm text-zinc-600 italic">No manuscript content generated yet. Complete the writing pipeline first.</p>
-      )}
-    </section>
-
-    {/* Cover Images */}
-    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl">
-      <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-6">Cover Images</h3>
-      {generatedCovers.length > 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-          {generatedCovers.map((cover, index) => (
-            <div key={index} className="relative group">
-              <div className={`aspect-[2/3] rounded-xl overflow-hidden border-2 transition-all ${
-                generatedCoverUrl === cover.url ? "border-emerald-400 shadow-lg shadow-emerald-500/20" : "border-zinc-800"
-              }`}>
-                <img src={cover.url} alt={`Cover ${index + 1}`} className="h-full w-full object-cover" />
-              </div>
-              <div className="mt-2 flex items-center justify-between">
-                <button
-                  onClick={async () => {
-                    setGeneratedCoverUrl(cover.url);
-                    setCoverUrl(cover.url);
-                    setMockupUserImage(cover.url);
-                    if (novelId) {
-                      try {
-                        await fetch("/api/novel/covers/activate", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ novelId, coverId: cover.id, coverUrl: cover.url }),
-                        });
-                      } catch (err) {
-                        console.error("Failed to activate cover:", err);
-                      }
-                    }
-                  }}
-                  className={`text-xs font-semibold ${generatedCoverUrl === cover.url ? "text-emerald-400" : "text-zinc-500 hover:text-zinc-300"}`}
-                >
-                  {generatedCoverUrl === cover.url ? "✓ Selected" : "Select"}
-                </button>
-                <button
-                  onClick={() => {
-                    const link = document.createElement("a");
-                    link.href = cover.url;
-                    link.download = `cover_${index + 1}.png`;
-                    link.click();
-                  }}
-                  className="text-xs text-zinc-600 hover:text-zinc-300"
-                >
-                  Download
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-sm text-zinc-600 italic">No cover images generated yet. Use the Cover tab to create one.</p>
-      )}
-    </section>
-
-    {/* Mockup Renders */}
-    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl">
-      <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-6">Mockup Renders</h3>
-      {mockupRenderResultUrl ? (
-        <div className="space-y-4">
-          <div className="max-w-md">
-            <div className="rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-950">
-              <img src={mockupRenderResultUrl} alt="Mockup render" className="h-full w-full object-contain" />
-            </div>
-            <div className="mt-3 flex gap-2">
-              <button
-                onClick={() => {
-                  const link = document.createElement("a");
-                  link.href = mockupRenderResultUrl;
-                  link.download = `${title || "novel"}_mockup.png`;
-                  link.click();
-                }}
-                className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300 hover:border-zinc-500"
-              >
-                Download Mockup
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <p className="text-sm text-zinc-600 italic">No mockup renders yet. Use the Mockups tab to generate product renders.</p>
-      )}
-    </section>
-
-    {/* Story Details & Pipeline Content */}
-    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl">
-      <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-6">Story & Marketing Content</h3>
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Story Details */}
-        {storyDetails && (
-          <Collapsible label="Story Details">
-            <pre className="whitespace-pre-wrap text-xs text-zinc-400 leading-relaxed">{formatReadable(storyDetails)}</pre>
-          </Collapsible>
-        )}
-        {/* Premises & Endings */}
-        {premisesAndEndings && (
-          <Collapsible label="Premises & Endings">
-            <div className="space-y-3">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 mb-1">Chosen Premise</p>
-                <p className="text-xs text-zinc-400">{premisesAndEndings.chosen_premise}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 mb-1">Chosen Ending</p>
-                <p className="text-xs text-zinc-400">{premisesAndEndings.chosen_ending}</p>
-              </div>
-            </div>
-          </Collapsible>
-        )}
-        {/* Character Profiles */}
-        {characterProfiles && (
-          <Collapsible label="Character Profiles">
-            <pre className="whitespace-pre-wrap text-xs text-zinc-400 leading-relaxed">{characterProfiles}</pre>
-          </Collapsible>
-        )}
-        {/* Book Descriptions */}
-        {bookDescriptions && (
-          <Collapsible label="Book Descriptions">
-            <div className="space-y-3">
-              {Object.entries(bookDescriptions).map(([key, value]) => (
-                <div key={key}>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 mb-1">{key.replace(/_/g, " ")}</p>
-                  <p className="text-xs text-zinc-400 leading-relaxed">{value}</p>
-                </div>
-              ))}
-            </div>
-          </Collapsible>
-        )}
-        {/* BISAC Categories */}
-        {novelBisac && novelBisac.length > 0 && (
-          <Collapsible label="BISAC Categories">
-            <div className="flex flex-wrap gap-1.5">
-              {novelBisac.map((cat, i) => (
-                <span key={i} className="rounded-full border border-zinc-700 px-2.5 py-0.5 text-xs text-zinc-400">{cat}</span>
-              ))}
-            </div>
-          </Collapsible>
-        )}
-        {/* Quotes */}
-        {novelQuotes && novelQuotes.length > 0 && (
-          <Collapsible label="Notable Quotes">
-            <div className="space-y-2">
-              {novelQuotes.map((quote, i) => (
-                <p key={i} className="text-xs text-zinc-400 italic leading-relaxed border-l-2 border-zinc-700 pl-3">"{quote}"</p>
-              ))}
-            </div>
-          </Collapsible>
-        )}
-        {/* Social Snippets */}
-        {socialSnippetsByPlatform && Object.keys(socialSnippetsByPlatform).length > 0 && (
-          <Collapsible label="Social Media Snippets">
-            <div className="space-y-3">
-              {Object.entries(socialSnippetsByPlatform).map(([platform, content]) => (
-                <div key={platform}>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 mb-1">{platform}</p>
-                  <p className="text-xs text-zinc-400 leading-relaxed">{content}</p>
-                </div>
-              ))}
-            </div>
-          </Collapsible>
-        )}
-        {/* Promotional Articles */}
-        {promotionalArticles && promotionalArticles.length > 0 && (
-          <Collapsible label="Promotional Articles">
-            <div className="space-y-4">
-              {promotionalArticles.map((article, i) => (
-                <div key={i} className="border-l-2 border-zinc-700 pl-3">
-                  <p className="text-xs font-semibold text-zinc-300">{typeof article.title === "string" ? article.title : `Article ${i + 1}`}</p>
-                  <p className="text-[10px] text-zinc-600 mt-0.5">{typeof article.article_type === "string" ? article.article_type : ""} · {typeof article.length_type === "string" ? article.length_type : ""} · {typeof article.tone === "string" ? article.tone : ""}</p>
-                  <p className="text-xs text-zinc-400 leading-relaxed mt-1">{typeof article.content === "string" ? article.content : ""}</p>
-                </div>
-              ))}
-            </div>
-          </Collapsible>
-        )}
-      </div>
-      {/* Empty state if nothing generated */}
-      {!storyDetails && !premisesAndEndings && !characterProfiles && !bookDescriptions && !novelBisac && !novelQuotes && !socialSnippetsByPlatform && !promotionalArticles && (
-        <p className="text-sm text-zinc-600 italic">No story or marketing content generated yet. Complete the pipeline steps first.</p>
-      )}
     </section>
 
     {/* Publish Action */}
-    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl text-center">
+    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 text-center">
       <div className="max-w-md mx-auto space-y-6">
         {novelId && (
-          <div className="rounded-2xl border border-zinc-700 bg-zinc-950/50 px-5 py-4 text-left">
+          <div className="rounded-xl border border-zinc-700 bg-zinc-950/50 px-5 py-4 text-left">
             <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
               Novel ID (for elstranbooks import)
             </p>
@@ -5466,14 +5362,14 @@ function StudioContent() {
           onClick={publishNovelAction}
           disabled={!novelId || isPublished || !!loadingStep}
           className={`w-full rounded-full px-10 py-6 text-xl font-black uppercase tracking-widest transition-all shadow-2xl ${
-            isPublished 
-            ? "bg-emerald-500 text-white cursor-default" 
+            isPublished
+            ? "bg-emerald-500 text-white cursor-default"
             : "bg-white text-zinc-900 hover:scale-105 active:scale-95 hover:shadow-white/10"
           }`}
         >
           {loadingStep === "publish" ? "Publishing..." : isPublished ? "✓ Published" : "Publish to Library"}
         </button>
-        
+
         {publishPublicId && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 pt-4">
             <p className="text-xs font-bold uppercase tracking-widest text-emerald-500">Available in Library</p>
