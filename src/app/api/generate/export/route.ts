@@ -15,7 +15,6 @@ import {
   FileChild,
 } from 'docx';
 import JSZip from 'jszip';
-import { convert as libreofficeConvert } from 'libreoffice-convert';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -794,29 +793,8 @@ async function postProcessDocx(buffer: Buffer): Promise<Buffer> {
   return Buffer.from(newBuffer);
 }
 
-// ---------------------------------------------------------------------------
-// PDF conversion
-// ---------------------------------------------------------------------------
-
-function docxToPdf(docxBuffer: Buffer): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      reject(new Error('PDF conversion timed out. LibreOffice may not be installed on the server.'));
-    }, 120000); // 2 minute timeout
-
-    libreofficeConvert(docxBuffer, '.pdf', undefined, (err: Error | null, pdfBuffer: Buffer) => {
-      clearTimeout(timeout);
-      if (err) {
-        console.error('[export] LibreOffice conversion error:', err.message);
-        reject(new Error(
-          'PDF conversion failed. LibreOffice may not be installed on the server. Please download the Word document instead and convert it locally.'
-        ));
-        return;
-      }
-      resolve(Buffer.from(pdfBuffer));
-    });
-  });
-}
+// PDF conversion removed — not available on production server.
+// Users convert DOCX to PDF locally.
 
 // ---------------------------------------------------------------------------
 // Route handler
@@ -826,9 +804,9 @@ export async function POST(request: NextRequest) {
   try {
     // Parse format from query params
     const format = request.nextUrl.searchParams.get('format') || 'docx';
-    if (format !== 'docx' && format !== 'pdf') {
+    if (format !== 'docx') {
       return NextResponse.json(
-        { error: 'Invalid format. Use "docx" or "pdf".' },
+        { error: 'Invalid format. Only "docx" is supported.' },
         { status: 400 }
       );
     }
@@ -903,29 +881,13 @@ export async function POST(request: NextRequest) {
     // Post-process: fix evenAndOddHeaders + add updateFields
     const fixedBuffer = await postProcessDocx(rawBuffer);
 
-    // Convert to PDF if requested
-    let outputBuffer: Buffer;
-    let contentType: string;
-    let extension: string;
-
-    if (format === 'pdf') {
-      outputBuffer = await docxToPdf(fixedBuffer);
-      contentType = 'application/pdf';
-      extension = 'pdf';
-    } else {
-      outputBuffer = fixedBuffer;
-      contentType =
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      extension = 'docx';
-    }
-
     const safeName = safeFileName(body.bookTitle);
 
-    return new NextResponse(new Uint8Array(outputBuffer), {
+    return new NextResponse(new Uint8Array(fixedBuffer), {
       status: 200,
       headers: {
-        'Content-Type': contentType,
-        'Content-Disposition': `attachment; filename="${safeName}_Formatted.${extension}"`,
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'Content-Disposition': `attachment; filename="${safeName}_Formatted.docx"`,
       },
     });
   } catch (error) {

@@ -217,6 +217,14 @@ create table if not exists public.social_snippets (
   created_at timestamptz default now()
 );
 
+create table if not exists public.novel_dedications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  novel_id uuid references public.novels(id) on delete cascade,
+  dedication text not null,
+  created_at timestamptz default now()
+);
+
 create table if not exists public.series_books (
   id uuid primary key default gen_random_uuid(),
   series_id uuid references public.series(id) on delete cascade,
@@ -325,6 +333,7 @@ alter table public.book_descriptions enable row level security;
 alter table public.novel_quotes enable row level security;
 alter table public.promotional_articles enable row level security;
 alter table public.social_snippets enable row level security;
+alter table public.novel_dedications enable row level security;
 alter table public.series_books enable row level security;
 alter table public.series_characters enable row level security;
 alter table public.series_worlds enable row level security;
@@ -744,6 +753,7 @@ create policy "descriptions owner" on public.book_descriptions for all using (au
 create policy "quotes owner" on public.novel_quotes for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "promotional articles owner" on public.promotional_articles for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "social snippets owner" on public.social_snippets for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "novel dedications owner" on public.novel_dedications for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "series books owner" on public.series_books for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (

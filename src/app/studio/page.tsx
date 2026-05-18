@@ -406,6 +406,7 @@ function StudioContent() {
   const [promoCtaType, setPromoCtaType] = useState<string>("medium");
   const [promoIncludeLinks, setPromoIncludeLinks] = useState<boolean>(false);
   const [socialSnippets, setSocialSnippets] = useState<string | null>(null);
+  const [novelDedication, setNovelDedication] = useState<string | null>(null);
   const [novelFormats, setNovelFormats] = useState<Record<string, string>>({});
   const [savingExport, setSavingExport] = useState<string | null>(null);
   const [socialSnippetsByPlatform, setSocialSnippetsByPlatform] = useState<
@@ -704,6 +705,12 @@ function StudioContent() {
         status: isFilled(socialSnippets) ? "ready" : "missing",
       },
       {
+        step: "Dedication",
+        requires: ["storyDetails", "novelSynopsis"],
+        produces: ["novelDedication"],
+        status: isFilled(novelDedication) ? "ready" : "missing",
+      },
+      {
         step: "Exports",
         requires: ["proseScenes"],
         produces: ["novelFormats"],
@@ -728,6 +735,7 @@ function StudioContent() {
       novelQuotes,
       promotionalArticles,
       socialSnippets,
+      novelDedication,
       novelFormats,
     ]
   );
@@ -1267,6 +1275,16 @@ function StudioContent() {
       });
       setNovelFormats(formatted);
     }
+
+    const { data: dedicationRow } = await supabase
+      .from("novel_dedications")
+      .select("dedication")
+      .eq("novel_id", novelIdValue)
+      .maybeSingle();
+
+    if (dedicationRow?.dedication) {
+      setNovelDedication(dedicationRow.dedication);
+    }
   };
 
   const loadSeriesContext = async (seriesIdValue: string, bookNumber: number) => {
@@ -1366,6 +1384,7 @@ function StudioContent() {
     setEditingSocialSnippets({});
     setEditingSocialSnippetKeys({});
     setCopiedSnippetKey(null);
+    setNovelDedication(null);
     setNovelFormats({});
     setSavingExport(null);
     setActiveStudioTab("pipeline");
@@ -2075,6 +2094,39 @@ function StudioContent() {
     }
   };
 
+  const generateDedication = async () => {
+    setLoadingStep("dedication");
+    setError(null);
+    try {
+      const user = await requireUser();
+      const novelIdValue = await ensureNovel(user.id);
+      const response = await fetch("/api/generate/dedication", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storyDetails,
+          premisesAndEndings,
+          novelSynopsis,
+          characterProfiles,
+          model,
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to generate dedication");
+      const data = await response.json();
+      setNovelDedication(data.dedication ?? "");
+      await saveSingleRow(
+        "novel_dedications",
+        { dedication: data.dedication ?? "" },
+        novelIdValue,
+        user.id
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setLoadingStep(null);
+    }
+  };
+
   const generatePromotionalArticle = async (options?: {
     articleType?: string;
     lengthType?: string;
@@ -2562,7 +2614,7 @@ function StudioContent() {
     }
   };
 
-  const downloadExport = async (format: 'docx' | 'pdf') => {
+  const downloadExport = async (format: 'docx') => {
     if (!proseScenes) return;
     setSavingExport(format);
     setError(null);
@@ -2575,7 +2627,7 @@ function StudioContent() {
           bookTitle: title || "Untitled Novel",
           authorName: "Elstran Books",
           publisherName: "Elstran Books",
-          dedication: "",
+          dedication: novelDedication || "",
           aboutAuthor: "",
           chapters,
         }),
@@ -2631,7 +2683,7 @@ function StudioContent() {
   };
 
   /** Download a previously saved export from Supabase */
-  const downloadSavedExport = async (format: 'docx' | 'pdf') => {
+  const downloadSavedExport = async (format: 'docx') => {
     const formatName = `export_${format}`;
     const base64 = novelFormats[formatName];
     if (!base64) return;
@@ -2643,7 +2695,7 @@ function StudioContent() {
       for (let i = 0; i < binaryString.length; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
-      const mimeType = format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      const mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
       const blob = new Blob([bytes], { type: mimeType });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -3750,7 +3802,63 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <SectionHeading title="11. Formats & exports" step="Exports" />
+          <SectionHeading title="11. Dedication" step="Dedication" />
+          <p className="mt-2 text-sm text-zinc-400">
+            Generate a dedication page for your novel that will appear in the formatted export.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              onClick={generateDedication}
+              disabled={!storyDetails || !novelSynopsis || loadingStep === "dedication"}
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 disabled:opacity-50"
+            >
+              {loadingStep === "dedication" ? "Generating..." : "Generate Dedication"}
+            </button>
+            {novelDedication && (
+              <button
+                onClick={generateDedication}
+                disabled={!storyDetails || !novelSynopsis}
+                className="rounded-full border border-zinc-700 px-5 py-2 text-sm disabled:opacity-50"
+              >
+                ♻️ Regenerate
+              </button>
+            )}
+          </div>
+          {novelDedication && (
+            <div className="mt-4 space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() =>
+                    downloadText(`${title || "story"}_dedication.txt`, novelDedication)
+                  }
+                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                >
+                  Download TXT
+                </button>
+                <button
+                  onClick={async () => {
+                    const success = await copyToClipboard(novelDedication);
+                    if (success) {
+                      setMessage("Dedication copied to clipboard!");
+                      setTimeout(() => setMessage(null), 2000);
+                    }
+                  }}
+                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                >
+                  Copy
+                </button>
+              </div>
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
+                <p className="whitespace-pre-wrap text-sm text-zinc-200 italic">
+                  {novelDedication}
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+          <SectionHeading title="12. Formats & exports" step="Exports" />
           <p className="mt-2 text-sm text-zinc-400">
             Download your formatted novel for publishing.
           </p>
@@ -3782,7 +3890,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <SectionHeading title="12. Cover prompt" step="Cover prompt" />
+          <SectionHeading title="13. Cover prompt" step="Cover prompt" />
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateCoverPrompt}
@@ -3819,7 +3927,7 @@ function StudioContent() {
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <SectionHeading title="13. Quote snippets" step="Quotes" />
+          <SectionHeading title="14. Quote snippets" step="Quotes" />
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               onClick={generateQuotes}
