@@ -25,7 +25,6 @@ type PromotionalArticleRow = {
 /** A cover row from cover_design_prompts */
 type CoverRow = {
   id: string;
-  prompt: string | null;
   url: string | null;
   model: string | null;
   is_active: boolean;
@@ -33,10 +32,14 @@ type CoverRow = {
 };
 
 /**
- * Showroom payload — only includes data that appears on the publish page.
- * Pipeline/writing data (story details, premises, character profiles,
- * novel plan, chapter outlines, chapter guide, chapter beats, prose scenes)
- * is intentionally excluded.
+ * Showroom payload — only includes data that appears on the publish page
+ * and is needed by elstranbooks.com.
+ *
+ * Removed (not needed in showroom):
+ * - dedication (already embedded in the novel export)
+ * - coverPrompt (only the cover image is needed)
+ * - allCovers (only the selected/active cover is needed)
+ * - all format variants (only the fully formatted HTML novel is needed)
  */
 export type ShowroomPayload = {
   source: "elstran-studio";
@@ -51,7 +54,7 @@ export type ShowroomPayload = {
   publish: {
     /** Short marketing description (marketing_short or marketing_standard fallback) */
     shortDescription: string | null;
-    /** Back cover description (back_cover_standard) */
+    /** Back cover description */
     backCoverDescription: string | null;
     /** All book descriptions for reference */
     bookDescriptions: Array<{
@@ -61,21 +64,13 @@ export type ShowroomPayload = {
     }>;
     keywords: string[];
     bisac: string[];
+    /** The active/selected cover image URL */
     coverUrl: string | null;
-    coverPrompt: string | null;
-    allCovers: Array<{
-      id: string;
-      url: string | null;
-      prompt: string | null;
-      model: string | null;
-      isActive: boolean;
-      createdAt: string;
-    }>;
     facebookImageUrl: string | null;
     instagramImageUrl: string | null;
     quotes: string[];
-    dedication: string | null;
-    formats: Record<string, string>;
+    /** The fully formatted novel as HTML */
+    formattedNovel: string | null;
     promotionalArticles: Array<{
       articleType: string;
       lengthType: string;
@@ -105,9 +100,9 @@ const parseStringArray = (value: unknown): string[] => {
 
 /**
  * Build a showroom payload for a single novel.
- * Only includes data that appears on the publish page:
- * book descriptions, keywords, BISAC, cover images, quotes,
- * dedication, formats, promotional articles, and social snippets.
+ * Only includes what elstranbooks.com needs: descriptions, keywords, BISAC,
+ * selected cover, social images, quotes, fully formatted novel HTML,
+ * promotional articles, and social snippets.
  */
 export async function buildShowroomPayload(
   novelId: string
@@ -129,7 +124,6 @@ export async function buildShowroomPayload(
     socialResult,
     formatsResult,
     coversResult,
-    dedicationResult,
     articlesResult,
   ] = await Promise.all([
     // Book Descriptions
@@ -176,30 +170,21 @@ export async function buildShowroomPayload(
       .limit(1)
       .maybeSingle<{ content: string; created_at: string }>(),
 
-    // Formats
+    // Formats — we only need the fully formatted HTML novel
     supabaseAdmin
       .from("novel_formats")
       .select("format_name,content,created_at")
       .eq("novel_id", novelId)
       .returns<FormatRow[]>(),
 
-    // Cover Design Prompts (all covers)
+    // Cover Design Prompts
     supabaseAdmin
       .from("cover_design_prompts")
-      .select("id,prompt,url,model,is_active,created_at")
+      .select("id,url,model,is_active,created_at")
       .eq("novel_id", novelId)
       .order("is_active", { ascending: false })
       .order("created_at", { ascending: false })
       .returns<CoverRow[]>(),
-
-    // Dedication
-    supabaseAdmin
-      .from("novel_dedications")
-      .select("dedication,created_at")
-      .eq("novel_id", novelId)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle<{ dedication: string; created_at: string }>(),
 
     // Promotional Articles
     supabaseAdmin
@@ -210,13 +195,25 @@ export async function buildShowroomPayload(
       .returns<PromotionalArticleRow[]>(),
   ]);
 
-  // Build formats map
-  const formats: Record<string, string> = {};
+  // Extract the fully formatted HTML novel from formats
+  // The format_name for the full novel HTML is stored under keys like
+  // "html", "prose_html", or similar. We look for the best match.
+  const formatsMap: Record<string, string> = {};
   for (const row of formatsResult.data ?? []) {
     if (typeof row.format_name === "string" && typeof row.content === "string") {
-      formats[row.format_name] = row.content;
+      formatsMap[row.format_name] = row.content;
     }
   }
+
+  // Find the fully formatted novel — prefer "html", then "prose_html",
+  // then any key containing "html" that looks like a full novel export
+  const formattedNovel =
+    formatsMap["html"] ??
+    formatsMap["prose_html"] ??
+    Object.entries(formatsMap).find(([key]) =>
+      key.toLowerCase().includes("html") && !key.includes("scene")
+    )?.[1] ??
+    null;
 
   // Determine the active/latest cover URL (exclude social media images)
   const coverCovers = (coversResult.data ?? []).filter(
@@ -234,12 +231,6 @@ export async function buildShowroomPayload(
     (c) => c.url && String(c.model || "").startsWith("instagram-")
   );
 
-  // Get cover prompt (prefer AI-generated, not social media or custom upload)
-  const aiPromptRow = coverCovers.find(
-    (c) => c.prompt && c.model !== "custom-upload"
-  );
-  const coverPrompt = aiPromptRow?.prompt ?? coverCovers.find((c) => c.prompt)?.prompt ?? null;
-
   // Build promotional articles
   const promotionalArticles: ShowroomPayload["publish"]["promotionalArticles"] = (
     articlesResult.data ?? []
@@ -250,16 +241,6 @@ export async function buildShowroomPayload(
     ctaType: row.cta_type,
     title: row.title,
     content: row.content,
-  }));
-
-  // Build all covers list
-  const allCovers: ShowroomPayload["publish"]["allCovers"] = coverCovers.map((c) => ({
-    id: c.id,
-    url: c.url,
-    prompt: c.prompt,
-    model: c.model,
-    isActive: c.is_active,
-    createdAt: c.created_at,
   }));
 
   // Extract key descriptions for easy access
@@ -303,13 +284,10 @@ export async function buildShowroomPayload(
       keywords: parseStringArray(keywordsResult.data?.keywords),
       bisac: parseStringArray(bisacResult.data?.categories),
       coverUrl: activeCover?.url ?? null,
-      coverPrompt,
-      allCovers,
       facebookImageUrl: fbCover?.url ?? null,
       instagramImageUrl: igCover?.url ?? null,
       quotes: parseStringArray(quotesResult.data?.quotes),
-      dedication: dedicationResult.data?.dedication ?? null,
-      formats,
+      formattedNovel,
       promotionalArticles,
       socialSnippets: socialResult.data?.content ?? null,
     },
