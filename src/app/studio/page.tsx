@@ -5170,9 +5170,9 @@ function StudioContent() {
         {/* Full Description (Back Cover) */}
         <div className="md:col-span-2">
           <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Full Description (Back Cover)</p>
-          {(bookDescriptions?.backcover_long ?? bookDescriptions?.backcover_standard ?? "") ? (
+          {(bookDescriptions?.back_cover_long ?? bookDescriptions?.back_cover_standard ?? "") ? (
             <div className="mt-1 rounded-lg border border-zinc-800 bg-zinc-950/50 p-3 max-h-48 overflow-y-auto">
-              <p className="text-sm text-zinc-200 whitespace-pre-wrap">{bookDescriptions?.backcover_long ?? bookDescriptions?.backcover_standard ?? ""}</p>
+              <p className="text-sm text-zinc-200 whitespace-pre-wrap">{bookDescriptions?.back_cover_long ?? bookDescriptions?.back_cover_standard ?? ""}</p>
             </div>
           ) : (
             <p className="text-sm text-zinc-600 mt-1 italic">No back cover description available</p>

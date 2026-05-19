@@ -49,6 +49,11 @@ export type ShowroomPayload = {
     bookNumber: number | null;
   };
   publish: {
+    /** Short marketing description (marketing_short or marketing_standard fallback) */
+    shortDescription: string | null;
+    /** Back cover description (back_cover_standard) */
+    backCoverDescription: string | null;
+    /** All book descriptions for reference */
     bookDescriptions: Array<{
       type: string;
       length: string;
@@ -257,6 +262,21 @@ export async function buildShowroomPayload(
     createdAt: c.created_at,
   }));
 
+  // Extract key descriptions for easy access
+  const descData = descriptionsResult.data ?? [];
+  const findDescription = (type: string, length: string) =>
+    descData.find((row) => row.description_type === type && row.length_type === length)?.content ?? null;
+
+  const shortDescription =
+    findDescription("marketing", "short") ??
+    findDescription("marketing", "standard") ??
+    null;
+
+  const backCoverDescription =
+    findDescription("back_cover", "long") ??
+    findDescription("back_cover", "standard") ??
+    null;
+
   return {
     source: "elstran-studio",
     generatedAt: new Date().toISOString(),
@@ -268,7 +288,9 @@ export async function buildShowroomPayload(
       bookNumber: novel.book_number ?? null,
     },
     publish: {
-      bookDescriptions: (descriptionsResult.data ?? []).map((row) => ({
+      shortDescription,
+      backCoverDescription,
+      bookDescriptions: descData.map((row) => ({
         type: row.description_type,
         length: row.length_type,
         content: row.content,
