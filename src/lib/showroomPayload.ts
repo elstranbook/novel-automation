@@ -272,9 +272,14 @@ export async function buildShowroomPayload(
     findDescription("marketing", "standard") ??
     null;
 
+  // The back cover description may be stored in different formats depending
+  // on when it was generated:
+  // - Old (buggy save): description_type="back", length_type="cover" → key "back_cover"
+  // - New (fixed save): description_type="back_cover", length_type="standard" → key "back_cover_standard"
   const backCoverDescription =
-    findDescription("back_cover", "long") ??
     findDescription("back_cover", "standard") ??
+    findDescription("back_cover", "long") ??
+    findDescription("back", "cover") ??
     null;
 
   return {

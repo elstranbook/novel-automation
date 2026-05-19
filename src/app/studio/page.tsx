@@ -1562,12 +1562,35 @@ function StudioContent() {
         .eq("novel_id", novelIdValue);
 
       const rows = Object.entries(descriptions).map(([key, content]) => {
-        const [descriptionType, lengthType] = key.split("_");
+        // The API generates keys as "{type}_{length}" but some types contain
+        // underscores (e.g. "back_cover", "elevator_pitch").
+        // Known type names that contain underscores:
+        const compoundTypes = ["back_cover", "elevator_pitch"];
+        let descriptionType = "marketing";
+        let lengthType = "standard";
+
+        for (const ct of compoundTypes) {
+          const prefix = ct + "_";
+          if (key.startsWith(prefix)) {
+            descriptionType = ct;
+            lengthType = key.substring(prefix.length) || "standard";
+            break;
+          }
+        }
+        // If no compound type matched, split on first underscore
+        if (descriptionType === "marketing" && !key.startsWith("marketing_")) {
+          const firstUnderscore = key.indexOf("_");
+          descriptionType = firstUnderscore > 0 ? key.substring(0, firstUnderscore) : key;
+          lengthType = firstUnderscore > 0 ? key.substring(firstUnderscore + 1) : "standard";
+        } else if (descriptionType === "marketing" && key.startsWith("marketing_")) {
+          lengthType = key.substring("marketing_".length) || "standard";
+        }
+
         return {
           novel_id: novelIdValue,
           user_id: user.id,
-          description_type: descriptionType ?? "marketing",
-          length_type: lengthType ?? "standard",
+          description_type: descriptionType,
+          length_type: lengthType,
           content: String(content ?? ""),
         };
       });
@@ -5170,9 +5193,9 @@ function StudioContent() {
         {/* Full Description (Back Cover) */}
         <div className="md:col-span-2">
           <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Full Description (Back Cover)</p>
-          {(bookDescriptions?.back_cover_long ?? bookDescriptions?.back_cover_standard ?? "") ? (
+          {(bookDescriptions?.back_cover ?? "") ? (
             <div className="mt-1 rounded-lg border border-zinc-800 bg-zinc-950/50 p-3 max-h-48 overflow-y-auto">
-              <p className="text-sm text-zinc-200 whitespace-pre-wrap">{bookDescriptions?.back_cover_long ?? bookDescriptions?.back_cover_standard ?? ""}</p>
+              <p className="text-sm text-zinc-200 whitespace-pre-wrap">{bookDescriptions?.back_cover ?? ""}</p>
             </div>
           ) : (
             <p className="text-sm text-zinc-600 mt-1 italic">No back cover description available</p>
