@@ -1241,7 +1241,8 @@ function StudioContent() {
 
     if (promotionalArticlesError) {
       console.warn("Failed to load promotional articles", promotionalArticlesError);
-    } else if (promotionalArticlesRows) {
+    } else if (promotionalArticlesRows && promotionalArticlesRows.length > 0) {
+      console.log("📋 Loaded", promotionalArticlesRows.length, "promotional articles for novel", novelIdValue);
       setPromotionalArticles(
         promotionalArticlesRows.map((row: PromotionalArticleRow) => ({
           article_type: row.article_type,
@@ -1252,6 +1253,9 @@ function StudioContent() {
           content: row.content,
         }))
       );
+    } else {
+      console.log("📋 No promotional articles found for novel", novelIdValue, "rows:", promotionalArticlesRows?.length ?? 0);
+      setPromotionalArticles(null);
     }
 
     const { data: socialSnippetRow, error: socialSnippetError } = await supabase
@@ -5239,20 +5243,26 @@ function StudioContent() {
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
       <h3 className="text-lg font-bold text-zinc-100 mb-6 flex items-center gap-2">
         <span className="text-xl">📝</span> Blog
-        {promotionalArticles && promotionalArticles.length > 0 && (
-          <span className="inline-flex rounded-full border border-emerald-400/40 px-2 py-0.5 text-[10px] text-emerald-200">
-            {promotionalArticles.length} article{promotionalArticles.length !== 1 ? "s" : ""}
-          </span>
-        )}
+        {(() => {
+          const articleCount = promotionalArticles?.length ?? 0;
+          const snippetCount = socialSnippets ? parseSocialSnippets(socialSnippets).length : 0;
+          const total = articleCount + snippetCount;
+          return total > 0 ? (
+            <span className="inline-flex rounded-full border border-emerald-400/40 px-2 py-0.5 text-[10px] text-emerald-200">
+              {total} item{total !== 1 ? "s" : ""} ({articleCount} article{articleCount !== 1 ? "s" : ""}, {snippetCount} snippet{snippetCount !== 1 ? "s" : ""})
+            </span>
+          ) : null;
+        })()}
       </h3>
-      {(!promotionalArticles || promotionalArticles.length === 0) ? (
+      {(!promotionalArticles || promotionalArticles.length === 0) && !socialSnippets ? (
         <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-8 text-center">
-          <p className="text-zinc-500 text-sm">No promotional articles generated yet.</p>
-          <p className="text-zinc-600 text-xs mt-1">Generate articles in the Promotional tab first.</p>
+          <p className="text-zinc-500 text-sm">No promotional articles or social snippets generated yet.</p>
+          <p className="text-zinc-600 text-xs mt-1">Generate content in the Promotional tab first.</p>
         </div>
       ) : (
         <div className="space-y-6">
-          {promotionalArticles.map((article, articleIndex) => {
+          {/* Promotional Articles */}
+          {promotionalArticles && promotionalArticles.length > 0 && promotionalArticles.map((article, articleIndex) => {
             const articleTitle = blogArticleEdits[articleIndex]?.title ?? String(article.title ?? "Untitled Article");
             const articleSlug = articleTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
             const articleContent = String(article.content ?? "");
@@ -5262,12 +5272,13 @@ function StudioContent() {
             const articleHtml = articleContent.split("\n\n").map((p: string) => `<p>${p.replace(/\n+/g, "</p><p>")}</p>`).join("\n");
 
             return (
-              <div key={articleIndex} className="rounded-xl border border-zinc-700/60 bg-zinc-950/40 p-5">
+              <div key={`article-${articleIndex}`} className="rounded-xl border border-zinc-700/60 bg-zinc-950/40 p-5">
                 <div className="flex items-center gap-2 mb-4">
                   <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-zinc-800 text-xs font-bold text-zinc-300">{articleIndex + 1}</span>
                   <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{titleize(String(article.article_type ?? "article"))}</span>
                   <span className="text-[10px] text-zinc-600">•</span>
                   <span className="text-[10px] text-zinc-600">{String(article.length_type ?? "medium")} • {String(article.tone ?? "formal")}</span>
+                  <span className="inline-flex rounded-full border border-sky-400/30 px-2 py-0.5 text-[9px] text-sky-300 ml-auto">Article</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
                   {/* Title */}
@@ -5341,6 +5352,119 @@ function StudioContent() {
                         setBlogArticleEdits((prev) => ({
                           ...prev,
                           [articleIndex]: { ...prev[articleIndex] ?? { title: articleTitle, excerpt: articleExcerpt, category: articleCategory, tags: articleTags }, tags: e.target.value },
+                        }));
+                      }}
+                      className="mt-1 bg-zinc-800/50 border-zinc-700 text-zinc-100"
+                      placeholder="Comma-separated tags"
+                    />
+                  </div>
+                  {/* Cover Image */}
+                  <div className="md:col-span-2">
+                    <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Cover Image</p>
+                    {generatedCoverUrl ? (
+                      <img src={generatedCoverUrl} alt="Blog cover" className="max-w-48 rounded-lg border border-zinc-800 shadow-lg" />
+                    ) : (
+                      <div className="w-48 h-32 rounded-lg border border-zinc-800 bg-zinc-950/50 flex items-center justify-center">
+                        <p className="text-xs text-zinc-600 italic">No cover image</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Social Media Snippets */}
+          {socialSnippets && parseSocialSnippets(socialSnippets).length > 0 && parseSocialSnippets(socialSnippets).map((snippet, snippetIndex) => {
+            const articleOffset = promotionalArticles?.length ?? 0;
+            const editKey = articleOffset + snippetIndex;
+            const snippetTitle = blogArticleEdits[editKey]?.title ?? `${title} — ${snippet.title}`;
+            const snippetSlug = snippetTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+            const snippetContent = snippet.body;
+            const snippetExcerpt = blogArticleEdits[editKey]?.excerpt ?? snippetContent.split("\n").filter((line: string) => line.trim().length > 0).slice(0, 2).join(" ").substring(0, 250);
+            const snippetCategory = blogArticleEdits[editKey]?.category ?? "Social Media";
+            const snippetTags = blogArticleEdits[editKey]?.tags ?? (novelKeywords ? novelKeywords.join(", ") : "");
+            const snippetHtml = snippetContent.split("\n\n").map((p: string) => `<p>${p.replace(/\n+/g, "</p><p>")}</p>`).join("\n");
+
+            return (
+              <div key={`snippet-${snippetIndex}`} className="rounded-xl border border-amber-700/40 bg-zinc-950/40 p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-900/60 text-xs font-bold text-amber-200">{articleOffset + snippetIndex + 1}</span>
+                  <span className="text-xs font-medium text-amber-400/80 uppercase tracking-wider">{snippet.title}</span>
+                  <span className="inline-flex rounded-full border border-amber-400/30 px-2 py-0.5 text-[9px] text-amber-300 ml-auto">Social Snippet</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+                  {/* Title */}
+                  <div>
+                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Title</label>
+                    <Input
+                      value={snippetTitle}
+                      onChange={(e) => {
+                        setBlogArticleEdits((prev) => ({
+                          ...prev,
+                          [editKey]: { ...prev[editKey] ?? { title: snippetTitle, excerpt: snippetExcerpt, category: snippetCategory, tags: snippetTags }, title: e.target.value },
+                        }));
+                      }}
+                      className="mt-1 bg-zinc-800/50 border-zinc-700 text-zinc-100"
+                      placeholder="Snippet title"
+                    />
+                  </div>
+                  {/* Slug */}
+                  <div>
+                    <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Slug</p>
+                    <p className="text-sm text-zinc-200 mt-2 font-mono">{snippetSlug || "—"}</p>
+                  </div>
+                  {/* Excerpt */}
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Excerpt</label>
+                    <textarea
+                      value={snippetExcerpt}
+                      onChange={(e) => {
+                        setBlogArticleEdits((prev) => ({
+                          ...prev,
+                          [editKey]: { ...prev[editKey] ?? { title: snippetTitle, excerpt: snippetExcerpt, category: snippetCategory, tags: snippetTags }, excerpt: e.target.value },
+                        }));
+                      }}
+                      rows={3}
+                      className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y"
+                      placeholder="Snippet excerpt"
+                    />
+                  </div>
+                  {/* Content (HTML) */}
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Content (HTML)</label>
+                    <textarea
+                      value={snippetHtml}
+                      readOnly
+                      rows={5}
+                      className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y font-mono cursor-text"
+                      placeholder="Snippet content (HTML)"
+                    />
+                  </div>
+                  {/* Category */}
+                  <div>
+                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Category</label>
+                    <Input
+                      value={snippetCategory}
+                      onChange={(e) => {
+                        setBlogArticleEdits((prev) => ({
+                          ...prev,
+                          [editKey]: { ...prev[editKey] ?? { title: snippetTitle, excerpt: snippetExcerpt, category: snippetCategory, tags: snippetTags }, category: e.target.value },
+                        }));
+                      }}
+                      className="mt-1 bg-zinc-800/50 border-zinc-700 text-zinc-100"
+                      placeholder="Blog category"
+                    />
+                  </div>
+                  {/* Tags */}
+                  <div>
+                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Tags</label>
+                    <Input
+                      value={snippetTags}
+                      onChange={(e) => {
+                        setBlogArticleEdits((prev) => ({
+                          ...prev,
+                          [editKey]: { ...prev[editKey] ?? { title: snippetTitle, excerpt: snippetExcerpt, category: snippetCategory, tags: snippetTags }, tags: e.target.value },
                         }));
                       }}
                       className="mt-1 bg-zinc-800/50 border-zinc-700 text-zinc-100"
