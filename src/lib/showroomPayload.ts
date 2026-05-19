@@ -39,7 +39,7 @@ type CoverRow = {
  * - dedication (already embedded in the novel export)
  * - coverPrompt (only the cover image is needed)
  * - allCovers (only the selected/active cover is needed)
- * - all format variants (only the fully formatted HTML novel is needed)
+ * - all format variants (only the fully formatted DOCX novel is needed)
  */
 export type ShowroomPayload = {
   source: "elstran-studio";
@@ -69,7 +69,7 @@ export type ShowroomPayload = {
     facebookImageUrl: string | null;
     instagramImageUrl: string | null;
     quotes: string[];
-    /** The fully formatted novel as HTML */
+    /** The fully formatted novel as base64-encoded DOCX */
     formattedNovel: string | null;
     promotionalArticles: Array<{
       articleType: string;
@@ -101,8 +101,8 @@ const parseStringArray = (value: unknown): string[] => {
 /**
  * Build a showroom payload for a single novel.
  * Only includes what elstranbooks.com needs: descriptions, keywords, BISAC,
- * selected cover, social images, quotes, fully formatted novel HTML,
- * promotional articles, and social snippets.
+ * selected cover, social images, quotes, fully formatted novel (DOCX),
+ * promotional articles (HTML), and social snippets.
  */
 export async function buildShowroomPayload(
   novelId: string
@@ -170,12 +170,14 @@ export async function buildShowroomPayload(
       .limit(1)
       .maybeSingle<{ content: string; created_at: string }>(),
 
-    // Formats — we only need the fully formatted HTML novel
+    // Formats — we only need the fully formatted DOCX novel (export_docx)
     supabaseAdmin
       .from("novel_formats")
       .select("format_name,content,created_at")
       .eq("novel_id", novelId)
-      .returns<FormatRow[]>(),
+      .eq("format_name", "export_docx")
+      .limit(1)
+      .maybeSingle<FormatRow>(),
 
     // Cover Design Prompts
     supabaseAdmin
@@ -195,25 +197,8 @@ export async function buildShowroomPayload(
       .returns<PromotionalArticleRow[]>(),
   ]);
 
-  // Extract the fully formatted HTML novel from formats
-  // The format_name for the full novel HTML is stored under keys like
-  // "html", "prose_html", or similar. We look for the best match.
-  const formatsMap: Record<string, string> = {};
-  for (const row of formatsResult.data ?? []) {
-    if (typeof row.format_name === "string" && typeof row.content === "string") {
-      formatsMap[row.format_name] = row.content;
-    }
-  }
-
-  // Find the fully formatted novel — prefer "html", then "prose_html",
-  // then any key containing "html" that looks like a full novel export
-  const formattedNovel =
-    formatsMap["html"] ??
-    formatsMap["prose_html"] ??
-    Object.entries(formatsMap).find(([key]) =>
-      key.toLowerCase().includes("html") && !key.includes("scene")
-    )?.[1] ??
-    null;
+  // The fully formatted novel is stored as "export_docx" — a base64-encoded DOCX
+  const formattedNovel = formatsResult.data?.content ?? null;
 
   // Determine the active/latest cover URL (exclude social media images)
   const coverCovers = (coversResult.data ?? []).filter(
