@@ -4,7 +4,23 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 
-const modelOptions = ["gpt-4.1-mini", "gpt-4.1", "gpt-4o", "gpt-4"];
+const AUTO = "auto" as const;
+
+const modelOptions = [
+  AUTO,  // 🤖 Auto — best model per pipeline step
+  // ── Qwen3 (DashScope / Alibaba Cloud) ──
+  "qwen3-235b-a22b-instruct-2507",  // 🏆 Best for creative writing
+  "qwen3-235b-a22b-thinking-2507",   // 🧠 Complex narrative planning
+  "qwen3-235b-a22b",                  // 📖 Base model
+  "qwen3-14b",                        // ⚡ Efficient & affordable
+  "qwen3-30b-a3b",                    // ⚖️ Balanced MoE
+  "qwen3-32b",                        // 💪 Dense 32B
+  // ── OpenAI ──
+  "gpt-4.1-mini",
+  "gpt-4.1",
+  "gpt-4o",
+  "gpt-4",
+];
 
 type SeriesSummary = {
   id: string;
@@ -37,7 +53,7 @@ export default function SeriesPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [numBooks, setNumBooks] = useState(3);
-  const [model, setModel] = useState(modelOptions[0]);
+  const [model, setModel] = useState<string>(AUTO);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authEmail, setAuthEmail] = useState<string | null>(null);
@@ -608,7 +624,11 @@ export default function SeriesPage() {
                 >
                   {modelOptions.map((option) => (
                     <option key={option} value={option}>
-                      {option}
+                      {option === "auto"
+                        ? "🤖 Auto — best model per step"
+                        : option.startsWith("qwen3-")
+                          ? `✨ ${option} (Qwen3/DashScope)`
+                          : option}
                     </option>
                   ))}
                 </select>

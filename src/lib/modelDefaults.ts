@@ -95,6 +95,13 @@ export const getDefaultModel = (step: PipelineStep): string =>
 /**
  * Resolve the model to use: client override > pipeline step default.
  * Use this in every API route to respect both user choice and pipeline defaults.
+ *
+ * When clientModel is "auto", undefined, null, or empty string,
+ * the pipeline-step default is used instead.
  */
-export const resolveModel = (clientModel: string | undefined | null, step: PipelineStep): string =>
-  clientModel || getDefaultModel(step);
+export const resolveModel = (clientModel: string | undefined | null, step: PipelineStep): string => {
+  if (!clientModel || clientModel === "auto") {
+    return getDefaultModel(step);
+  }
+  return clientModel;
+};

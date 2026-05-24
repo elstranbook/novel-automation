@@ -17,11 +17,10 @@ import { Input } from "@/components/ui/input";
 import { ArrowLeft, Plus } from "lucide-react";
 import type { Template, Category, TemplatesResponse } from "@/types";
 
+const AUTO = "auto" as const;
+
 const modelOptions = [
-  "gpt-4.1-mini",
-  "gpt-4.1",
-  "gpt-4o",
-  "gpt-4",
+  AUTO,  // 🤖 Auto — best model per pipeline step
   // ── Qwen3 (DashScope / Alibaba Cloud) ──
   "qwen3-235b-a22b-instruct-2507",  // 🏆 Best for creative writing
   "qwen3-235b-a22b-thinking-2507",   // 🧠 Complex narrative planning
@@ -29,6 +28,11 @@ const modelOptions = [
   "qwen3-14b",                        // ⚡ Efficient & affordable
   "qwen3-30b-a3b",                    // ⚖️ Balanced MoE
   "qwen3-32b",                        // 💪 Dense 32B
+  // ── OpenAI ──
+  "gpt-4.1-mini",
+  "gpt-4.1",
+  "gpt-4o",
+  "gpt-4",
 ];
 
 type StoryDetails = Record<string, unknown>;
@@ -371,7 +375,7 @@ function StudioContent() {
 
   const [title, setTitle] = useState("");
   const [novelAbout, setNovelAbout] = useState("");
-  const [model, setModel] = useState(modelOptions[0]);
+  const [model, setModel] = useState<string>(AUTO);
   const [maxSceneLength, setMaxSceneLength] = useState(1000);
   const [minSceneLength, setMinSceneLength] = useState(300);
 
@@ -943,7 +947,7 @@ function StudioContent() {
           ? storyDetails.novel_about
           : "";
       setNovelAbout(aboutValue);
-      setModel(novel.model ?? modelOptions[0]);
+      setModel(novel.model ?? AUTO);
       setMaxSceneLength(novel.max_scene_length ?? 1000);
       setMinSceneLength(novel.min_scene_length ?? 300);
       setStoryDetails(novel.story_details ?? null);
@@ -2813,7 +2817,7 @@ function StudioContent() {
               setSelectedNovelId(null);
               setTitle("");
               setNovelAbout("");
-              setModel(modelOptions[0]);
+              setModel(AUTO);
               setMaxSceneLength(1000);
               setMinSceneLength(300);
               setGeneratedCoverUrl(null);
@@ -3120,9 +3124,11 @@ function StudioContent() {
               >
                 {modelOptions.map((option) => (
                   <option key={option} value={option}>
-                    {option.startsWith("qwen3-")
-                      ? `✨ ${option} (Qwen3/DashScope)`
-                      : option}
+                    {option === "auto"
+                      ? "🤖 Auto — best model per step"
+                      : option.startsWith("qwen3-")
+                        ? `✨ ${option} (Qwen3/DashScope)`
+                        : option}
                   </option>
                 ))}
               </select>
