@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { isDashScopeModel, runDashScopeCompletion } from "./dashscopeClient";
 
 export const openaiClient = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -23,6 +24,19 @@ export const runChatCompletion = async ({
     targetId?: string;
   };
 }) => {
+  // ── Route Qwen3/DashScope models through Alibaba Cloud ──
+  if (isDashScopeModel(model)) {
+    return runDashScopeCompletion({
+      model,
+      system,
+      prompt,
+      jsonResponse,
+      maxTokens,
+      generationMeta,
+    });
+  }
+
+  // ── Default: OpenAI models ──
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
 
   if (system) {

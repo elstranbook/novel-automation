@@ -17,7 +17,19 @@ import { Input } from "@/components/ui/input";
 import { ArrowLeft, Plus } from "lucide-react";
 import type { Template, Category, TemplatesResponse } from "@/types";
 
-const modelOptions = ["gpt-4.1-mini", "gpt-4.1", "gpt-4o", "gpt-4"];
+const modelOptions = [
+  "gpt-4.1-mini",
+  "gpt-4.1",
+  "gpt-4o",
+  "gpt-4",
+  // ── Qwen3 (DashScope / Alibaba Cloud) ──
+  "qwen3-235b-a22b-instruct-2507",  // 🏆 Best for creative writing
+  "qwen3-235b-a22b-thinking-2507",   // 🧠 Complex narrative planning
+  "qwen3-235b-a22b",                  // 📖 Base model
+  "qwen3-14b",                        // ⚡ Efficient & affordable
+  "qwen3-30b-a3b",                    // ⚖️ Balanced MoE
+  "qwen3-32b",                        // 💪 Dense 32B
+];
 
 type StoryDetails = Record<string, unknown>;
 
@@ -3108,7 +3120,9 @@ function StudioContent() {
               >
                 {modelOptions.map((option) => (
                   <option key={option} value={option}>
-                    {option}
+                    {option.startsWith("qwen3-")
+                      ? `✨ ${option} (Qwen3/DashScope)`
+                      : option}
                   </option>
                 ))}
               </select>
