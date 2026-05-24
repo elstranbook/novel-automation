@@ -118,10 +118,14 @@ export const runDashScopeCompletion = async ({
     model,
     messages,
     max_completion_tokens: maxTokens ?? 4000,
-    response_format: jsonResponse ? { type: "json_object" } : undefined,
+    ...(jsonResponse && !model.includes("thinking") ? { response_format: { type: "json_object" } } : {}),
   });
 
-  const content = response.choices[0]?.message?.content ?? "";
+  let content = response.choices[0]?.message?.content ?? "";
+
+  // Strip <think/> tags from thinking model responses
+  // The thinking model outputs: <think.reasoning content</think.actual response
+  content = content.replace(/<think[\s\S]*?<\/think>\s*/g, "").trim();
 
   if (generationMeta?.seriesId && generationMeta?.type && generationLogId) {
     try {
