@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 export async function POST(request: Request) {
   try {
@@ -129,7 +130,7 @@ Focus on emotional arcs, structural balance, and specific plot milestones that w
 Provide a balance of big-picture guidance and specific tactical suggestions.`;
 
     const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
+      model: resolveModel(model, PipelineStep.NOVEL_PLAN),
       system,
       prompt,
       jsonResponse: false,

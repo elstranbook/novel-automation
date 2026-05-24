@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 const createDefaultChapterEntry = () => ({
   key_dialogue: [
@@ -231,7 +232,7 @@ IMPORTANT INSTRUCTIONS:
 
 Your response will be parsed directly as JSON and any formatting errors will cause failure.`;
 
-    const baseModel = model || "gpt-4.1-mini";
+    const baseModel = resolveModel(model, PipelineStep.CHAPTER_GUIDE);
     const maxRetries = 5;
     let retryDelay = 3000;
     let guide: Record<string, Record<string, unknown>> | null = null;

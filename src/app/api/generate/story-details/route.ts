@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -41,7 +42,7 @@ Format the response as a JSON object with exactly these keys.
       "You are a professional young adult novelist skilled at creating compelling story outlines. Your task is to create a detailed YA novel structure that appeals to teen readers. Respect any provided series context for continuity.";
 
     const completion = await client.chat.completions.create({
-      model: model || "gpt-4.1-mini",
+      model: resolveModel(model, PipelineStep.STORY_DETAILS),
       messages: [
         { role: "system", content: systemMessage },
         { role: "user", content: prompt },

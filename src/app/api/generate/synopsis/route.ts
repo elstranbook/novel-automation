@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 export async function POST(request: Request) {
   try {
@@ -148,7 +149,7 @@ Create a detailed three-act structure synopsis that would excite both readers an
 Focus on emotional arcs, character development, and the unique aspects that make this story stand out in the YA market.`;
 
     const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
+      model: resolveModel(model, PipelineStep.SYNOPSIS),
       system,
       prompt,
       jsonResponse: false,

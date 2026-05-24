@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 type SeriesMapRequest = {
   seriesId: string;
@@ -103,7 +104,7 @@ Return as JSON array with one object per book:
     in terms of the full series arc.`;
 
     const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
+      model: resolveModel(model, PipelineStep.SERIES_MAP),
       system,
       prompt,
       jsonResponse: true,

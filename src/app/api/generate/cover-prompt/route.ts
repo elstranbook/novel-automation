@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 export async function POST(request: Request) {
   try {
@@ -96,7 +97,7 @@ You must:
 Output prompts must be directly usable in image generation APIs and produce high-quality, publishable results.`;
 
     const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
+      model: resolveModel(model, PipelineStep.COVER_PROMPT),
       system,
       prompt,
       jsonResponse: false,

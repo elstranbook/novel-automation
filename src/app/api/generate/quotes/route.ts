@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 const logGeneration = async (payload: {
@@ -185,7 +186,7 @@ Write with an emotionally engaging, fast-paced tone tailored to teen readers, us
     for (let attempt = 0; attempt < attempts.length; attempt += 1) {
       console.info("quotes attempt", { attempt: attempt + 1 });
       response = await runChatCompletion({
-        model: model || "gpt-4.1-mini",
+        model: resolveModel(model, PipelineStep.QUOTES),
         system,
         prompt: attempts[attempt],
         jsonResponse: false,

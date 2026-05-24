@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 type StoryDetails = Record<string, unknown>;
 
@@ -312,7 +313,7 @@ Write with an emotionally engaging, fast-paced tone tailored to teen readers, us
     };
 
     const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
+      model: resolveModel(model, PipelineStep.PROMOTIONAL_ARTICLE),
       system,
       prompt,
       jsonResponse: false,

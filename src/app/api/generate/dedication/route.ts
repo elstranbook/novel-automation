@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 export async function POST(request: Request) {
   try {
@@ -82,7 +83,7 @@ Keep it concise (1-4 lines), emotionally authentic, and specific to the novel's 
 Avoid clichés and generic motivational lines. Make it feel like an emotional doorway into the story.`;
 
     const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
+      model: resolveModel(model, PipelineStep.DEDICATION),
       system,
       prompt,
       jsonResponse: false,

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 type BlueprintRequest = {
   seriesId: string;
@@ -120,7 +121,7 @@ book outlines with perfect pacing, shocking twists, and satisfying arcs. Every
 chapter must serve the story. Build toward the climax with mounting tension.`;
 
     const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
+      model: resolveModel(model, PipelineStep.SERIES_BLUEPRINT),
       system,
       prompt,
       jsonResponse: true,

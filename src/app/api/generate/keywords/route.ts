@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 export async function POST(request: Request) {
   try {
@@ -40,7 +41,7 @@ Focus on actual search terms people use, not generic descriptors.
 Your response should be a JSON array of strings containing exactly 15 keywords/phrases.`;
 
     const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
+      model: resolveModel(model, PipelineStep.KEYWORDS),
       system,
       prompt,
       jsonResponse: true,

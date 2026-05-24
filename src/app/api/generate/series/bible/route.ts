@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 type SeriesInput = {
   seriesId: string;
@@ -140,7 +141,7 @@ professional series bibles. You think in arcs, not scenes. You build worlds with
 depth and characters with complexity. Your bibles become law for the entire series.`;
 
     const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
+      model: resolveModel(model, PipelineStep.SERIES_BIBLE),
       system,
       prompt,
       jsonResponse: true,

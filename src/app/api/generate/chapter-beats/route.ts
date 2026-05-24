@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 type Beat = {
   beat_number?: number;
@@ -130,7 +131,7 @@ Return valid JSON only.`;
       const runAttempt = async (prompt: string, attempt: number) => {
         console.info("chapter_beats attempt", { chapterNum, attempt });
         const response = await runChatCompletion({
-          model: model || "gpt-4.1-mini",
+          model: resolveModel(model, PipelineStep.CHAPTER_BEATS),
           system,
           prompt,
           jsonResponse: false,

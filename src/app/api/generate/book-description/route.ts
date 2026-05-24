@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 export async function POST(request: Request) {
   try {
@@ -157,7 +158,7 @@ Write the description now:
 `;
 
         const loopResponse = await runChatCompletion({
-          model: model || "gpt-4.1-mini",
+          model: resolveModel(model, PipelineStep.BOOK_DESCRIPTION),
           system,
           prompt: loopPrompt,
           jsonResponse: false,
@@ -171,7 +172,7 @@ Write the description now:
     }
 
     const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
+      model: resolveModel(model, PipelineStep.BOOK_DESCRIPTION),
       system,
       prompt,
       jsonResponse: false,

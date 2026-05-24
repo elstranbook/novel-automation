@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 export async function POST(request: Request) {
   try {
@@ -46,7 +47,7 @@ Return JSON with keys overall_arc, character_arcs (object), themes (array), cont
       "You are a series architect for YA fiction. Provide cohesive multi-book arcs.";
 
     const arcResponse = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
+      model: resolveModel(model, PipelineStep.SERIES_CREATE),
       system: arcSystem,
       prompt: arcPrompt,
       jsonResponse: true,

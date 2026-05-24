@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 export async function POST(request: Request) {
   try {
@@ -101,7 +102,7 @@ Create detailed character profiles that bring each character to life with distin
 Ensure main characters have clear emotional arcs while supporting characters have distinctive qualities that help them stand out.`;
 
     const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
+      model: resolveModel(model, PipelineStep.CHARACTER_PROFILES),
       system,
       prompt: finalPrompt,
       jsonResponse: false,

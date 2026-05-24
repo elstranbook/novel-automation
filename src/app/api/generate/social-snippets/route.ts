@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 type StoryDetails = Record<string, unknown>;
 
@@ -75,7 +76,7 @@ Use hooks, curiosity, and relatable language. Avoid generic phrasing.
       "You are a social media marketing expert specializing in YA book promotion. Create engaging, platform-appropriate content that drives book discovery and purchases. Write with an emotionally engaging, fast-paced tone tailored to teen readers, using hooks, curiosity, and relatable language while avoiding generic phrasing.";
 
     const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
+      model: resolveModel(model, PipelineStep.SOCIAL_SNIPPETS),
       system,
       prompt,
       jsonResponse: false,

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 const logGeneration = async (payload: {
   step: string;
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const baseModel = model || "gpt-4.1-mini";
+    const baseModel = resolveModel(model, PipelineStep.PROSE);
     const trimmedPrevious =
       typeof previousScene === "string"
         ? previousScene.slice(-800)

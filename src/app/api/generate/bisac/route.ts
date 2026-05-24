@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 export async function POST(request: Request) {
   try {
@@ -39,7 +40,7 @@ Generate accurate BISAC subject categories that would help bookstores and online
 Include both broad and specific categories. Your response should be a JSON array of strings containing exactly 10 BISAC category suggestions.`;
 
     const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
+      model: resolveModel(model, PipelineStep.BISAC),
       system,
       prompt,
       jsonResponse: true,

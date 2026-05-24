@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 const ensureOutlineShape = (
   outline: unknown,
@@ -120,7 +121,7 @@ You must structure your response as a valid JSON array with all required fields.
 This is for a software application that needs this exact format to function properly.`;
 
     const raw = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
+      model: resolveModel(model, PipelineStep.CHAPTER_OUTLINE),
       system,
       prompt,
       jsonResponse: false,
@@ -156,7 +157,7 @@ number, title, pov, summary, emotional_development, theme_focus, estimated_word_
 Do not include chapters outside of ${missingNumbers.join(", ")}.`; 
 
       const fillRaw = await runChatCompletion({
-        model: model || "gpt-4.1-mini",
+        model: resolveModel(model, PipelineStep.CHAPTER_OUTLINE),
         system,
         prompt: `${fillPrompt}\n\nContext:\n${structuredPlan}\n\nAuthor Intent:\n${novelAbout}`,
         jsonResponse: false,

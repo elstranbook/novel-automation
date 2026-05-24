@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 export async function POST(request: Request) {
   try {
@@ -79,7 +80,7 @@ Follow the YA market conventions while preserving the author's unique voice. Bal
 with areas for improvement.`;
 
     const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
+      model: resolveModel(model, PipelineStep.EDITING_SUGGESTIONS),
       system,
       prompt,
       jsonResponse: true,

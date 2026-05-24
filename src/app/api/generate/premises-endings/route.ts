@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 export async function POST(request: Request) {
   try {
@@ -87,7 +88,7 @@ Focus on themes, emotional arcs, and character growth that resonate with young a
 Provide a variety of premise ideas and ending possibilities that could engage teen readers.`;
 
     const response = await runChatCompletion({
-      model: model || "gpt-4.1-mini",
+      model: resolveModel(model, PipelineStep.PREMISES_ENDINGS),
       system,
       prompt,
       jsonResponse: true,
