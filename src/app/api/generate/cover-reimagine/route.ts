@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 /**
  * POST /api/generate/cover-reimagine
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
     console.log("🧠 Reimagining cover prompt with GPT-5...");
 
     const reimagined = await runChatCompletion({
-      model: "gpt-5",
+      model: resolveModel(null, PipelineStep.COVER_PROMPT),
       system: `You are an elite creative director and cinematic book cover prompt engineer.
 
 Your task is to transform simple or weak book cover prompts into highly detailed, emotionally compelling, visually cinematic AI image prompts suitable for premium-quality novel covers.

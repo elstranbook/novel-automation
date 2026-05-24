@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
+import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
-
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
 
 export async function POST(request: Request) {
   try {
@@ -41,20 +37,15 @@ Format the response as a JSON object with exactly these keys.
     const systemMessage =
       "You are a professional young adult novelist skilled at creating compelling story outlines. Your task is to create a detailed YA novel structure that appeals to teen readers. Respect any provided series context for continuity.";
 
-    const completion = await client.chat.completions.create({
+    const result = await runChatCompletion({
       model: resolveModel(model, PipelineStep.STORY_DETAILS),
-      messages: [
-        { role: "system", content: systemMessage },
-        { role: "user", content: prompt },
-      ],
-      response_format: { type: "json_object" },
-      max_tokens: 1200,
+      system: systemMessage,
+      prompt,
+      jsonResponse: true,
+      maxTokens: 1200,
     });
 
-    const content = completion.choices[0]?.message?.content ?? "{}";
-    const parsed = JSON.parse(content);
-
-    return NextResponse.json(parsed);
+    return NextResponse.json(result);
   } catch (error) {
     console.error(error);
     return NextResponse.json(

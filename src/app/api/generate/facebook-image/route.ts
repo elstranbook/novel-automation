@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { runChatCompletion } from "@/lib/openaiClient";
+import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
 /**
  * Ensure the novel-covers storage bucket exists. Creates it if missing.
@@ -59,7 +60,7 @@ export async function POST(req: Request) {
     try {
       console.log("🧠 Reimagining Facebook image prompt with GPT-5...");
       const reimagined = await runChatCompletion({
-        model: "gpt-5",
+        model: resolveModel(null, PipelineStep.COVER_PROMPT),
         system: `You are an elite creative director and cinematic book cover prompt engineer specializing in social media marketing visuals.
 
 Your task is to transform simple or weak book cover prompts into highly detailed, emotionally compelling, visually cinematic AI image prompts suitable for Facebook promotional campaigns.
