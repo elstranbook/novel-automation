@@ -1430,7 +1430,9 @@ function StudioContent() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to generate story details");
+        const errorData = await response.json().catch(() => null);
+        const errorMsg = errorData?.error || `Server error (${response.status})`;
+        throw new Error(errorMsg);
       }
 
       const data = await response.json();

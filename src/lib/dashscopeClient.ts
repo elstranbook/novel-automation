@@ -19,6 +19,9 @@ const DASHSCOPE_BASE_URL =
 
 const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY ?? "";
 
+/** Check if DashScope API key is configured */
+export const isDashScopeConfigured = (): boolean => DASHSCOPE_API_KEY.length > 0;
+
 /** Available Qwen3 creative-writing models on DashScope */
 export const QWEN3_MODELS = {
   /** Best for creative writing — superior human preference alignment */
@@ -71,6 +74,13 @@ export const runDashScopeCompletion = async ({
     targetId?: string;
   };
 }) => {
+  if (!isDashScopeConfigured()) {
+    throw new Error(
+      "DASHSCOPE_API_KEY is not set. Add it in Vercel → Settings → Environment Variables. " +
+      "Get your key from: https://dashscope.console.aliyun.com/"
+    );
+  }
+
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
 
   if (system) {

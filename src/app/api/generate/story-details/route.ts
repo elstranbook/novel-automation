@@ -47,9 +47,10 @@ Format the response as a JSON object with exactly these keys.
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error(error);
+    console.error("❌ Story details generation error:", error);
+    const message = error instanceof Error ? error.message : "Failed to generate story details";
     return NextResponse.json(
-      { error: "Failed to generate story details" },
+      { error: message },
       { status: 500 }
     );
   }
