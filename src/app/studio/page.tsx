@@ -2941,6 +2941,7 @@ function StudioContent() {
                   key={t.id}
                   onClick={() => {
                     setView(t.id as any);
+                    if (t.id === "write") setActiveStudioTab("pipeline");
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
                   className={`rounded-full px-3 sm:px-5 py-2.5 sm:py-2 text-xs sm:text-sm font-bold uppercase tracking-widest transition-all ${
@@ -4138,6 +4139,7 @@ function StudioContent() {
         <button
           onClick={() => {
             setView("write");
+            setActiveStudioTab("pipeline");
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
           className="inline-flex items-center text-sm text-zinc-400 py-2 hover:text-zinc-200"
@@ -4609,6 +4611,7 @@ function StudioContent() {
         <button
           onClick={() => {
             setView("write");
+            setActiveStudioTab("pipeline");
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
           className="inline-flex items-center text-sm text-zinc-400 py-2 hover:text-zinc-200"
@@ -5039,6 +5042,7 @@ function StudioContent() {
         <button
           onClick={() => {
             setView("write");
+            setActiveStudioTab("pipeline");
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
           className="inline-flex items-center text-sm text-zinc-400 py-2 hover:text-zinc-200"
@@ -5281,6 +5285,7 @@ function StudioContent() {
         <button
           onClick={() => {
             setView("write");
+            setActiveStudioTab("pipeline");
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
           className="inline-flex items-center text-sm text-zinc-400 py-2 hover:text-zinc-200"
