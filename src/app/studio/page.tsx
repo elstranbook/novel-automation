@@ -396,7 +396,7 @@ function StudioContent() {
   const [storyDetails, setStoryDetails] = useState<StoryDetails | null>(null);
   const [premisesAndEndings, setPremisesAndEndings] =
     useState<PremisesAndEndings | null>(null);
-  const [showPremisesPanel, setShowPremisesPanel] = useState(false);
+
   const [novelSynopsis, setNovelSynopsis] = useState<string | null>(null);
   const [characterProfiles, setCharacterProfiles] = useState<string | null>(null);
   const [bookDescriptions, setBookDescriptions] =
@@ -4133,6 +4133,183 @@ function StudioContent() {
 
 {view === "promotional" && (
   <div className="space-y-8 animate-in fade-in duration-700">
+    {/* Social Media Snippets — moved to top for easy access */}
+    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <SectionHeading title="Social media snippets" step="Social snippets" />
+          <p className="text-sm text-zinc-400">
+            Generate multi-platform social posts (X, Instagram, TikTok, Facebook, newsletter).
+          </p>
+        </div>
+        <button
+          onClick={() => generateSocialSnippets()}
+          disabled={!storyDetails || loadingStep === "social"}
+          className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+        >
+          {loadingStep === "social" ? "Generating..." : "Generate Snippets"}
+        </button>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-3">
+        <button
+          onClick={() =>
+            generateSocialSnippets(
+              typeof promotionalArticles?.[0]?.content === "string"
+                ? promotionalArticles?.[0]?.content
+                : undefined
+            )
+          }
+          disabled={!storyDetails || loadingStep === "social"}
+          className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+        >
+          Use Latest Article
+        </button>
+        <button
+          onClick={clearSocialSnippets}
+          disabled={!socialSnippets}
+          className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
+        >
+          Clear Snippets
+        </button>
+        {socialSnippets && (
+          <button
+            onClick={() =>
+              downloadText(
+                `${title || "story"}_social_snippets.txt`,
+                socialSnippets
+              )
+            }
+            className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
+          >
+            Download TXT
+          </button>
+        )}
+      </div>
+      {socialSnippets ? (
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {parseSocialSnippets(socialSnippets).length > 0 ? (
+            parseSocialSnippets(socialSnippets).map((section) => (
+              <div
+                key={section.title}
+                className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-zinc-100">
+                    {section.title}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {section.key !== "general" && (
+                      <button
+                        onClick={() =>
+                          generateSocialSnippets(
+                            typeof promotionalArticles?.[0]?.content ===
+                              "string"
+                              ? promotionalArticles?.[0]?.content
+                              : undefined,
+                            section.key as
+                              | "twitter"
+                              | "instagram"
+                              | "tiktok"
+                              | "facebook"
+                              | "newsletter"
+                          )
+                        }
+                        disabled={loadingStep === "social"}
+                        className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
+                      >
+                        Regenerate
+                      </button>
+                    )}
+                    <button
+                      onClick={async () => {
+                        const text =
+                          socialSnippetsByPlatform[section.key] ?? section.body;
+                        const copied = await copyToClipboard(text);
+                        if (copied) {
+                          setCopiedSnippetKey(section.key);
+                          setTimeout(() => setCopiedSnippetKey(null), 1500);
+                        }
+                      }}
+                      className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
+                    >
+                      {copiedSnippetKey === section.key ? "Copied" : "Copy"}
+                    </button>
+                    <button
+                      onClick={() =>
+                        setEditingSocialSnippetKeys((prev) => ({
+                          ...prev,
+                          [section.key]: !prev[section.key],
+                        }))
+                      }
+                      className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
+                    >
+                      {editingSocialSnippetKeys[section.key] ? "Cancel" : "Edit"}
+                    </button>
+                    {editingSocialSnippetKeys[section.key] && (
+                      <button
+                        onClick={() =>
+                          setSocialSnippetsByPlatform((prev) => ({
+                            ...prev,
+                            [section.key]:
+                              editingSocialSnippets[section.key] ??
+                              socialSnippetsByPlatform[section.key] ??
+                              section.body,
+                          }))
+                        }
+                        className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200"
+                      >
+                        Save
+                      </button>
+                    )}
+                    <button
+                      onClick={() =>
+                        downloadText(
+                          `${title || "story"}_${section.title.replace(/\s+/g, "_")}.txt`,
+                          socialSnippetsByPlatform[section.key] ?? section.body
+                        )
+                      }
+                      className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
+                    >
+                      Download
+                    </button>
+                  </div>
+                </div>
+                {editingSocialSnippetKeys[section.key] ? (
+                  <textarea
+                    value={
+                      editingSocialSnippets[section.key] ??
+                      socialSnippetsByPlatform[section.key] ??
+                      section.body
+                    }
+                    onChange={(event) =>
+                      setEditingSocialSnippets((prev) => ({
+                        ...prev,
+                        [section.key]: event.target.value,
+                      }))
+                    }
+                    className="mt-3 min-h-[140px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                  />
+                ) : (
+                  <pre className="mt-3 whitespace-pre-wrap text-xs">
+                    {socialSnippetsByPlatform[section.key] ?? section.body}
+                  </pre>
+                )}
+              </div>
+            ))
+          ) : (
+            <pre className="whitespace-pre-wrap text-xs text-zinc-200">
+              {socialSnippets}
+            </pre>
+          )}
+        </div>
+      ) : (
+        <p className="mt-4 text-xs text-zinc-500">
+          No snippets yet. Generate to see ready-to-post social content.
+        </p>
+      )}
+    </section>
+
+    {/* Promotional Articles */}
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -4342,194 +4519,6 @@ function StudioContent() {
           Generate marketing-ready articles like theme deep-dives, author letters,
           and SEO-friendly reviews. Each click adds a new variant.
         </p>
-
-        <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-950/40 p-5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-semibold">Premises & endings</p>
-            <button
-              onClick={() => setShowPremisesPanel((prev) => !prev)}
-              className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
-            >
-              {showPremisesPanel ? "Hide" : "Show"}
-            </button>
-          </div>
-          {showPremisesPanel && (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold text-zinc-100">
-                  Social media snippets
-                </h3>
-                <p className="text-xs text-zinc-400">
-                  Generate multi-platform social posts (X, Instagram, TikTok, Facebook, newsletter).
-                </p>
-              </div>
-              <button
-                onClick={() => generateSocialSnippets()}
-                disabled={!storyDetails || loadingStep === "social"}
-                className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
-              >
-                {loadingStep === "social" ? "Generating..." : "Generate Snippets"}
-              </button>
-            </div>
-          )}
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button
-              onClick={() =>
-                generateSocialSnippets(
-                  typeof promotionalArticles?.[0]?.content === "string"
-                    ? promotionalArticles?.[0]?.content
-                    : undefined
-                )
-              }
-              disabled={!storyDetails || loadingStep === "social"}
-              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
-            >
-              Use Latest Article
-            </button>
-            <button
-              onClick={clearSocialSnippets}
-              disabled={!socialSnippets}
-              className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
-            >
-              Clear Snippets
-            </button>
-            {socialSnippets && (
-              <button
-                onClick={() =>
-                  downloadText(
-                    `${title || "story"}_social_snippets.txt`,
-                    socialSnippets
-                  )
-                }
-                className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
-              >
-                Download TXT
-              </button>
-            )}
-          </div>
-          {socialSnippets ? (
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {parseSocialSnippets(socialSnippets).length > 0 ? (
-                parseSocialSnippets(socialSnippets).map((section) => (
-                  <div
-                    key={section.title}
-                    className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-zinc-100">
-                        {section.title}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {section.key !== "general" && (
-                          <button
-                            onClick={() =>
-                              generateSocialSnippets(
-                                typeof promotionalArticles?.[0]?.content ===
-                                  "string"
-                                  ? promotionalArticles?.[0]?.content
-                                  : undefined,
-                                section.key as
-                                  | "twitter"
-                                  | "instagram"
-                                  | "tiktok"
-                                  | "facebook"
-                                  | "newsletter"
-                              )
-                            }
-                            disabled={loadingStep === "social"}
-                            className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
-                          >
-                            Regenerate
-                          </button>
-                        )}
-                        <button
-                          onClick={async () => {
-                            const text =
-                              socialSnippetsByPlatform[section.key] ?? section.body;
-                            const copied = await copyToClipboard(text);
-                            if (copied) {
-                              setCopiedSnippetKey(section.key);
-                              setTimeout(() => setCopiedSnippetKey(null), 1500);
-                            }
-                          }}
-                          className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
-                        >
-                          {copiedSnippetKey === section.key ? "Copied" : "Copy"}
-                        </button>
-                        <button
-                          onClick={() =>
-                            setEditingSocialSnippetKeys((prev) => ({
-                              ...prev,
-                              [section.key]: !prev[section.key],
-                            }))
-                          }
-                          className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
-                        >
-                          {editingSocialSnippetKeys[section.key] ? "Cancel" : "Edit"}
-                        </button>
-                        {editingSocialSnippetKeys[section.key] && (
-                          <button
-                            onClick={() =>
-                              setSocialSnippetsByPlatform((prev) => ({
-                                ...prev,
-                                [section.key]:
-                                  editingSocialSnippets[section.key] ??
-                                  socialSnippetsByPlatform[section.key] ??
-                                  section.body,
-                              }))
-                            }
-                            className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200"
-                          >
-                            Save
-                          </button>
-                        )}
-                        <button
-                          onClick={() =>
-                            downloadText(
-                              `${title || "story"}_${section.title.replace(/\s+/g, "_")}.txt`,
-                              socialSnippetsByPlatform[section.key] ?? section.body
-                            )
-                          }
-                          className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
-                        >
-                          Download
-                        </button>
-                      </div>
-                    </div>
-                    {editingSocialSnippetKeys[section.key] ? (
-                      <textarea
-                        value={
-                          editingSocialSnippets[section.key] ??
-                          socialSnippetsByPlatform[section.key] ??
-                          section.body
-                        }
-                        onChange={(event) =>
-                          setEditingSocialSnippets((prev) => ({
-                            ...prev,
-                            [section.key]: event.target.value,
-                          }))
-                        }
-                        className="mt-3 min-h-[140px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
-                      />
-                    ) : (
-                      <pre className="mt-3 whitespace-pre-wrap text-xs">
-                        {socialSnippetsByPlatform[section.key] ?? section.body}
-                      </pre>
-                    )}
-                  </div>
-                ))
-              ) : (
-                <pre className="whitespace-pre-wrap text-xs text-zinc-200">
-                  {socialSnippets}
-                </pre>
-              )}
-            </div>
-          ) : (
-            <p className="mt-4 text-xs text-zinc-500">
-              No snippets yet. Generate to see ready-to-post social content.
-            </p>
-          )}
-        </div>
 
         {promotionalArticles && promotionalArticles.length > 0 ? (
           <div className="mt-6 space-y-4">
