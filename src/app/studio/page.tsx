@@ -4133,6 +4133,29 @@ function StudioContent() {
 
 {view === "promotional" && (
   <div className="space-y-8 animate-in fade-in duration-700">
+    <header className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button
+          onClick={() => {
+            setView("write");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          className="inline-flex items-center text-sm text-zinc-400 py-2 hover:text-zinc-200"
+        >
+          ← Back to Write
+        </button>
+        <Link href="/" className="inline-flex items-center text-sm text-zinc-400 py-2 hover:text-zinc-200">
+          Back to home
+        </Link>
+      </div>
+      <div>
+        <h1 className="text-3xl font-semibold">Promotional</h1>
+        <p className="text-zinc-300">
+          Generate social media snippets, promotional articles, and marketing assets.
+        </p>
+      </div>
+    </header>
+
     {/* Social Media Snippets — moved to top for easy access */}
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -4581,6 +4604,22 @@ function StudioContent() {
 
 {view === "cover" && (
   <div className="space-y-8 animate-in fade-in duration-700">
+    <header className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button
+          onClick={() => {
+            setView("write");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          className="inline-flex items-center text-sm text-zinc-400 py-2 hover:text-zinc-200"
+        >
+          ← Back to Write
+        </button>
+        <Link href="/" className="inline-flex items-center text-sm text-zinc-400 py-2 hover:text-zinc-200">
+          Back to home
+        </Link>
+      </div>
+    </header>
     <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-4 sm:p-8 shadow-2xl">
       <SectionHeading title="🎨 Cover Design" step="Cover" />
       <p className="mt-2 text-sm text-zinc-500">Upload your own cover image or generate one with AI.</p>
@@ -4995,6 +5034,22 @@ function StudioContent() {
 
 {view === "mockups" && (
   <div className="space-y-8 animate-in fade-in duration-700 min-h-[800px]">
+    <header className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button
+          onClick={() => {
+            setView("write");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          className="inline-flex items-center text-sm text-zinc-400 py-2 hover:text-zinc-200"
+        >
+          ← Back to Write
+        </button>
+        <Link href="/" className="inline-flex items-center text-sm text-zinc-400 py-2 hover:text-zinc-200">
+          Back to home
+        </Link>
+      </div>
+    </header>
     {/* Render Job Progress */}
     {mockupRenderStatus !== "idle" && (
       <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
@@ -5221,6 +5276,22 @@ function StudioContent() {
 )}
 {view === "publish" && (
   <div className="space-y-8 animate-in fade-in duration-700">
+    <header className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button
+          onClick={() => {
+            setView("write");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          className="inline-flex items-center text-sm text-zinc-400 py-2 hover:text-zinc-200"
+        >
+          ← Back to Write
+        </button>
+        <Link href="/" className="inline-flex items-center text-sm text-zinc-400 py-2 hover:text-zinc-200">
+          Back to home
+        </Link>
+      </div>
+    </header>
     {/* Header */}
     <div className="flex items-center gap-4 mb-2">
       <span className="text-5xl">🚀</span>
