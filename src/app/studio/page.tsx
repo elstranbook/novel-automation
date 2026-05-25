@@ -14,7 +14,8 @@ import { PSDUploadDialog } from "@/components/editor/PSDUploadDialog";
 import { useMockupState } from "@/hooks/useMockupState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Menu, Plus } from "lucide-react";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import type { Template, Category, TemplatesResponse } from "@/types";
 
 const AUTO = "auto" as const;
@@ -487,6 +488,7 @@ function StudioContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [mockupViewMode, setMockupViewMode] = useState<"gallery" | "smart-preview">("smart-preview");
   const [showPSDDialog, setShowPSDDialog] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Keep a legacy coverUrl for compatibility if needed, 
   // but sync it with mockupUserImage where possible.
@@ -770,7 +772,7 @@ function StudioContent() {
     const step = pipelineSteps.find((row) => row.step === stepName);
     if (!step || step.status !== "ready") return null;
     return (
-      <span className="inline-flex rounded-full border border-emerald-400/40 px-2 py-0.5 text-[10px] text-emerald-200">
+      <span className="inline-flex rounded-full border border-emerald-400/40 px-2 py-0.5 text-xs text-emerald-200">
         {step.step === "Exports" ? "Formats & Exports ready" : `${step.step} done`}
       </span>
     );
@@ -2832,70 +2834,102 @@ function StudioContent() {
       setLoadingStep(null);
     }
   };
+
+  const handleNewNovel = () => {
+    resetPipeline();
+    setNovelId(null);
+    setSelectedNovelId(null);
+    setTitle("");
+    setNovelAbout("");
+    setModel(AUTO);
+    setMaxSceneLength(1000);
+    setMinSceneLength(300);
+    setGeneratedCoverUrl(null);
+    setCoverUrl("");
+    setGeneratedCovers([]);
+    setCoverPrompt(null);
+    setProseScenes(null);
+    setIsPublished(false);
+    setPublishPublicId(null);
+    setMessage(null);
+    setError(null);
+    setSidebarOpen(false);
+  };
+
+  const handleSelectNovel = (id: string) => {
+    setSelectedNovelId(id);
+    setSidebarOpen(false);
+  };
+
+  const sidebarContent = (
+    <>
+      <button
+        onClick={handleNewNovel}
+        className="flex items-center justify-center gap-2 rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-3 py-2.5 text-sm font-semibold text-emerald-300 transition hover:border-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-200"
+      >
+        <Plus className="h-4 w-4" />
+        Write New Novel
+      </button>
+      <div className="flex flex-col gap-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+          Saved novels
+        </h2>
+        <p className="text-xs text-zinc-500">
+          Pick a stored novel to reload all generation steps.
+        </p>
+      </div>
+      <div className="flex flex-col gap-2">
+        {novels.length === 0 && (
+          <span className="text-xs text-zinc-500">No novels saved yet.</span>
+        )}
+        {novels.map((novel) => (
+          <button
+            key={novel.id}
+            onClick={() => handleSelectNovel(novel.id)}
+            className={`group flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs transition ${
+              novel.id === selectedNovelId
+                ? "border-emerald-400/60 bg-emerald-500/10 text-emerald-200"
+                : "border-zinc-800 text-zinc-300 hover:border-zinc-600"
+            }`}
+          >
+            <span className="truncate" title={novel.title}>
+              {novel.title}
+            </span>
+            <span className="text-xs text-zinc-500">
+              {new Date(novel.created_at).toLocaleDateString()}
+            </span>
+          </button>
+        ))}
+      </div>
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <div className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-12 lg:flex-row">
+      <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 sm:px-6 py-8 sm:py-12 lg:flex-row">
+        {/* Mobile sidebar drawer */}
+        <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+          <SheetTrigger asChild>
+            <button className="lg:hidden fixed top-4 left-4 z-50 rounded-lg border border-zinc-800 bg-zinc-900/90 p-2.5 backdrop-blur-md">
+              <Menu className="h-5 w-5 text-zinc-300" />
+            </button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-[280px] bg-zinc-900 border-zinc-800 p-4">
+            <SheetTitle className="sr-only">Navigation</SheetTitle>
+            <SheetDescription className="sr-only">Novel sidebar navigation</SheetDescription>
+            <div className="flex flex-col gap-4 mt-8">
+              {sidebarContent}
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        {/* Desktop sidebar */}
         <aside className="sticky top-24 hidden h-[calc(100vh-6rem)] w-[280px] flex-shrink-0 flex-col gap-4 self-start overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 lg:flex">
-          <button
-            onClick={() => {
-              resetPipeline();
-              setNovelId(null);
-              setSelectedNovelId(null);
-              setTitle("");
-              setNovelAbout("");
-              setModel(AUTO);
-              setMaxSceneLength(1000);
-              setMinSceneLength(300);
-              setGeneratedCoverUrl(null);
-              setCoverUrl("");
-              setGeneratedCovers([]);
-              setCoverPrompt(null);
-              setProseScenes(null);
-              setIsPublished(false);
-              setPublishPublicId(null);
-              setMessage(null);
-              setError(null);
-            }}
-            className="flex items-center justify-center gap-2 rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-3 py-2.5 text-sm font-semibold text-emerald-300 transition hover:border-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-200"
-          >
-            <Plus className="h-4 w-4" />
-            Write New Novel
-          </button>
-          <div className="flex flex-col gap-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-              Saved novels
-            </h2>
-            <p className="text-xs text-zinc-500">
-              Pick a stored novel to reload all generation steps.
-            </p>
-          </div>
-          <div className="flex flex-col gap-2">
-            {novels.length === 0 && (
-              <span className="text-xs text-zinc-500">No novels saved yet.</span>
-            )}
-            {novels.map((novel) => (
-              <button
-                key={novel.id}
-                onClick={() => setSelectedNovelId(novel.id)}
-                className={`group flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs transition ${
-                  novel.id === selectedNovelId
-                    ? "border-emerald-400/60 bg-emerald-500/10 text-emerald-200"
-                    : "border-zinc-800 text-zinc-300 hover:border-zinc-600"
-                }`}
-              >
-                <span className="truncate" title={novel.title}>
-                  {novel.title}
-                </span>
-                <span className="text-[10px] text-zinc-500">
-                  {new Date(novel.created_at).toLocaleDateString()}
-                </span>
-              </button>
-            ))}
-          </div>
+          {sidebarContent}
         </aside>
         <main className="flex flex-1 flex-col gap-8">
           {/* Persistent Main Menu */}
-          <div className="sticky top-0 z-40 -mx-6 bg-zinc-950/80 px-6 py-4 backdrop-blur-md border-b border-zinc-800">
+          <div className="sticky top-0 z-40 bg-zinc-950/80 px-4 sm:px-6 py-3 sm:py-4 backdrop-blur-md border-b border-zinc-800">
             <div className="flex items-center justify-center gap-2 sm:gap-6">
               {[
                 { id: "write", label: "Write" },
@@ -2909,7 +2943,7 @@ function StudioContent() {
                     setView(t.id as any);
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
-                  className={`rounded-full px-5 py-2 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                  className={`rounded-full px-3 sm:px-5 py-2.5 sm:py-2 text-xs sm:text-sm font-bold uppercase tracking-widest transition-all ${
                     view === t.id
                       ? "bg-white text-zinc-900 shadow-lg shadow-white/5"
                       : "text-zinc-500 hover:text-zinc-300"
@@ -2925,7 +2959,7 @@ function StudioContent() {
             <div className="space-y-8 animate-in fade-in duration-700">
               <header className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <Link href="/" className="text-sm text-zinc-400">
+              <Link href="/" className="inline-flex items-center text-sm text-zinc-400 py-2 hover:text-zinc-200">
                 ← Back to home
               </Link>
               <div className="flex flex-wrap items-center gap-2">
@@ -2934,7 +2968,7 @@ function StudioContent() {
                 )}
                 <Link
                   href="/series"
-                  className="rounded-full border border-emerald-500/60 px-3 py-1 text-xs text-emerald-200"
+                  className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200"
                 >
                   Go to Series
                 </Link>
@@ -2997,7 +3031,7 @@ function StudioContent() {
                   await supabase.auth.signOut();
                   window.location.href = "/login";
                 }}
-                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
               >
                 Sign out
               </button>
@@ -3024,7 +3058,7 @@ function StudioContent() {
                       const nextBook = event.target.value;
                       window.location.href = `/studio?seriesId=${seriesId}&bookNumber=${nextBook}`;
                     }}
-                    className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1 text-xs text-zinc-100"
+                    className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
                   >
                     {seriesBookOptions.map((option) => (
                       <option
@@ -3038,7 +3072,7 @@ function StudioContent() {
                 )}
                 <Link
                   href="/series"
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                  className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
                 >
                   Back to Series
                 </Link>
@@ -3077,7 +3111,7 @@ function StudioContent() {
                           {row.step}
                         </p>
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                          className={`rounded-full border px-2 py-0.5 text-xs ${
                             row.status === "ready"
                               ? "border-emerald-400/60 text-emerald-200"
                               : "border-amber-500/40 text-amber-200"
@@ -3087,7 +3121,7 @@ function StudioContent() {
                         </span>
                       </div>
                       {row.status === "ready" && (
-                        <span className="mt-2 inline-flex rounded-full border border-emerald-400/40 px-2 py-0.5 text-[10px] text-emerald-200">
+                        <span className="mt-2 inline-flex rounded-full border border-emerald-400/40 px-2 py-0.5 text-xs text-emerald-200">
                           {row.step === "Exports"
                             ? "Formats & Exports ready"
                             : `${row.step} done`}
@@ -3098,7 +3132,7 @@ function StudioContent() {
                         {row.requires.map((item) => (
                           <span
                             key={`${row.step}-${item}`}
-                            className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]"
+                            className="rounded-full border border-zinc-700 px-2 py-0.5 text-xs"
                           >
                             {item}
                           </span>
@@ -3109,7 +3143,7 @@ function StudioContent() {
                         {row.produces.map((item) => (
                           <span
                             key={`${row.step}-${item}`}
-                            className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]"
+                            className="rounded-full border border-zinc-700 px-2 py-0.5 text-xs"
                           >
                             {item}
                           </span>
@@ -3128,7 +3162,7 @@ function StudioContent() {
               <input
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2"
+                className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 placeholder="The Midnight Inheritors"
               />
             </label>
@@ -3137,7 +3171,7 @@ function StudioContent() {
               <textarea
                 value={novelAbout}
                 onChange={(event) => setNovelAbout(event.target.value)}
-                className="min-h-[120px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2"
+                className="min-h-[120px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 placeholder="Describe the premise, themes, or specific idea you want..."
               />
             </label>
@@ -3146,7 +3180,7 @@ function StudioContent() {
               <select
                 value={model}
                 onChange={(event) => setModel(event.target.value)}
-                className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2"
+                className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
               >
                 {modelOptions.map((option) => (
                   <option key={option} value={option}>
@@ -3165,7 +3199,7 @@ function StudioContent() {
                 type="number"
                 value={minSceneLength}
                 onChange={(event) => setMinSceneLength(Number(event.target.value))}
-                className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2"
+                className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
               />
             </label>
             <label className="flex flex-col gap-2 text-sm">
@@ -3174,7 +3208,7 @@ function StudioContent() {
                 type="number"
                 value={maxSceneLength}
                 onChange={(event) => setMaxSceneLength(Number(event.target.value))}
-                className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2"
+                className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
               />
             </label>
           </div>
@@ -3240,7 +3274,7 @@ function StudioContent() {
                       formatReadable(storyDetails)
                     )
                   }
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                  className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
                 >
                   Download TXT
                 </button>
@@ -3283,7 +3317,7 @@ function StudioContent() {
                       formatReadable(premisesAndEndings)
                     )
                   }
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                  className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
                 >
                   Download TXT
                 </button>
@@ -3298,7 +3332,7 @@ function StudioContent() {
                       {premisesAndEndings.chosen_premise}
                     </p>
                     <div className="mt-3 space-y-2">
-                      <p className="text-[10px] uppercase text-zinc-500">Select a premise</p>
+                      <p className="text-xs uppercase text-zinc-500">Select a premise</p>
                       {Array.isArray(premisesAndEndings.premises) && premisesAndEndings.premises.map((premise, index) => (
                         <button
                           key={`premise-select-${index}`}
@@ -3343,7 +3377,7 @@ function StudioContent() {
                       {premisesAndEndings.chosen_ending}
                     </p>
                     <div className="mt-3 space-y-2">
-                      <p className="text-[10px] uppercase text-zinc-500">Select an ending</p>
+                      <p className="text-xs uppercase text-zinc-500">Select an ending</p>
                       {Array.isArray(premisesAndEndings.potential_endings) && premisesAndEndings.potential_endings.map((ending, index) => (
                         <button
                           key={`ending-select-${index}`}
@@ -3411,7 +3445,7 @@ function StudioContent() {
                     novelSynopsis
                   )
                 }
-                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
               >
                 Download TXT
               </button>
@@ -3444,7 +3478,7 @@ function StudioContent() {
                     characterProfiles
                   )
                 }
-                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
               >
                 Download TXT
               </button>
@@ -3483,7 +3517,7 @@ function StudioContent() {
                           onClick={() =>
                             downloadText(`${title || "story"}_${key}.txt`, value)
                           }
-                          className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                          className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
                         >
                           Download
                         </button>
@@ -3524,7 +3558,7 @@ function StudioContent() {
                     formatReadable(novelKeywords)
                   )
                 }
-                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
               >
                 Download TXT
               </button>
@@ -3533,7 +3567,7 @@ function StudioContent() {
                   {novelKeywords.map((keyword) => (
                     <span
                       key={keyword}
-                      className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                      className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
                     >
                       {keyword}
                     </span>
@@ -3570,7 +3604,7 @@ function StudioContent() {
                     formatReadable(novelBisac)
                   )
                 }
-                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
               >
                 Download TXT
               </button>
@@ -3600,7 +3634,7 @@ function StudioContent() {
                 onClick={() =>
                   downloadText(`${title || "story"}_novel_plan.txt`, novelPlan)
                 }
-                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
               >
                 Download TXT
               </button>
@@ -3642,7 +3676,7 @@ function StudioContent() {
                     formatReadable(chapterOutline)
                   )
                 }
-                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
               >
                 Download TXT
               </button>
@@ -3682,7 +3716,7 @@ function StudioContent() {
                     formatReadable(chapterGuide)
                   )
                 }
-                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
               >
                 Download TXT
               </button>
@@ -3722,7 +3756,7 @@ function StudioContent() {
                     formatChapterBeatsText(chapterBeats)
                   )
                 }
-                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
               >
                 Download TXT
               </button>
@@ -3774,7 +3808,7 @@ function StudioContent() {
                     formatReadable(allScenes)
                   )
                 }
-                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
               >
                 Download TXT
               </button>
@@ -3829,7 +3863,7 @@ function StudioContent() {
                       formatProseText(proseScenes)
                     )
                   }
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                  className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
                 >
                   Download TXT
                 </button>
@@ -3841,7 +3875,7 @@ function StudioContent() {
                       "text/markdown"
                     )
                   }
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                  className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
                 >
                   Download Markdown
                 </button>
@@ -3853,7 +3887,7 @@ function StudioContent() {
                       "text/html"
                     )
                   }
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                  className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
                 >
                   Download HTML
                 </button>
@@ -3909,7 +3943,7 @@ function StudioContent() {
                   onClick={() =>
                     downloadText(`${title || "story"}_dedication.txt`, novelDedication)
                   }
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                  className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
                 >
                   Download TXT
                 </button>
@@ -3921,7 +3955,7 @@ function StudioContent() {
                       setTimeout(() => setMessage(null), 2000);
                     }
                   }}
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                  className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
                 >
                   Copy
                 </button>
@@ -3991,7 +4025,7 @@ function StudioContent() {
                 onClick={() =>
                   downloadText(`${title || "story"}_cover_prompt.txt`, coverPrompt)
                 }
-                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
               >
                 Download TXT
               </button>
@@ -4031,7 +4065,7 @@ function StudioContent() {
                     formatReadable(novelQuotes)
                   )
                 }
-                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
               >
                 Download TXT
               </button>
@@ -4051,7 +4085,7 @@ function StudioContent() {
           <textarea
             value={editingText}
             onChange={(event) => setEditingText(event.target.value)}
-            className="mt-4 h-40 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm"
+            className="mt-4 h-40 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
             placeholder="Paste prose or a scene here for feedback"
           />
           <button
@@ -4070,7 +4104,7 @@ function StudioContent() {
                     formatReadable(editingSuggestions)
                   )
                 }
-                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
               >
                 Download TXT
               </button>
@@ -4152,7 +4186,7 @@ function StudioContent() {
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-zinc-100">{row.step}</p>
                     <span
-                      className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                      className={`rounded-full border px-2 py-0.5 text-xs ${
                         row.status === "ready"
                           ? "border-emerald-400/60 text-emerald-200"
                           : "border-amber-500/40 text-amber-200"
@@ -4166,7 +4200,7 @@ function StudioContent() {
                     {row.requires.map((item) => (
                       <span
                         key={`${row.step}-${item}`}
-                        className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]"
+                        className="rounded-full border border-zinc-700 px-2 py-0.5 text-xs"
                       >
                         {item}
                       </span>
@@ -4177,7 +4211,7 @@ function StudioContent() {
                     {row.produces.map((item) => (
                       <span
                         key={`${row.step}-${item}`}
-                        className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]"
+                        className="rounded-full border border-zinc-700 px-2 py-0.5 text-xs"
                       >
                         {item}
                       </span>
@@ -4195,7 +4229,7 @@ function StudioContent() {
             <select
               value={promoArticleType}
               onChange={(event) => setPromoArticleType(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100"
+              className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-100"
             >
               <option value="theme_analysis">Theme analysis</option>
               <option value="character_spotlight">Character spotlight</option>
@@ -4216,7 +4250,7 @@ function StudioContent() {
             <select
               value={promoLengthType}
               onChange={(event) => setPromoLengthType(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100"
+              className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-100"
             >
               <option value="short">Short (300-600 words)</option>
               <option value="medium">Medium (800-1200 words)</option>
@@ -4228,7 +4262,7 @@ function StudioContent() {
             <select
               value={promoTone}
               onChange={(event) => setPromoTone(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100"
+              className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-100"
             >
               <option value="formal">Formal</option>
               <option value="warm">Warm</option>
@@ -4241,7 +4275,7 @@ function StudioContent() {
             <select
               value={promoCtaType}
               onChange={(event) => setPromoCtaType(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100"
+              className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-100"
             >
               <option value="soft">Soft sell</option>
               <option value="medium">Medium sell</option>
@@ -4314,7 +4348,7 @@ function StudioContent() {
             <p className="text-sm font-semibold">Premises & endings</p>
             <button
               onClick={() => setShowPremisesPanel((prev) => !prev)}
-              className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+              className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
             >
               {showPremisesPanel ? "Hide" : "Show"}
             </button>
@@ -4367,7 +4401,7 @@ function StudioContent() {
                     socialSnippets
                   )
                 }
-                className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
               >
                 Download TXT
               </button>
@@ -4403,7 +4437,7 @@ function StudioContent() {
                               )
                             }
                             disabled={loadingStep === "social"}
-                            className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                            className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
                           >
                             Regenerate
                           </button>
@@ -4418,7 +4452,7 @@ function StudioContent() {
                               setTimeout(() => setCopiedSnippetKey(null), 1500);
                             }
                           }}
-                          className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                          className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
                         >
                           {copiedSnippetKey === section.key ? "Copied" : "Copy"}
                         </button>
@@ -4429,7 +4463,7 @@ function StudioContent() {
                               [section.key]: !prev[section.key],
                             }))
                           }
-                          className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                          className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
                         >
                           {editingSocialSnippetKeys[section.key] ? "Cancel" : "Edit"}
                         </button>
@@ -4444,7 +4478,7 @@ function StudioContent() {
                                   section.body,
                               }))
                             }
-                            className="rounded-full border border-emerald-500/60 px-3 py-1 text-[10px] text-emerald-200"
+                            className="rounded-full border border-emerald-500/60 px-3 py-2 text-xs text-emerald-200"
                           >
                             Save
                           </button>
@@ -4456,7 +4490,7 @@ function StudioContent() {
                               socialSnippetsByPlatform[section.key] ?? section.body
                             )
                           }
-                          className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                          className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
                         >
                           Download
                         </button>
@@ -4475,7 +4509,7 @@ function StudioContent() {
                             [section.key]: event.target.value,
                           }))
                         }
-                        className="mt-3 min-h-[140px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                        className="mt-3 min-h-[140px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                       />
                     ) : (
                       <pre className="mt-3 whitespace-pre-wrap text-xs">
@@ -4535,7 +4569,7 @@ function StudioContent() {
                           `# ${articleTitle}\n\n${content}`
                         )
                       }
-                      className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
+                      className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
                     >
                       Download
                     </button>
@@ -4558,7 +4592,7 @@ function StudioContent() {
 
 {view === "cover" && (
   <div className="space-y-8 animate-in fade-in duration-700">
-    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl">
+    <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-4 sm:p-8 shadow-2xl">
       <SectionHeading title="🎨 Cover Design" step="Cover" />
       <p className="mt-2 text-sm text-zinc-500">Upload your own cover image or generate one with AI.</p>
 
@@ -4633,7 +4667,7 @@ function StudioContent() {
             {loadingStep === "cover" ? "Generating Prompt..." : "1. Refresh Design Prompt"}
           </button>
           <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6 min-h-[120px]">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-600 mb-2">Original Prompt</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-zinc-600 mb-2">Original Prompt</p>
             <pre className="whitespace-pre-wrap text-xs text-zinc-400 leading-relaxed">{coverPrompt || "Generate a prompt in the Write view first..."}</pre>
           </div>
         </div>
@@ -4649,7 +4683,7 @@ function StudioContent() {
           </button>
           {reimaginedPrompt ? (
             <div className="rounded-2xl border border-emerald-800/40 bg-emerald-950/20 p-6 min-h-[120px]">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 mb-2">Reimagined Prompt (GPT-5 Enhanced)</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-emerald-500 mb-2">Reimagined Prompt (GPT-5 Enhanced)</p>
               <pre className="whitespace-pre-wrap text-xs text-zinc-300 leading-relaxed">{reimaginedPrompt}</pre>
             </div>
           ) : (
@@ -4662,7 +4696,7 @@ function StudioContent() {
         {/* Step 3: Generate Cover Image */}
         <div className="grid gap-8 md:grid-cols-2">
           <div className="space-y-4">
-            <label className="flex flex-col gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+            <label className="flex flex-col gap-2 text-xs font-bold uppercase tracking-widest text-zinc-500">
               Image Generation Model
               <select 
                 value={imageModel}
@@ -4685,7 +4719,7 @@ function StudioContent() {
               <p className="text-xs text-emerald-400 text-center">Will use GPT-5 reimagined prompt</p>
             )}
           </div>
-          <div className="aspect-[2/3] w-full max-w-sm mx-auto overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950 flex items-center justify-center shadow-2xl">
+          <div className="aspect-[2/3] w-full max-w-full sm:max-w-sm mx-auto overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950 flex items-center justify-center shadow-2xl">
             {generatedCoverUrl ? (
               <img src={generatedCoverUrl} alt="Generated Cover" className="h-full w-full object-cover" />
             ) : (
@@ -4700,7 +4734,7 @@ function StudioContent() {
       {generatedCovers.length > 0 && (
         <div className="mt-8">
           <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-500 mb-4">Generated Covers</h3>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {generatedCovers.map((cover, index) => (
               <div key={index} className="relative group aspect-[2/3] rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950">
                 <img src={cover.url} alt={`Cover ${index + 1}`} className="h-full w-full object-cover" />
@@ -4846,7 +4880,7 @@ function StudioContent() {
             )}
             <p className="text-xs text-zinc-600 text-center">Generates a 4:5 vertical image optimized for Facebook feed ads</p>
           </div>
-          <div className="aspect-[4/5] w-full max-w-sm mx-auto overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950 flex items-center justify-center shadow-2xl">
+          <div className="aspect-[4/5] w-full max-w-full sm:max-w-sm mx-auto overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950 flex items-center justify-center shadow-2xl">
             {facebookImageUrl ? (
               <img src={facebookImageUrl} alt="Facebook Promotional Image" className="h-full w-full object-cover" />
             ) : (
@@ -4954,7 +4988,7 @@ function StudioContent() {
             )}
             <p className="text-xs text-zinc-600 text-center">Generates a 4:5 portrait image optimized for Instagram feed engagement</p>
           </div>
-          <div className="aspect-[4/5] w-full max-w-sm mx-auto overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950 flex items-center justify-center shadow-2xl">
+          <div className="aspect-[4/5] w-full max-w-full sm:max-w-sm mx-auto overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-950 flex items-center justify-center shadow-2xl">
             {instagramImageUrl ? (
               <img src={instagramImageUrl} alt="Instagram Promotional Image" className="h-full w-full object-cover" />
             ) : (
@@ -5089,7 +5123,7 @@ function StudioContent() {
 
     {mockupActiveTab === "gallery" ? (
       <div className="space-y-8">
-        <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-8 shadow-2xl">
+        <section className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-4 sm:p-8 shadow-2xl">
           <SectionHeading title="🖼️ 3D Mockup Gallery" step="Mockup" />
           <p className="mt-2 text-sm text-zinc-500">Select a professional template to render your book cover in 3D.</p>
 
@@ -5108,7 +5142,7 @@ function StudioContent() {
                   variant={mockupViewMode === 'gallery' ? 'secondary' : 'ghost'} 
                   size="sm"
                   onClick={() => setMockupViewMode('gallery')}
-                  className="rounded-lg text-[10px] uppercase font-bold tracking-widest"
+                  className="rounded-lg text-xs uppercase font-bold tracking-widest"
                 >
                   Gallery
                 </Button>
@@ -5116,7 +5150,7 @@ function StudioContent() {
                   variant={mockupViewMode === 'smart-preview' ? 'secondary' : 'ghost'} 
                   size="sm"
                   onClick={() => setMockupViewMode('smart-preview')}
-                  className="rounded-lg text-[10px] uppercase font-bold tracking-widest"
+                  className="rounded-lg text-xs uppercase font-bold tracking-widest"
                 >
                   Smart Preview
                 </Button>
@@ -5185,11 +5219,11 @@ function StudioContent() {
     ) : (
       <div className="h-full animate-in zoom-in-95 duration-500">
         <div className="mb-4">
-          <Button variant="ghost" size="sm" onClick={() => setMockupActiveTab('gallery')} className="text-zinc-500 hover:text-white uppercase text-[10px] font-bold tracking-widest gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setMockupActiveTab('gallery')} className="text-zinc-500 hover:text-white uppercase text-xs font-bold tracking-widest gap-2">
             <ArrowLeft className="w-3 h-3" /> Back to Gallery
           </Button>
         </div>
-        <div className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-1 overflow-hidden shadow-2xl min-h-[700px]">
+        <div className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-1 overflow-hidden shadow-2xl min-h-[400px] sm:min-h-[700px]">
           <MockupEditor onBack={() => setMockupActiveTab('gallery')} />
         </div>
       </div>
@@ -5317,14 +5351,14 @@ function StudioContent() {
           const snippetCount = socialSnippets ? parseSocialSnippets(socialSnippets).length : 0;
           const total = articleCount + snippetCount;
           return total > 0 ? (
-            <span className="inline-flex rounded-full border border-emerald-400/40 px-2 py-0.5 text-[10px] text-emerald-200">
+            <span className="inline-flex rounded-full border border-emerald-400/40 px-2 py-0.5 text-xs text-emerald-200">
               {total} item{total !== 1 ? "s" : ""} ({articleCount} article{articleCount !== 1 ? "s" : ""}, {snippetCount} snippet{snippetCount !== 1 ? "s" : ""})
             </span>
           ) : null;
         })()}
       </h3>
       {(!promotionalArticles || promotionalArticles.length === 0) && !socialSnippets ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-8 text-center">
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 sm:p-8 text-center">
           <p className="text-zinc-500 text-sm">No promotional articles or social snippets generated yet.</p>
           <p className="text-zinc-600 text-xs mt-1">Generate content in the Promotional tab first.</p>
         </div>
@@ -5345,8 +5379,8 @@ function StudioContent() {
                 <div className="flex items-center gap-2 mb-4">
                   <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-zinc-800 text-xs font-bold text-zinc-300">{articleIndex + 1}</span>
                   <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">{titleize(String(article.article_type ?? "article"))}</span>
-                  <span className="text-[10px] text-zinc-600">•</span>
-                  <span className="text-[10px] text-zinc-600">{String(article.length_type ?? "medium")} • {String(article.tone ?? "formal")}</span>
+                  <span className="text-xs text-zinc-600">•</span>
+                  <span className="text-xs text-zinc-600">{String(article.length_type ?? "medium")} • {String(article.tone ?? "formal")}</span>
                   <span className="inline-flex rounded-full border border-sky-400/30 px-2 py-0.5 text-[9px] text-sky-300 ml-auto">Article</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
@@ -5382,7 +5416,7 @@ function StudioContent() {
                         }));
                       }}
                       rows={3}
-                      className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y"
+                      className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y"
                       placeholder="Article excerpt"
                     />
                   </div>
@@ -5393,7 +5427,7 @@ function StudioContent() {
                       value={articleHtml}
                       readOnly
                       rows={8}
-                      className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y font-mono cursor-text"
+                      className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y font-mono cursor-text"
                       placeholder="Article content (HTML)"
                     />
                   </div>
@@ -5506,7 +5540,7 @@ function StudioContent() {
                       value={snippetHtml}
                       readOnly
                       rows={5}
-                      className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y font-mono cursor-text"
+                      className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y font-mono cursor-text"
                       placeholder="Snippet content (HTML)"
                     />
                   </div>
@@ -5564,7 +5598,7 @@ function StudioContent() {
       <div className="max-w-md mx-auto space-y-6">
         {novelId && (
           <div className="rounded-xl border border-zinc-700 bg-zinc-950/50 px-5 py-4 text-left">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+            <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">
               Novel ID (for elstranbooks import)
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -5580,7 +5614,7 @@ function StudioContent() {
                     window.setTimeout(() => setNovelIdCopied(false), 2000);
                   }
                 }}
-                className="shrink-0 rounded-full border border-zinc-600 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-300 hover:border-zinc-400 hover:text-white"
+                className="shrink-0 rounded-full border border-zinc-600 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-300 hover:border-zinc-400 hover:text-white"
               >
                 {novelIdCopied ? "Copied" : "Copy"}
               </button>
@@ -5590,7 +5624,7 @@ function StudioContent() {
         <button
           onClick={publishNovelAction}
           disabled={!novelId || isPublished || !!loadingStep}
-          className={`w-full rounded-full px-10 py-6 text-xl font-black uppercase tracking-widest transition-all shadow-2xl ${
+          className={`w-full rounded-full px-6 sm:px-10 py-6 text-lg sm:text-xl font-black uppercase tracking-widest transition-all shadow-2xl ${
             isPublished
             ? "bg-emerald-500 text-white cursor-default"
             : "bg-white text-zinc-900 hover:scale-105 active:scale-95 hover:shadow-white/10"
@@ -5602,7 +5636,7 @@ function StudioContent() {
         {publishPublicId && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 pt-4">
             <p className="text-xs font-bold uppercase tracking-widest text-emerald-500">Available in Library</p>
-            <p className="text-[10px] text-zinc-600 mt-2 font-mono">{publishPublicId}</p>
+            <p className="text-xs text-zinc-600 mt-2 font-mono">{publishPublicId}</p>
           </div>
         )}
       </div>

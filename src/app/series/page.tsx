@@ -468,13 +468,13 @@ export default function SeriesPage() {
                   await pendingDelete.refresh();
                   setPendingDelete(null);
                 }}
-                className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-zinc-900"
+                className="rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-zinc-900"
               >
                 Delete
               </button>
               <button
                 onClick={() => setPendingDelete(null)}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm text-zinc-200"
               >
                 Cancel
               </button>
@@ -485,7 +485,14 @@ export default function SeriesPage() {
 
       {loadingStep && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 px-6">
-          <div className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-6 text-center">
+          <div className="relative w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-6 text-center">
+            <button
+              onClick={() => setLoadingStep(null)}
+              className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full border border-zinc-700 text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
             <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Generating</p>
             <h2 className="mt-2 text-lg font-semibold text-zinc-100">
               {String(loadingStep)} in progress
@@ -594,7 +601,7 @@ export default function SeriesPage() {
               <input
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
-                className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2"
+                className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3"
               />
             </label>
             <label className="flex flex-col gap-2 text-sm">
@@ -602,7 +609,7 @@ export default function SeriesPage() {
               <textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2"
+                className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3"
               />
             </label>
             <div className="grid gap-4 md:grid-cols-2">
@@ -612,7 +619,7 @@ export default function SeriesPage() {
                   type="number"
                   value={numBooks}
                   onChange={(event) => setNumBooks(Number(event.target.value))}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2"
+                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3"
                 />
               </label>
               <label className="flex flex-col gap-2 text-sm">
@@ -620,7 +627,7 @@ export default function SeriesPage() {
                 <select
                   value={model}
                   onChange={(event) => setModel(event.target.value)}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2"
+                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3"
                 >
                   {modelOptions.map((option) => (
                     <option key={option} value={option}>
@@ -656,7 +663,7 @@ export default function SeriesPage() {
           </section>
         )}
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
           {[
             { id: "overview", label: "Overview" },
             { id: "characters", label: "Characters" },
@@ -673,7 +680,7 @@ export default function SeriesPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`rounded-full border px-4 py-2 text-sm transition ${
+              className={`shrink-0 rounded-full border px-4 py-2.5 text-sm transition ${
                 activeTab === tab.id
                   ? "border-white text-white"
                   : "border-zinc-700 text-zinc-400"
@@ -696,7 +703,7 @@ export default function SeriesPage() {
               <input
                 value={suiteTone}
                 onChange={(event) => setSuiteTone(event.target.value)}
-                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 placeholder="Emotional, dramatic, hopeful"
               />
             </label>
@@ -705,7 +712,7 @@ export default function SeriesPage() {
               <input
                 value={suiteSetting}
                 onChange={(event) => setSuiteSetting(event.target.value)}
-                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 placeholder="Contemporary"
               />
             </label>
@@ -714,7 +721,7 @@ export default function SeriesPage() {
               <input
                 value={suiteCharacters}
                 onChange={(event) => setSuiteCharacters(event.target.value)}
-                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 placeholder="Character 1, Character 2"
               />
             </label>
@@ -723,7 +730,7 @@ export default function SeriesPage() {
               <input
                 value={suiteCoreConflict}
                 onChange={(event) => setSuiteCoreConflict(event.target.value)}
-                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 placeholder="A secret threatens to unravel everything"
               />
             </label>
@@ -732,7 +739,7 @@ export default function SeriesPage() {
               <input
                 value={suiteThemes}
                 onChange={(event) => setSuiteThemes(event.target.value)}
-                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 placeholder="Coming of age, identity, relationships"
               />
             </label>
@@ -745,7 +752,7 @@ export default function SeriesPage() {
                 onChange={(event) =>
                   setSuiteBookNumber(Number(event.target.value) || 1)
                 }
-                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
               />
             </label>
           </div>
@@ -802,7 +809,7 @@ export default function SeriesPage() {
                   setLoadingStep(null);
                 }
               }}
-              className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+              className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
             >
               {loadingStep === "bible" ? "Generating..." : "Generate Series Bible"}
             </button>
@@ -884,7 +891,7 @@ export default function SeriesPage() {
                   setLoadingStep(null);
                 }
               }}
-              className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+              className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
             >
               {loadingStep === "map" ? "Generating..." : "Generate Series Map"}
             </button>
@@ -922,7 +929,7 @@ export default function SeriesPage() {
                   setLoadingStep(null);
                 }
               }}
-              className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+              className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
             >
               {loadingStep === "evolution" ? "Generating..." : "Generate Character Evolution"}
             </button>
@@ -959,7 +966,7 @@ export default function SeriesPage() {
                   setLoadingStep(null);
                 }
               }}
-              className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+              className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
             >
               {loadingStep === "blueprint" ? "Generating..." : "Generate Book Blueprint"}
             </button>
@@ -1111,7 +1118,7 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setSeriesCharacters(data.characters ?? []);
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Refresh Characters
               </button>
@@ -1334,7 +1341,7 @@ export default function SeriesPage() {
                   setWorldRulesDraft(String(data.world?.rules ?? ""));
                   setWorldLoreDraft(String(data.world?.lore ?? ""));
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Refresh World
               </button>
@@ -1353,7 +1360,7 @@ export default function SeriesPage() {
                   <textarea
                     value={worldSettingDraft}
                     onChange={(event) => setWorldSettingDraft(event.target.value)}
-                    className="mt-2 min-h-[120px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100"
+                    className="mt-2 min-h-[120px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-100"
                     placeholder="City, era, cultural context"
                   />
                 </div>
@@ -1362,7 +1369,7 @@ export default function SeriesPage() {
                   <textarea
                     value={worldRulesDraft}
                     onChange={(event) => setWorldRulesDraft(event.target.value)}
-                    className="mt-2 min-h-[120px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100"
+                    className="mt-2 min-h-[120px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-100"
                     placeholder="Rules, limitations, systems"
                   />
                 </div>
@@ -1371,7 +1378,7 @@ export default function SeriesPage() {
                   <textarea
                     value={worldLoreDraft}
                     onChange={(event) => setWorldLoreDraft(event.target.value)}
-                    className="mt-2 min-h-[120px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100"
+                    className="mt-2 min-h-[120px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-100"
                     placeholder="Lore, myths, historical anchors"
                   />
                 </div>
@@ -1394,7 +1401,7 @@ export default function SeriesPage() {
                     const data = await response.json();
                     setSeriesWorld(data.world ?? null);
                   }}
-                  className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200"
+                  className="rounded-full border border-emerald-500/60 px-4 py-2.5 text-sm text-emerald-200"
                 >
                   Save World Overview
                 </button>
@@ -1431,7 +1438,7 @@ export default function SeriesPage() {
                 <select
                   value={canonCategory}
                   onChange={(event) => setCanonCategory(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 >
                   <option value="world">World</option>
                   <option value="character">Character</option>
@@ -1444,7 +1451,7 @@ export default function SeriesPage() {
                 <input
                   value={canonSource}
                   onChange={(event) => setCanonSource(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                   placeholder="Book 1, Chapter 3"
                 />
               </label>
@@ -1453,7 +1460,7 @@ export default function SeriesPage() {
                 <textarea
                   value={canonFact}
                   onChange={(event) => setCanonFact(event.target.value)}
-                  className="min-h-[100px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="min-h-[100px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
             </div>
@@ -1463,7 +1470,7 @@ export default function SeriesPage() {
                 <select
                   value={canonFilter}
                   onChange={(event) => setCanonFilter(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 >
                   <option value="all">All</option>
                   <option value="world">World</option>
@@ -1477,7 +1484,7 @@ export default function SeriesPage() {
                 <input
                   value={canonSearch}
                   onChange={(event) => setCanonSearch(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
               <button
@@ -1500,7 +1507,7 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setSeriesMemory(data.entries ?? []);
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Add Canon Fact
               </button>
@@ -1509,7 +1516,7 @@ export default function SeriesPage() {
                   setCanonFilter("all");
                   setCanonSearch("");
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Clear Filters
               </button>
@@ -1522,7 +1529,7 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setSeriesMemory(data.entries ?? []);
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Refresh Canon
               </button>
@@ -1544,7 +1551,7 @@ export default function SeriesPage() {
                       <select
                         value={editingCanonCategory}
                         onChange={(event) => setEditingCanonCategory(event.target.value)}
-                        className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                        className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                       >
                         <option value="world">World</option>
                         <option value="character">Character</option>
@@ -1554,7 +1561,7 @@ export default function SeriesPage() {
                       <textarea
                         value={editingCanonFact}
                         onChange={(event) => setEditingCanonFact(event.target.value)}
-                        className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                        className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                       />
                     </div>
                   ) : (
@@ -1633,7 +1640,7 @@ export default function SeriesPage() {
                 <input
                   value={mysteryTitle}
                   onChange={(event) => setMysteryTitle(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
               <label className="text-xs text-zinc-300">
@@ -1642,7 +1649,7 @@ export default function SeriesPage() {
                   type="number"
                   value={clueBook}
                   onChange={(event) => setClueBook(Number(event.target.value) || 1)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
               <label className="text-xs text-zinc-300 md:col-span-2">
@@ -1650,7 +1657,7 @@ export default function SeriesPage() {
                 <textarea
                   value={mysteryDescription}
                   onChange={(event) => setMysteryDescription(event.target.value)}
-                  className="min-h-[90px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="min-h-[90px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
               <label className="text-xs text-zinc-300 md:col-span-2">
@@ -1658,7 +1665,7 @@ export default function SeriesPage() {
                 <textarea
                   value={clueDescription}
                   onChange={(event) => setClueDescription(event.target.value)}
-                  className="min-h-[90px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="min-h-[90px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
             </div>
@@ -1671,7 +1678,7 @@ export default function SeriesPage() {
                 <input
                   value={mysterySearch}
                   onChange={(event) => setMysterySearch(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
               <label className="text-xs text-zinc-300">
@@ -1680,7 +1687,7 @@ export default function SeriesPage() {
                   type="number"
                   value={mysteryBookFilter || ""}
                   onChange={(event) => setMysteryBookFilter(Number(event.target.value) || 0)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
               <button
@@ -1688,7 +1695,7 @@ export default function SeriesPage() {
                   setMysterySearch("");
                   setMysteryBookFilter(0);
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Clear Filters
               </button>
@@ -1713,7 +1720,7 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setSeriesMemory(data.secrets ?? []);
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Add Secret
               </button>
@@ -1737,7 +1744,7 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setSeriesMemory(data.secrets ?? []);
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Add Clue
               </button>
@@ -1750,7 +1757,7 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setSeriesMemory(data.secrets ?? []);
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Refresh Mysteries
               </button>
@@ -1766,12 +1773,12 @@ export default function SeriesPage() {
                       <input
                         value={editingSecretTitle}
                         onChange={(event) => setEditingSecretTitle(event.target.value)}
-                        className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                        className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                       />
                       <textarea
                         value={editingSecretDescription}
                         onChange={(event) => setEditingSecretDescription(event.target.value)}
-                        className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                        className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                       />
                     </div>
                   ) : (
@@ -1852,13 +1859,13 @@ export default function SeriesPage() {
                       <textarea
                         value={editingClueDescription}
                         onChange={(event) => setEditingClueDescription(event.target.value)}
-                        className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                        className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                       />
                       <input
                         type="number"
                         value={editingClueBook}
                         onChange={(event) => setEditingClueBook(Number(event.target.value) || 1)}
-                        className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                        className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                       />
                     </div>
                   ) : (
@@ -1943,7 +1950,7 @@ export default function SeriesPage() {
                 <input
                   value={relationshipA}
                   onChange={(event) => setRelationshipA(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
               <label className="text-xs text-zinc-300">
@@ -1951,7 +1958,7 @@ export default function SeriesPage() {
                 <input
                   value={relationshipB}
                   onChange={(event) => setRelationshipB(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
               <label className="text-xs text-zinc-300">
@@ -1959,7 +1966,7 @@ export default function SeriesPage() {
                 <select
                   value={relationshipType}
                   onChange={(event) => setRelationshipType(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 >
                   <option value="friends">Friends</option>
                   <option value="enemies">Enemies</option>
@@ -1974,7 +1981,7 @@ export default function SeriesPage() {
                 <select
                   value={relationshipStatus}
                   onChange={(event) => setRelationshipStatus(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 >
                   <option value="neutral">Neutral</option>
                   <option value="positive">Positive</option>
@@ -1989,7 +1996,7 @@ export default function SeriesPage() {
                 <select
                   value={relationshipsStatusFilter}
                   onChange={(event) => setRelationshipsStatusFilter(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 >
                   <option value="all">All</option>
                   <option value="neutral">Neutral</option>
@@ -2003,7 +2010,7 @@ export default function SeriesPage() {
                 <input
                   value={relationshipsSearch}
                   onChange={(event) => setRelationshipsSearch(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
               <button
@@ -2011,7 +2018,7 @@ export default function SeriesPage() {
                   setRelationshipsStatusFilter("all");
                   setRelationshipsSearch("");
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Clear Filters
               </button>
@@ -2037,7 +2044,7 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setSeriesMemory(data.entries ?? []);
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Add Relationship
               </button>
@@ -2050,7 +2057,7 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setSeriesMemory(data.entries ?? []);
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Refresh Relationships
               </button>
@@ -2070,17 +2077,17 @@ export default function SeriesPage() {
                       <input
                         value={editingRelationshipA}
                         onChange={(event) => setEditingRelationshipA(event.target.value)}
-                        className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                        className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                       />
                       <input
                         value={editingRelationshipB}
                         onChange={(event) => setEditingRelationshipB(event.target.value)}
-                        className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                        className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                       />
                       <select
                         value={editingRelationshipType}
                         onChange={(event) => setEditingRelationshipType(event.target.value)}
-                        className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                        className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                       >
                         <option value="friends">Friends</option>
                         <option value="enemies">Enemies</option>
@@ -2092,7 +2099,7 @@ export default function SeriesPage() {
                       <select
                         value={editingRelationshipStatus}
                         onChange={(event) => setEditingRelationshipStatus(event.target.value)}
-                        className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                        className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                       >
                         <option value="neutral">Neutral</option>
                         <option value="positive">Positive</option>
@@ -2215,7 +2222,7 @@ export default function SeriesPage() {
                 <input
                   value={plotName}
                   onChange={(event) => setPlotName(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
               <label className="text-xs text-zinc-300">
@@ -2223,7 +2230,7 @@ export default function SeriesPage() {
                 <select
                   value={plotType}
                   onChange={(event) => setPlotType(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 >
                   <option value="main">Main</option>
                   <option value="subplot">Subplot</option>
@@ -2239,7 +2246,7 @@ export default function SeriesPage() {
                   onChange={(event) =>
                     setPlotIntroducedBook(Number(event.target.value) || 1)
                   }
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
               <label className="text-xs text-zinc-300">
@@ -2251,7 +2258,7 @@ export default function SeriesPage() {
                     const value = Number(event.target.value);
                     setPlotResolvedBook(value ? value : null);
                   }}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
               <label className="text-xs text-zinc-300 md:col-span-2">
@@ -2259,7 +2266,7 @@ export default function SeriesPage() {
                 <textarea
                   value={plotDescription}
                   onChange={(event) => setPlotDescription(event.target.value)}
-                  className="min-h-[90px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="min-h-[90px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
             </div>
@@ -2269,7 +2276,7 @@ export default function SeriesPage() {
                 <select
                   value={plotFilter}
                   onChange={(event) => setPlotFilter(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 >
                   <option value="all">All</option>
                   <option value="main">Main</option>
@@ -2283,7 +2290,7 @@ export default function SeriesPage() {
                 <input
                   value={plotSearch}
                   onChange={(event) => setPlotSearch(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
               <button
@@ -2291,7 +2298,7 @@ export default function SeriesPage() {
                   setPlotFilter("all");
                   setPlotSearch("");
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Clear Filters
               </button>
@@ -2318,7 +2325,7 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setPlotThreads(data.threads ?? []);
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Add Thread
               </button>
@@ -2331,7 +2338,7 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setPlotThreads(data.threads ?? []);
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Refresh Threads
               </button>
@@ -2455,7 +2462,7 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setSeriesBooks(data.books ?? []);
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Refresh Books
               </button>
@@ -2521,7 +2528,7 @@ export default function SeriesPage() {
                   const warningsData = await warningsResponse.json();
                   setMemoryWarnings(warningsData.warnings ?? []);
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Refresh Memory
               </button>
@@ -2562,7 +2569,7 @@ export default function SeriesPage() {
                       <select
                         value={newMemoryCategory}
                         onChange={(event) => setNewMemoryCategory(event.target.value)}
-                        className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                        className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                       >
                         <option value="canon">Canon</option>
                         <option value="callback">Callback</option>
@@ -2579,7 +2586,7 @@ export default function SeriesPage() {
                       <textarea
                         value={newMemoryContent}
                         onChange={(event) => setNewMemoryContent(event.target.value)}
-                        className="min-h-[120px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                        className="min-h-[120px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                       />
                     </label>
                     <div className="flex flex-wrap gap-3">
@@ -2610,7 +2617,7 @@ export default function SeriesPage() {
                             setMemoryWarnings(warningsData.warnings ?? []);
                           }
                         }}
-                        className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                        className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
                       >
                         Save Memory
                       </button>
@@ -2619,7 +2626,7 @@ export default function SeriesPage() {
                           setNewMemoryContent("");
                           setNewMemoryCategory("canon");
                         }}
-                        className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                        className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
                       >
                         Clear
                       </button>
@@ -2692,7 +2699,7 @@ export default function SeriesPage() {
                 <input
                   value={timelineTitle}
                   onChange={(event) => setTimelineTitle(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
               <label className="text-xs text-zinc-300">
@@ -2701,7 +2708,7 @@ export default function SeriesPage() {
                   type="number"
                   value={timelineBook}
                   onChange={(event) => setTimelineBook(Number(event.target.value) || 1)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
               <label className="text-xs text-zinc-300">
@@ -2710,7 +2717,7 @@ export default function SeriesPage() {
                   type="number"
                   value={timelineOrder}
                   onChange={(event) => setTimelineOrder(Number(event.target.value) || 1)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
               <label className="text-xs text-zinc-300 md:col-span-2">
@@ -2718,7 +2725,7 @@ export default function SeriesPage() {
                 <textarea
                   value={timelineDescription}
                   onChange={(event) => setTimelineDescription(event.target.value)}
-                  className="min-h-[100px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="min-h-[100px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
             </div>
@@ -2750,7 +2757,7 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setSeriesTimeline(data.events ?? []);
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Add Event
               </button>
@@ -2763,7 +2770,7 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setSeriesTimeline(data.events ?? []);
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Refresh Timeline
               </button>
@@ -2774,7 +2781,7 @@ export default function SeriesPage() {
                 <input
                   value={timelineSearch}
                   onChange={(event) => setTimelineSearch(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
               <label className="text-xs text-zinc-300">
@@ -2783,7 +2790,7 @@ export default function SeriesPage() {
                   type="number"
                   value={timelineBookFilter || ""}
                   onChange={(event) => setTimelineBookFilter(Number(event.target.value) || 0)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
               <button
@@ -2791,7 +2798,7 @@ export default function SeriesPage() {
                   setTimelineSearch("");
                   setTimelineBookFilter(0);
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Clear Filters
               </button>
@@ -2804,7 +2811,7 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setSeriesTimeline(data.events ?? []);
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Refresh Timeline
               </button>
@@ -2846,12 +2853,12 @@ export default function SeriesPage() {
                               <input
                                 value={editingTimelineTitle}
                                 onChange={(eventInput) => setEditingTimelineTitle(eventInput.target.value)}
-                                className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                                className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                               />
                               <textarea
                                 value={editingTimelineDescription}
                                 onChange={(eventInput) => setEditingTimelineDescription(eventInput.target.value)}
-                                className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                                className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                               />
                               <div className="grid gap-2 md:grid-cols-2">
                                 <input
@@ -2860,7 +2867,7 @@ export default function SeriesPage() {
                                   onChange={(eventInput) =>
                                     setEditingTimelineBook(Number(eventInput.target.value) || 1)
                                   }
-                                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                                 />
                                 <input
                                   type="number"
@@ -2868,7 +2875,7 @@ export default function SeriesPage() {
                                   onChange={(eventInput) =>
                                     setEditingTimelineOrder(Number(eventInput.target.value) || 1)
                                   }
-                                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                                 />
                               </div>
                             </div>
@@ -2983,7 +2990,7 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setSeriesLogs(data.logs ?? []);
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2 text-sm"
+                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Refresh Logs
               </button>
@@ -2995,7 +3002,7 @@ export default function SeriesPage() {
                 <select
                   value={logTypeFilter}
                   onChange={(event) => setLogTypeFilter(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 >
                   {logTypes.map((type) => (
                     <option key={type} value={type}>
@@ -3053,7 +3060,7 @@ export default function SeriesPage() {
                   body: JSON.stringify({ seriesId: seriesList[0].id }),
                 });
               }}
-              className="rounded-full border border-zinc-700 px-4 py-2 text-xs"
+              className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
             >
               Run Legacy Migration
             </button>
@@ -3078,7 +3085,7 @@ export default function SeriesPage() {
                 </p>
                 <Link
                   href={`/studio?seriesId=${series.id}&bookNumber=1`}
-                  className="mt-3 inline-flex rounded-full border border-zinc-700 px-4 py-2 text-xs"
+                  className="mt-3 inline-flex rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
                 >
                   Start book 1
                 </Link>

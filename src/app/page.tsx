@@ -140,7 +140,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col overflow-x-hidden">
       {/* Navigation */}
       <nav className="border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-50">
         <div className="mx-auto max-w-7xl px-6 h-16 flex items-center justify-between">
@@ -165,7 +165,7 @@ export default function Home() {
             ) : (
               <a
                 href="#login"
-                className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors"
+                className="text-sm text-zinc-400 hover:text-zinc-100 transition-colors px-3 py-2"
               >
                 Sign in →
               </a>
@@ -432,7 +432,7 @@ export default function Home() {
                       <h3 className="text-sm font-semibold text-zinc-200 mb-1">
                         {feature.title}
                       </h3>
-                      <p className="text-xs text-zinc-500 leading-relaxed">{feature.description}</p>
+                      <p className="text-sm text-zinc-400 leading-relaxed">{feature.description}</p>
                     </div>
                   </div>
                 </motion.div>
@@ -495,7 +495,7 @@ export default function Home() {
                     <ArrowRight className={`h-4 w-4 ${colors.icon} transition-transform group-hover:translate-x-1`} />
                   </div>
                   <p className="text-sm text-zinc-400">{workflow.subtitle}</p>
-                  <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
                     {workflow.details.map((detail) => (
                       <li key={detail} className="flex items-center gap-1.5 text-xs text-zinc-500">
                         <Sparkles className={`h-3 w-3 ${colors.icon} opacity-60`} />

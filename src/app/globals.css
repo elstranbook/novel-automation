@@ -20,6 +20,18 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Mobile touch target minimum — ensures interactive elements meet 44px standard on touch devices */
+@media (pointer: coarse) {
+  button:not([class*="h-"]),
+  a:not([class*="h-"]),
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+  }
 }
 
 /* Subtle focus styles for accessibility */
@@ -45,4 +57,14 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #3f3f46;
+}
+
+/* Hide scrollbar for horizontally-scrollable strips (e.g. tab bars) */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

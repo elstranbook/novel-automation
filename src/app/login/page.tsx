@@ -71,14 +71,14 @@ function LoginForm() {
                   type="button"
                   onClick={handlePasswordReset}
                   disabled={loading}
-                  className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-zinc-900"
+                  className="rounded-full bg-white px-4 py-3 text-sm font-semibold text-zinc-900"
                 >
                   {loading ? "Sending..." : "Yes, send it"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowResetConfirm(false)}
-                  className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-200"
+                  className="rounded-full border border-zinc-700 px-4 py-3 text-sm text-zinc-200"
                 >
                   Cancel
                 </button>
@@ -93,7 +93,7 @@ function LoginForm() {
         <p className="text-sm text-zinc-400">
           Use your email and password to access your writing studio.
         </p>
-        <p className="text-xs text-zinc-500">
+        <p className="text-sm text-zinc-500">
           New account creation is disabled. Please contact the site owner if you need access.
         </p>
         <form onSubmit={handleSignIn} className="flex flex-col gap-4">
@@ -103,7 +103,7 @@ function LoginForm() {
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100"
+              className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-3 text-zinc-100"
               required
             />
           </label>
@@ -113,19 +113,19 @@ function LoginForm() {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100"
+              className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-3 text-zinc-100"
               required
             />
           </label>
           <button
             type="submit"
-            className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-zinc-900"
+            className="rounded-full bg-white px-4 py-3 text-sm font-semibold text-zinc-900"
             disabled={loading}
           >
             {loading ? "Signing in..." : "Sign in"}
           </button>
           {email.trim().toLowerCase() === ownerEmail && (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-300">
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-sm text-zinc-300">
               <p className="text-sm font-semibold text-zinc-100">
                 Owner password reset
               </p>
@@ -137,14 +137,14 @@ function LoginForm() {
                   type="button"
                   onClick={() => setShowResetConfirm(true)}
                   disabled={loading}
-                  className="rounded-full border border-zinc-700 px-4 py-2 text-xs font-semibold text-zinc-100 disabled:opacity-40"
+                  className="rounded-full border border-zinc-700 px-4 py-3 text-sm font-semibold text-zinc-100 disabled:opacity-40"
                 >
                   Send owner reset link
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowResetConfirm(false)}
-                  className="rounded-full border border-zinc-800 px-4 py-2 text-xs text-zinc-400"
+                  className="rounded-full border border-zinc-800 px-4 py-3 text-sm text-zinc-400"
                 >
                   Cancel
                 </button>
