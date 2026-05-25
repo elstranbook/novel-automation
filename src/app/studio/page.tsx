@@ -376,7 +376,7 @@ function StudioContent() {
 
   const [title, setTitle] = useState("");
   const [novelAbout, setNovelAbout] = useState("");
-  const [model, setModel] = useState<string>(AUTO);
+  const [model, setModel] = useState<string>("gpt-4.1");
   const [maxSceneLength, setMaxSceneLength] = useState(1000);
   const [minSceneLength, setMinSceneLength] = useState(300);
 

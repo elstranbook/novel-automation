@@ -53,7 +53,7 @@ export default function SeriesPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [numBooks, setNumBooks] = useState(3);
-  const [model, setModel] = useState<string>(AUTO);
+  const [model, setModel] = useState<string>("gpt-4.1");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authEmail, setAuthEmail] = useState<string | null>(null);
