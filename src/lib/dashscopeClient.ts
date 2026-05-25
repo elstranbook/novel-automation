@@ -1,59 +1,57 @@
 import OpenAI from "openai";
 
 /**
- * DashScope (Alibaba Cloud Model Studio) client for Qwen3 models.
+ * OpenRouter client for Qwen3 models.
  *
- * Uses the OpenAI-compatible interface — same SDK, just different base_url and API key.
- * Docs: https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope
+ * OpenRouter provides unified access to all models with a single API key.
+ * No need to enable individual models — everything works immediately.
+ * Docs: https://openrouter.ai/docs/api-reference
  *
- * Region endpoints:
- *   International (Singapore): https://dashscope-intl.aliyuncs.com/compatible-mode/v1
- *   US (Virginia):             https://dashscope-us.aliyuncs.com/compatible-mode/v1
- *   China (Beijing):           https://dashscope.aliyuncs.com/compatible-mode/v1
- *   Hong Kong:                 https://cn-hongkong.dashscope.aliyuncs.com/compatible-mode/v1
+ * Get your API key from: https://openrouter.ai/keys
  */
 
-const DASHSCOPE_BASE_URL =
-  process.env.DASHSCOPE_BASE_URL ??
-  "https://dashscope-intl.aliyuncs.com/compatible-mode/v1";
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? "";
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 
-const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY ?? "";
+/** Check if OpenRouter API key is configured */
+export const isOpenRouterConfigured = (): boolean => OPENROUTER_API_KEY.length > 0;
 
-/** Check if DashScope API key is configured */
-export const isDashScopeConfigured = (): boolean => DASHSCOPE_API_KEY.length > 0;
-
-/** Available Qwen3 creative-writing models on DashScope */
+/** Available Qwen3 creative-writing models on OpenRouter */
 export const QWEN3_MODELS = {
   /** Best for creative writing — superior human preference alignment */
-  QWEN3_235B_INSTRUCT: "qwen3-235b-a22b-instruct-2507",
+  QWEN3_235B_INSTRUCT: "qwen/qwen3-235b-a22b-instruct-2507",
   /** Thinking/reasoning mode — for complex narrative planning */
-  QWEN3_235B_THINKING: "qwen3-235b-a22b-thinking-2507",
+  QWEN3_235B_THINKING: "qwen/qwen3-235b-a22b-thinking-2507",
   /** Base model — general purpose */
-  QWEN3_235B_BASE: "qwen3-235b-a22b",
+  QWEN3_235B_BASE: "qwen/qwen3-235b-a22b",
   /** Efficient 14B model — great value for creative writing */
-  QWEN3_14B: "qwen3-14b",
+  QWEN3_14B: "qwen/qwen3-14b",
   /** Efficient 30B MoE model */
-  QWEN3_30B_A3B: "qwen3-30b-a3b",
+  QWEN3_30B_A3B: "qwen/qwen3-30b-a3b",
   /** 32B dense model */
-  QWEN3_32B: "qwen3-32b",
+  QWEN3_32B: "qwen/qwen3-32b",
 } as const;
 
 export type Qwen3ModelId = (typeof QWEN3_MODELS)[keyof typeof QWEN3_MODELS];
 
-/** Check if a model ID is a Qwen3/DashScope model */
+/** Check if a model ID is a Qwen3/OpenRouter model */
 export const isDashScopeModel = (model: string): boolean =>
-  model.startsWith("qwen3-") || model.startsWith("qwen-");
+  model.startsWith("qwen3-") || model.startsWith("qwen-") || model.startsWith("qwen/");
 
-/** Create a DashScope OpenAI-compatible client */
+/** Create an OpenRouter OpenAI-compatible client */
 export const dashscopeClient = new OpenAI({
-  apiKey: DASHSCOPE_API_KEY,
-  baseURL: DASHSCOPE_BASE_URL,
+  apiKey: OPENROUTER_API_KEY,
+  baseURL: OPENROUTER_BASE_URL,
+  defaultHeaders: {
+    "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "https://write.elstranbooks.com",
+    "X-Title": "Novel Automation",
+  },
 });
 
 /**
- * Run a chat completion against DashScope's Qwen3 models.
+ * Run a chat completion against OpenRouter's Qwen3 models.
  * This mirrors the runChatCompletion signature from openaiClient.ts
- * so that API routes can transparently switch between OpenAI and DashScope.
+ * so that API routes can transparently switch between OpenAI and OpenRouter.
  */
 export const runDashScopeCompletion = async ({
   model,
@@ -74,10 +72,10 @@ export const runDashScopeCompletion = async ({
     targetId?: string;
   };
 }) => {
-  if (!isDashScopeConfigured()) {
+  if (!isOpenRouterConfigured()) {
     throw new Error(
-      "DASHSCOPE_API_KEY is not set. Add it in Vercel → Settings → Environment Variables. " +
-      "Get your key from: https://dashscope.console.aliyun.com/"
+      "OPENROUTER_API_KEY is not set. Add it in Vercel → Settings → Environment Variables. " +
+      "Get your key from: https://openrouter.ai/keys"
     );
   }
 
@@ -118,13 +116,13 @@ export const runDashScopeCompletion = async ({
     model,
     messages,
     max_completion_tokens: maxTokens ?? 4000,
+    // Thinking models don't support response_format; skip for them
     ...(jsonResponse && !model.includes("thinking") ? { response_format: { type: "json_object" } } : {}),
   });
 
   let content = response.choices[0]?.message?.content ?? "";
 
   // Strip <think/> tags from thinking model responses
-  // The thinking model outputs: <think.reasoning content</think.actual response
   content = content.replace(/<think[\s\S]*?<\/think>\s*/g, "").trim();
 
   if (generationMeta?.seriesId && generationMeta?.type && generationLogId) {
@@ -150,9 +148,29 @@ export const runDashScopeCompletion = async ({
     return content;
   }
 
+  // For thinking models that couldn't use response_format,
+  // try to extract JSON from the response
   try {
     return JSON.parse(content);
   } catch {
+    // Try to find JSON object in the response
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch {
+        // fall through
+      }
+    }
+    // Try to find JSON array
+    const arrayMatch = content.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      try {
+        return JSON.parse(arrayMatch[0]);
+      } catch {
+        // fall through
+      }
+    }
     return { error: "Failed to parse JSON response", raw: content };
   }
 };

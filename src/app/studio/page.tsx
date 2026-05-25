@@ -21,13 +21,13 @@ const AUTO = "auto" as const;
 
 const modelOptions = [
   AUTO,  // 🤖 Auto — best model per pipeline step
-  // ── Qwen3 (DashScope / Alibaba Cloud) ──
-  "qwen3-235b-a22b-instruct-2507",  // 🏆 Best for creative writing
-  "qwen3-235b-a22b-thinking-2507",   // 🧠 Complex narrative planning
-  "qwen3-235b-a22b",                  // 📖 Base model
-  "qwen3-14b",                        // ⚡ Efficient & affordable
-  "qwen3-30b-a3b",                    // ⚖️ Balanced MoE
-  "qwen3-32b",                        // 💪 Dense 32B
+  // ── Qwen3 (OpenRouter) ──
+  "qwen/qwen3-235b-a22b-instruct-2507",  // 🏆 Best for creative writing
+  "qwen/qwen3-235b-a22b-thinking-2507",   // 🧠 Complex narrative planning
+  "qwen/qwen3-235b-a22b",                  // 📖 Base model
+  "qwen/qwen3-14b",                        // ⚡ Efficient & affordable
+  "qwen/qwen3-30b-a3b",                    // ⚖️ Balanced MoE
+  "qwen/qwen3-32b",                        // 💪 Dense 32B
   // ── OpenAI ──
   "gpt-4.1-mini",
   "gpt-4.1",
@@ -3128,8 +3128,8 @@ function StudioContent() {
                   <option key={option} value={option}>
                     {option === "auto"
                       ? "🤖 Auto — best model per step"
-                      : option.startsWith("qwen3-")
-                        ? `✨ ${option} (Qwen3/DashScope)`
+                      : option.startsWith("qwen/")
+                        ? `✨ ${option} (Qwen3/OpenRouter)`
                         : option}
                   </option>
                 ))}

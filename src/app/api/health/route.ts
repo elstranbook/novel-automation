@@ -1,25 +1,27 @@
 import { NextResponse } from "next/server";
-import { isDashScopeConfigured } from "@/lib/dashscopeClient";
+import { isOpenRouterConfigured } from "@/lib/dashscopeClient";
 
 export async function GET() {
-  const dashscopeKey = process.env.DASHSCOPE_API_KEY;
+  const openrouterKey = process.env.OPENROUTER_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
-  const dashscopeBaseUrl = process.env.DASHSCOPE_BASE_URL ?? "https://dashscope-intl.aliyuncs.com/compatible-mode/v1";
+  const dashscopeKey = process.env.DASHSCOPE_API_KEY;
 
   return NextResponse.json({
     status: "ok",
     config: {
-      DASHSCOPE_API_KEY: dashscopeKey
-        ? `✅ Set (${dashscopeKey.slice(0, 8)}...)`
-        : "❌ NOT SET — Add DASHSCOPE_API_KEY in Vercel → Settings → Environment Variables",
-      DASHSCOPE_BASE_URL: dashscopeBaseUrl,
+      OPENROUTER_API_KEY: openrouterKey
+        ? `✅ Set (${openrouterKey.slice(0, 8)}...)`
+        : "❌ NOT SET — Add OPENROUTER_API_KEY in Vercel → Settings → Environment Variables",
       OPENAI_API_KEY: openaiKey
         ? `✅ Set (${openaiKey.slice(0, 8)}...)`
-        : "⚠️ Not set (optional — Qwen3 models use DashScope)",
-      isDashScopeConfigured: isDashScopeConfigured(),
+        : "⚠️ Not set (optional — Qwen3 models use OpenRouter)",
+      DASHSCOPE_API_KEY: dashscopeKey
+        ? `⚠️ Set but not used anymore (switched to OpenRouter)`
+        : "Not set (OK — using OpenRouter instead)",
+      isOpenRouterConfigured: isOpenRouterConfigured(),
     },
-    help: !dashscopeKey
-      ? "Get your DashScope API key from https://dashscope.console.aliyun.com/ then add it to Vercel environment variables."
+    help: !openrouterKey
+      ? "Get your OpenRouter API key from https://openrouter.ai/keys then add it to Vercel environment variables."
       : undefined,
   });
 }

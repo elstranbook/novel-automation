@@ -1,28 +1,28 @@
 import { NextResponse } from "next/server";
-import { dashscopeClient, isDashScopeConfigured, QWEN3_MODELS } from "@/lib/dashscopeClient";
+import { dashscopeClient, isOpenRouterConfigured, QWEN3_MODELS } from "@/lib/dashscopeClient";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/test-dashscope
- * Diagnostic endpoint — tests DashScope API connectivity and model availability.
+ * Diagnostic endpoint — tests OpenRouter API connectivity and model availability.
  * Visit in browser to see exactly which models work and what errors occur.
  */
 export async function GET() {
-  if (!isDashScopeConfigured()) {
+  if (!isOpenRouterConfigured()) {
     return NextResponse.json({
-      error: "DASHSCOPE_API_KEY is not set",
-      help: "Add it in Vercel → Settings → Environment Variables",
+      error: "OPENROUTER_API_KEY is not set",
+      help: "Get your key from https://openrouter.ai/keys and add it in Vercel → Settings → Environment Variables",
     });
   }
 
   const modelsToTest = [
-    { id: QWEN3_MODELS.QWEN3_235B_INSTRUCT, label: "Prose (instruct)" },
-    { id: QWEN3_MODELS.QWEN3_235B_THINKING, label: "Planning (thinking)" },
+    { id: QWEN3_MODELS.QWEN3_235B_INSTRUCT, label: "Prose (instruct-2507)" },
+    { id: QWEN3_MODELS.QWEN3_235B_THINKING, label: "Planning (thinking-2507)" },
     { id: QWEN3_MODELS.QWEN3_14B, label: "Marketing (14b)" },
-    { id: "qwen3-235b-a22b-instruct", label: "Alt: instruct (no suffix)" },
-    { id: "qwen3-235b-a22b", label: "Alt: base" },
-    { id: "qwen-plus", label: "Alt: qwen-plus alias" },
+    { id: QWEN3_MODELS.QWEN3_235B_BASE, label: "Base" },
+    { id: QWEN3_MODELS.QWEN3_32B, label: "Dense 32B" },
+    { id: QWEN3_MODELS.QWEN3_30B_A3B, label: "MoE 30B" },
   ];
 
   const results: Record<string, unknown> = {};
@@ -59,7 +59,8 @@ export async function GET() {
   }
 
   return NextResponse.json({
-    endpoint: process.env.DASHSCOPE_BASE_URL ?? "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    provider: "OpenRouter",
+    endpoint: "https://openrouter.ai/api/v1",
     results,
   }, { status: 200 });
 }
