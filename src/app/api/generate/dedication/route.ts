@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
 export async function POST(request: Request) {
   try {
     const {

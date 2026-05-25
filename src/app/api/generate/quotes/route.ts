@@ -3,6 +3,9 @@ import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
 const logGeneration = async (payload: {
   step: string;
   attempt: number;

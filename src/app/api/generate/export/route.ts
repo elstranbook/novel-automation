@@ -16,6 +16,9 @@ import {
 } from 'docx';
 import JSZip from 'jszip';
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------

@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
 const createDefaultChapterEntry = () => ({
   key_dialogue: [
     "This is where a revealing line of dialogue would appear.",
@@ -233,20 +236,23 @@ IMPORTANT INSTRUCTIONS:
 Your response will be parsed directly as JSON and any formatting errors will cause failure.`;
 
     const baseModel = resolveModel(model, PipelineStep.CHAPTER_GUIDE);
-    const maxRetries = 5;
-    let retryDelay = 3000;
+    const maxRetries = 3;
+    let retryDelay = 2000;
     let guide: Record<string, Record<string, unknown>> | null = null;
 
     for (let attempt = 0; attempt < maxRetries; attempt += 1) {
+      // Primary attempt: full prompt with JSON mode
       const response = await runChatCompletion({
         model: baseModel,
         system,
         prompt,
         jsonResponse: true,
-        maxTokens: 3000,
+        maxTokens: 4000,
       });
 
       guide = parseGuideResponse(response);
+
+      // Fallback: shortened prompt + raw text mode if JSON mode failed
       if (!guide) {
         const shortenedPrompt = prompt.replace(
           /Novel Context:[\s\S]*?Chapter Outline:/,
@@ -256,25 +262,10 @@ Your response will be parsed directly as JSON and any formatting errors will cau
           model: baseModel,
           system,
           prompt: shortenedPrompt,
-          jsonResponse: true,
-          maxTokens: 3000,
+          jsonResponse: false,
+          maxTokens: 4000,
         });
         guide = parseGuideResponse(retryResponse);
-      }
-
-      if (!guide) {
-        const shortenedPrompt = prompt.replace(
-          /Novel Context:[\s\S]*?Chapter Outline:/,
-          "Novel Context: Young adult novel with character development and emotional journey.\n\nChapter Outline:"
-        );
-        const rawResponse = await runChatCompletion({
-          model: baseModel,
-          system,
-          prompt: shortenedPrompt,
-          jsonResponse: false,
-          maxTokens: 3000,
-        });
-        guide = parseGuideResponse(rawResponse);
       }
 
       if (guide && Object.keys(guide).length > 0) {

@@ -3,6 +3,9 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
 type SeriesMapRequest = {
   seriesId: string;
   title: string;

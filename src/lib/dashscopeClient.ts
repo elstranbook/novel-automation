@@ -42,6 +42,7 @@ export const isDashScopeModel = (model: string): boolean =>
 export const dashscopeClient = new OpenAI({
   apiKey: OPENROUTER_API_KEY,
   baseURL: OPENROUTER_BASE_URL,
+  timeout: 120_000, // 2 minute timeout per request
   defaultHeaders: {
     "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "https://write.elstranbooks.com",
     "X-Title": "Novel Automation",

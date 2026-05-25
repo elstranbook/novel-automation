@@ -3,6 +3,9 @@ import { runChatCompletion } from "@/lib/openaiClient";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
 type Beat = {
   beat_number?: number;
   action?: string;

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
 const buildStructuredNovel = (scenes: Record<string, string[]>, title?: string) => {
   const chapters = Object.entries(scenes).map(([chapterTitle, chapterScenes]) => {
     const [numberPart, ...titleParts] = chapterTitle.split(":");

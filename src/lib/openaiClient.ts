@@ -3,6 +3,7 @@ import { isDashScopeModel, runDashScopeCompletion } from "./dashscopeClient";
 
 export const openaiClient = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  timeout: 120_000, // 2 minute timeout per request
 });
 
 export const runChatCompletion = async ({

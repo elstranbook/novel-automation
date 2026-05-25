@@ -1315,6 +1315,7 @@ function StudioContent() {
   const loadSeriesContext = async (seriesIdValue: string, bookNumber: number) => {
     const response = await fetch("/api/generate/series/context", {
       method: "POST",
+      signal: AbortSignal.timeout(240000),
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ seriesId: seriesIdValue, bookNumber }),
     });
@@ -1425,6 +1426,7 @@ function StudioContent() {
       const user = await requireUser();
       const response = await fetch("/api/generate/story-details", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, novelAbout, model, seriesContext }),
       });
@@ -1463,6 +1465,7 @@ function StudioContent() {
       const novelIdValue = await ensureNovel(user.id);
       const response = await fetch("/api/generate/premises-endings", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ storyDetails, model }),
       });
@@ -1495,6 +1498,7 @@ function StudioContent() {
       const novelIdValue = await ensureNovel(user.id);
       const response = await fetch("/api/generate/synopsis", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           storyDetails,
@@ -1535,6 +1539,7 @@ function StudioContent() {
       const novelIdValue = await ensureNovel(user.id);
       const response = await fetch("/api/generate/character-profiles", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ storyDetails, synopsis: novelSynopsis, model }),
       });
@@ -1563,6 +1568,7 @@ function StudioContent() {
 
       const response = await fetch("/api/generate/book-description", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ storyDetails, model, mode: "all" }),
       });
@@ -1633,6 +1639,7 @@ function StudioContent() {
       const novelIdValue = await ensureNovel(user.id);
       const response = await fetch("/api/generate/keywords", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ storyDetails, model, synopsis: novelSynopsis }),
       });
@@ -1661,6 +1668,7 @@ function StudioContent() {
       const novelIdValue = await ensureNovel(user.id);
       const response = await fetch("/api/generate/bisac", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ storyDetails, model, synopsis: novelSynopsis }),
       });
@@ -1689,6 +1697,7 @@ function StudioContent() {
       const novelIdValue = await ensureNovel(user.id);
       const response = await fetch("/api/generate/novel-plan", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           storyDetails,
@@ -1720,6 +1729,7 @@ function StudioContent() {
       const novelIdValue = await ensureNovel(user.id);
       const response = await fetch("/api/generate/chapter-outline", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ storyDetails, model, novelPlan }),
       });
@@ -1747,6 +1757,7 @@ function StudioContent() {
       const novelIdValue = await ensureNovel(user.id);
       const response = await fetch("/api/generate/chapter-guide", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chapterOutline,
@@ -1781,6 +1792,7 @@ function StudioContent() {
       const novelIdValue = await ensureNovel(user.id);
       const response = await fetch("/api/generate/chapter-beats", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chapterOutline,
@@ -1934,6 +1946,7 @@ function StudioContent() {
 
           const response = await fetch("/api/generate/prose/chapter", {
             method: "POST",
+            signal: AbortSignal.timeout(240000),
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               scene,
@@ -2007,6 +2020,7 @@ function StudioContent() {
       const novelIdValue = await ensureNovel(user.id);
       const response = await fetch("/api/generate/cover-prompt", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ storyDetails, model, studioTitle: title }),
       });
@@ -2120,6 +2134,7 @@ function StudioContent() {
 
       const response = await fetch("/api/generate/quotes", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           storyDetails,
@@ -2152,6 +2167,7 @@ function StudioContent() {
       const novelIdValue = await ensureNovel(user.id);
       const response = await fetch("/api/generate/dedication", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           storyDetails,
@@ -2191,6 +2207,7 @@ function StudioContent() {
       const novelIdValue = await ensureNovel(user.id);
       const response = await fetch("/api/generate/promotional-article", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           storyDetails,
@@ -2247,6 +2264,7 @@ function StudioContent() {
       const novelIdValue = await ensureNovel(user.id);
       const response = await fetch("/api/generate/social-snippets", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           storyDetails,
@@ -2303,6 +2321,7 @@ function StudioContent() {
     try {
       const response = await fetch("/api/generate/cover-reimagine", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: coverPrompt }),
       });
@@ -2329,6 +2348,7 @@ function StudioContent() {
     try {
       const response = await fetch("/api/generate/cover-image", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           prompt: promptToUse, 
@@ -2367,6 +2387,7 @@ function StudioContent() {
     try {
       const response = await fetch("/api/generate/facebook-image", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: promptToUse,
@@ -2399,6 +2420,7 @@ function StudioContent() {
     try {
       const response = await fetch("/api/generate/instagram-image", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: promptToUse,
@@ -2672,6 +2694,7 @@ function StudioContent() {
       const chapters = proseScenesToChapters(proseScenes);
       const response = await fetch(`/api/generate/export?format=${format}`, {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bookTitle: title || "Untitled Novel",
@@ -2780,6 +2803,7 @@ function StudioContent() {
       const novelIdValue = await ensureNovel(user.id);
       const response = await fetch("/api/generate/editing-suggestions", {
         method: "POST",
+        signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: editingText,

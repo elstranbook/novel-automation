@@ -3,6 +3,9 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
 /**
  * Ensure the novel-covers storage bucket exists. Creates it if missing.
  * Returns true if the bucket is ready, false otherwise.
