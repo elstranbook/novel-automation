@@ -2914,10 +2914,10 @@ function StudioContent() {
               <Menu className="h-5 w-5 text-zinc-300" />
             </button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-[280px] bg-zinc-900 border-zinc-800 p-4">
+          <SheetContent side="left" className="w-[280px] bg-zinc-900 border-zinc-800 p-4 overflow-hidden">
             <SheetTitle className="sr-only">Navigation</SheetTitle>
             <SheetDescription className="sr-only">Novel sidebar navigation</SheetDescription>
-            <div className="flex flex-col gap-4 mt-8">
+            <div className="flex flex-col gap-4 mt-8 overflow-y-auto flex-1 min-h-0">
               {sidebarContent}
             </div>
           </SheetContent>
