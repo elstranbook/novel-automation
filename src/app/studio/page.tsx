@@ -14,8 +14,10 @@ import { PSDUploadDialog } from "@/components/editor/PSDUploadDialog";
 import { useMockupState } from "@/hooks/useMockupState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Menu, Plus } from "lucide-react";
+import { ArrowLeft, ClipboardPaste, Menu, Plus } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import type { Template, Category, TemplatesResponse } from "@/types";
 
 const AUTO = "auto" as const;
@@ -394,6 +396,8 @@ function StudioContent() {
   const [seriesContext, setSeriesContext] = useState<Record<string, unknown> | null>(null);
 
   const [storyDetails, setStoryDetails] = useState<StoryDetails | null>(null);
+  const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
+  const [pasteStoryText, setPasteStoryText] = useState("");
   const [premisesAndEndings, setPremisesAndEndings] =
     useState<PremisesAndEndings | null>(null);
 
@@ -1456,6 +1460,52 @@ function StudioContent() {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setLoadingStep(null);
+    }
+  };
+
+  const savePastedStoryDetails = async () => {
+    setError(null);
+    try {
+      const trimmed = pasteStoryText.trim();
+      if (!trimmed) return;
+
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch {
+        setError("Invalid JSON. Please paste valid story details JSON.");
+        return;
+      }
+
+      // Ensure the parsed object looks like story details
+      if (typeof parsed !== "object" || Array.isArray(parsed)) {
+        setError("Story details must be a JSON object, not an array.");
+        return;
+      }
+
+      const user = await requireUser();
+      const novelIdValue = await ensureNovel(user.id);
+
+      setStoryDetails(parsed);
+      const aboutValue =
+        parsed && typeof parsed.novel_about === "string"
+          ? parsed.novel_about
+          : "";
+      setNovelAbout(aboutValue);
+      if (typeof parsed.title === "string" && parsed.title.trim()) {
+        setTitle(parsed.title as string);
+      }
+
+      await supabase
+        .from("novels")
+        .update({ story_details: parsed })
+        .eq("id", novelIdValue);
+
+      await loadNovels(user.id);
+      setPasteDialogOpen(false);
+      setPasteStoryText("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save story details");
     }
   };
 
@@ -3244,7 +3294,7 @@ function StudioContent() {
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <SectionHeading title="1. Story details" step="Story details" />
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
             <button
               onClick={generateStoryDetails}
               disabled={!title || loadingStep === "story"}
@@ -3264,6 +3314,50 @@ function StudioContent() {
             >
               Regenerate story details
             </button>
+            <Dialog open={pasteDialogOpen} onOpenChange={setPasteDialogOpen}>
+              <DialogTrigger asChild>
+                <button
+                  onClick={() => {
+                    setPasteStoryText(storyDetails ? JSON.stringify(storyDetails, null, 2) : "");
+                    setPasteDialogOpen(true);
+                  }}
+                  className="inline-flex items-center gap-2 rounded-full border border-zinc-700 px-5 py-2 text-sm hover:border-zinc-500 transition-colors"
+                >
+                  <ClipboardPaste className="h-4 w-4" />
+                  Paste Story Details
+                </button>
+              </DialogTrigger>
+              <DialogContent className="bg-zinc-900 border-zinc-800 max-w-lg">
+                <DialogHeader>
+                  <DialogTitle className="text-zinc-100">Paste Story Details</DialogTitle>
+                  <DialogDescription className="text-zinc-400">
+                    Paste your story details as a JSON object. This will be saved to the database and unlock all downstream generation steps.
+                  </DialogDescription>
+                </DialogHeader>
+                <Textarea
+                  value={pasteStoryText}
+                  onChange={(e) => setPasteStoryText(e.target.value)}
+                  placeholder='{"title": "My Novel", "genre": "Young Adult Fiction", "story_theme": "...", ...}'
+                  className="min-h-[240px] bg-zinc-950 border-zinc-700 text-zinc-200 text-xs font-mono focus:border-zinc-500 focus:ring-zinc-500"
+                />
+                <div className="flex justify-end gap-3 mt-2">
+                  <Button
+                    variant="ghost"
+                    onClick={() => setPasteDialogOpen(false)}
+                    className="text-zinc-400 hover:text-zinc-200"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={savePastedStoryDetails}
+                    disabled={!pasteStoryText.trim()}
+                    className="bg-white text-zinc-900 hover:bg-zinc-200"
+                  >
+                    Save Story Details
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
           {storyDetails && (
             <div className="mt-4 space-y-3">
