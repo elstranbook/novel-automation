@@ -3226,7 +3226,7 @@ function StudioContent() {
               <button
               onClick={generateStoryDetails}
               disabled={!title || !novelAbout || loadingStep === "story"}
-              className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-zinc-900 disabled:opacity-50"
+              className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loadingStep === "story"
                 ? "Generating..."
@@ -3248,7 +3248,7 @@ function StudioContent() {
             <button
               onClick={generateStoryDetails}
               disabled={!title || loadingStep === "story"}
-              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loadingStep === "story"
                 ? "Generating..."
@@ -3294,7 +3294,7 @@ function StudioContent() {
             <button
               onClick={generatePremises}
               disabled={!storyDetails || !storyDetails?.novel_about || loadingStep === "premises"}
-              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loadingStep === "premises"
                 ? "Generating..."
@@ -3433,7 +3433,7 @@ function StudioContent() {
           <button
             onClick={generateSynopsis}
             disabled={!premisesAndEndings || !storyDetails?.novel_about || loadingStep === "synopsis"}
-            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loadingStep === "synopsis" ? "Generating..." : "Generate Synopsis"}
           </button>
@@ -3464,7 +3464,7 @@ function StudioContent() {
           <button
             onClick={generateProfiles}
             disabled={!novelSynopsis || !storyDetails?.novel_about || loadingStep === "profiles"}
-            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loadingStep === "profiles"
               ? "Generating..."
@@ -3497,7 +3497,7 @@ function StudioContent() {
           <button
             onClick={generateBookDescriptions}
             disabled={!storyDetails || !storyDetails?.novel_about || loadingStep === "descriptions"}
-            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loadingStep === "descriptions"
               ? "Generating..."
@@ -3538,7 +3538,7 @@ function StudioContent() {
             <button
               onClick={generateKeywords}
               disabled={!storyDetails || !storyDetails?.novel_about || loadingStep === "keywords"}
-              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loadingStep === "keywords" ? "Generating..." : "Generate Keywords"}
             </button>
@@ -3584,7 +3584,7 @@ function StudioContent() {
             <button
               onClick={generateBisac}
               disabled={!storyDetails || !storyDetails?.novel_about || loadingStep === "bisac"}
-              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loadingStep === "bisac" ? "Generating..." : "Generate BISAC"}
             </button>
@@ -3625,7 +3625,7 @@ function StudioContent() {
           <button
             onClick={generateNovelPlan}
             disabled={!characterProfiles || !storyDetails?.novel_about || loadingStep === "plan"}
-            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loadingStep === "plan" ? "Generating..." : "Generate Novel Plan"}
           </button>
@@ -3654,7 +3654,7 @@ function StudioContent() {
             <button
               onClick={generateChapterOutline}
               disabled={!novelPlan || !storyDetails?.novel_about || loadingStep === "outline"}
-              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loadingStep === "outline"
                 ? "Generating..."
@@ -3696,7 +3696,7 @@ function StudioContent() {
             <button
               onClick={generateChapterGuide}
               disabled={!chapterOutline || !storyDetails?.novel_about || loadingStep === "guide"}
-              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loadingStep === "guide" ? "Generating..." : "Generate Chapter Guide"}
             </button>
@@ -3736,7 +3736,7 @@ function StudioContent() {
             <button
               onClick={generateChapterBeats}
               disabled={!chapterGuide || !storyDetails?.novel_about || loadingStep === "beats"}
-              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loadingStep === "beats" ? "Generating..." : "Generate Chapter Beats"}
             </button>
@@ -3788,7 +3788,7 @@ function StudioContent() {
             <button
               onClick={generateScenes}
               disabled={!chapterBeats || !storyDetails?.novel_about || loadingStep === "scenes"}
-              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loadingStep === "scenes" ? "Generating..." : "Generate Scenes"}
             </button>
@@ -3842,7 +3842,7 @@ function StudioContent() {
             <button
               onClick={generateProse}
               disabled={!allScenes || !storyDetails?.novel_about || loadingStep === "prose"}
-              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loadingStep === "prose" ? "Generating..." : "Generate Prose"}
             </button>
@@ -3923,7 +3923,7 @@ function StudioContent() {
             <button
               onClick={generateDedication}
               disabled={!storyDetails || !novelSynopsis || loadingStep === "dedication"}
-              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 disabled:opacity-50"
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loadingStep === "dedication" ? "Generating..." : "Generate Dedication"}
             </button>
@@ -3979,7 +3979,7 @@ function StudioContent() {
             <button
               onClick={() => downloadExport("docx")}
               disabled={!proseScenes || savingExport === "docx"}
-              className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-zinc-900 disabled:opacity-50"
+              className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {savingExport === "docx" ? "Generating..." : "Generate Word"}
             </button>
@@ -3992,7 +3992,7 @@ function StudioContent() {
                 {novelFormats["export_docx"] && (
                   <button
                     onClick={() => downloadSavedExport("docx")}
-                    className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-zinc-900 disabled:opacity-50"
+                    className="rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Download Novel
                   </button>
@@ -4008,7 +4008,7 @@ function StudioContent() {
             <button
               onClick={generateCoverPrompt}
               disabled={!storyDetails || loadingStep === "cover"}
-              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loadingStep === "cover" ? "Generating..." : "Generate Cover Prompt"}
             </button>
@@ -4045,7 +4045,7 @@ function StudioContent() {
             <button
               onClick={generateQuotes}
               disabled={!storyDetails || loadingStep === "quotes"}
-              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loadingStep === "quotes" ? "Generating..." : "Generate Quotes"}
             </button>
@@ -4092,7 +4092,7 @@ function StudioContent() {
           <button
             onClick={generateEditingSuggestions}
             disabled={!editingText || loadingStep === "editing"}
-            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loadingStep === "editing" ? "Generating..." : "Get Editing Notes"}
           </button>
@@ -4170,7 +4170,7 @@ function StudioContent() {
         <button
           onClick={() => generateSocialSnippets()}
           disabled={!storyDetails || loadingStep === "social"}
-          className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+          className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loadingStep === "social" ? "Generating..." : "Generate Snippets"}
         </button>
@@ -4506,7 +4506,7 @@ function StudioContent() {
               })
             }
             disabled={!storyDetails || loadingStep === "promo"}
-            className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900"
+            className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loadingStep === "promo" ? "Generating..." : "Generate Article"}
           </button>
