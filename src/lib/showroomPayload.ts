@@ -78,6 +78,7 @@ export type ShowroomPayload = {
       ctaType: string | null;
       title: string | null;
       content: string | null;
+      contentFormat: "html" | "text";
     }>;
     socialSnippets: string | null;
   };
@@ -216,17 +217,23 @@ export async function buildShowroomPayload(
     (c) => c.url && String(c.model || "").startsWith("instagram-")
   );
 
-  // Build promotional articles
+  // Build promotional articles — detect format (HTML vs plain text)
   const promotionalArticles: ShowroomPayload["publish"]["promotionalArticles"] = (
     articlesResult.data ?? []
-  ).map((row) => ({
-    articleType: row.article_type,
-    lengthType: row.length_type,
-    tone: row.tone,
-    ctaType: row.cta_type,
-    title: row.title,
-    content: row.content,
-  }));
+  ).map((row) => {
+    const isHtml = row.content
+      ? /<[a-z][\s\S]*>/i.test(row.content)
+      : false;
+    return {
+      articleType: row.article_type,
+      lengthType: row.length_type,
+      tone: row.tone,
+      ctaType: row.cta_type,
+      title: row.title,
+      content: row.content,
+      contentFormat: isHtml ? "html" : "text",
+    };
+  });
 
   // Extract key descriptions for easy access
   const descData = descriptionsResult.data ?? [];
