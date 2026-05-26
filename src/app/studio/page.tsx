@@ -4892,21 +4892,33 @@ function StudioContent() {
                       </p>
                       <p className="text-xs text-zinc-400">{label}</p>
                     </div>
-                    <button
-                      onClick={() =>
-                        downloadText(
-                          `${title || "story"}_promo_${articleType}.txt`,
-                          `# ${articleTitle}\n\n${content}`
-                        )
-                      }
-                      className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
-                    >
-                      Download
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(content);
+                        }}
+                        className="rounded-full border border-zinc-700 px-3 py-2 text-xs hover:border-zinc-500 transition-colors"
+                      >
+                        Copy HTML
+                      </button>
+                      <button
+                        onClick={() =>
+                          downloadText(
+                            `${title || "story"}_promo_${articleType}.html`,
+                            content
+                          )
+                        }
+                        className="rounded-full border border-zinc-700 px-3 py-2 text-xs hover:border-zinc-500 transition-colors"
+                      >
+                        Download
+                      </button>
+                    </div>
                   </div>
-                  <pre className="mt-3 whitespace-pre-wrap text-xs">
-                    {content}
-                  </pre>
+                  {/* Rendered HTML preview */}
+                  <div
+                    className="mt-3 prose prose-invert prose-sm max-w-none text-zinc-200 prose-headings:text-zinc-100 prose-a:text-emerald-400 prose-blockquote:border-emerald-500/50 prose-blockquote:text-zinc-300 prose-strong:text-zinc-100 prose-li:text-zinc-300"
+                    dangerouslySetInnerHTML={{ __html: content }}
+                  />
                 </div>
               );
             })}
@@ -5750,10 +5762,10 @@ function StudioContent() {
             const articleTitle = blogArticleEdits[articleIndex]?.title ?? String(article.title ?? "Untitled Article");
             const articleSlug = articleTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
             const articleContent = String(article.content ?? "");
-            const articleExcerpt = blogArticleEdits[articleIndex]?.excerpt ?? articleContent.split("\n").filter((line: string) => line.trim().length > 0).slice(0, 3).join(" ").substring(0, 300);
+            const articleExcerpt = blogArticleEdits[articleIndex]?.excerpt ?? articleContent.replace(/<[^>]*>/g, "").split(/\s+/).slice(0, 50).join(" ").substring(0, 300);
             const articleCategory = blogArticleEdits[articleIndex]?.category ?? String(article.article_type ?? "Fiction");
             const articleTags = blogArticleEdits[articleIndex]?.tags ?? (novelKeywords ? novelKeywords.join(", ") : "");
-            const articleHtml = articleContent.split("\n\n").map((p: string) => `<p>${p.replace(/\n+/g, "</p><p>")}</p>`).join("\n");
+            const articleHtml = articleContent;
 
             return (
               <div key={`article-${articleIndex}`} className="rounded-xl border border-zinc-700/60 bg-zinc-950/40 p-5">

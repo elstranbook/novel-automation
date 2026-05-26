@@ -297,7 +297,21 @@ Format your response as follows:
 TITLE: [Your article title here]
 
 ARTICLE:
-[Your full article content here]
+[Your full article content in well-structured HTML]
+
+**HTML FORMATTING RULES:**
+- Wrap the entire article in an <article> tag
+- Use <h2> for the article title/heading
+- Use <h3> for section subheadings
+- Use <p> for paragraphs
+- Use <blockquote> for pull quotes or highlighted passages
+- Use <strong> and <em> for emphasis
+- Use <ul> and <li> for bulleted lists
+- Use <ol> and <li> for numbered lists (e.g., "5 reasons to read...")
+- Use <a href="[BOOK_LINK]"> for any links (use [BOOK_LINK] as placeholder)
+- Add class="cta-button" to a <p> or <div> wrapping the call-to-action
+- Do NOT include <html>, <head>, <body>, or <style> tags
+- Do NOT include the TITLE: line inside the HTML — it goes on its own line above ARTICLE:
 
 Make the tone emotionally engaging, fast-paced, and tailored to teen readers.
 Use hooks, curiosity, and relatable language. Avoid generic phrasing.
