@@ -396,8 +396,22 @@ function StudioContent() {
   const [seriesContext, setSeriesContext] = useState<Record<string, unknown> | null>(null);
 
   const [storyDetails, setStoryDetails] = useState<StoryDetails | null>(null);
-  const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
-  const [pasteStoryText, setPasteStoryText] = useState("");
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [detailsDialogTab, setDetailsDialogTab] = useState<"form" | "describe">("form");
+  const [detailsFreeText, setDetailsFreeText] = useState("");
+  const [detailsConverting, setDetailsConverting] = useState(false);
+  const [detailsForm, setDetailsForm] = useState<Record<string, string>>({
+    title: "",
+    genre: "",
+    story_theme: "",
+    main_character_name: "",
+    central_conflict: "",
+    setting: "",
+    plot_summary: "",
+    target_age_range: "",
+    narrative_style: "",
+    novel_about: "",
+  });
   const [premisesAndEndings, setPremisesAndEndings] =
     useState<PremisesAndEndings | null>(null);
 
@@ -1463,49 +1477,74 @@ function StudioContent() {
     }
   };
 
-  const savePastedStoryDetails = async () => {
+  const saveStoryDetailsToDb = async (parsed: Record<string, unknown>) => {
+    const user = await requireUser();
+    const novelIdValue = await ensureNovel(user.id);
+
+    setStoryDetails(parsed);
+    const aboutValue =
+      parsed && typeof parsed.novel_about === "string"
+        ? parsed.novel_about
+        : "";
+    setNovelAbout(aboutValue);
+    if (typeof parsed.title === "string" && parsed.title.trim()) {
+      setTitle(parsed.title as string);
+    }
+
+    await supabase
+      .from("novels")
+      .update({ story_details: parsed })
+      .eq("id", novelIdValue);
+
+    await loadNovels(user.id);
+    setDetailsDialogOpen(false);
+  };
+
+  const saveFormStoryDetails = async () => {
     setError(null);
     try {
-      const trimmed = pasteStoryText.trim();
-      if (!trimmed) return;
-
-      let parsed: Record<string, unknown>;
-      try {
-        parsed = JSON.parse(trimmed);
-      } catch {
-        setError("Invalid JSON. Please paste valid story details JSON.");
+      const details: Record<string, unknown> = {};
+      // Only include fields that have values
+      for (const [key, value] of Object.entries(detailsForm)) {
+        if (value.trim()) {
+          details[key] = value.trim();
+        }
+      }
+      if (Object.keys(details).length === 0) {
+        setError("Please fill in at least one field.");
         return;
       }
-
-      // Ensure the parsed object looks like story details
-      if (typeof parsed !== "object" || Array.isArray(parsed)) {
-        setError("Story details must be a JSON object, not an array.");
-        return;
-      }
-
-      const user = await requireUser();
-      const novelIdValue = await ensureNovel(user.id);
-
-      setStoryDetails(parsed);
-      const aboutValue =
-        parsed && typeof parsed.novel_about === "string"
-          ? parsed.novel_about
-          : "";
-      setNovelAbout(aboutValue);
-      if (typeof parsed.title === "string" && parsed.title.trim()) {
-        setTitle(parsed.title as string);
-      }
-
-      await supabase
-        .from("novels")
-        .update({ story_details: parsed })
-        .eq("id", novelIdValue);
-
-      await loadNovels(user.id);
-      setPasteDialogOpen(false);
-      setPasteStoryText("");
+      await saveStoryDetailsToDb(details);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save story details");
+    }
+  };
+
+  const convertFreeTextToDetails = async () => {
+    setError(null);
+    setDetailsConverting(true);
+    try {
+      const trimmed = detailsFreeText.trim();
+      if (!trimmed) return;
+
+      const response = await fetch("/api/generate/story-details/convert", {
+        method: "POST",
+        signal: AbortSignal.timeout(240000),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: trimmed, model }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => null);
+        throw new Error(err?.error || "Failed to convert description");
+      }
+
+      const data = await response.json();
+      await saveStoryDetailsToDb(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to convert description");
+    } finally {
+      setDetailsConverting(false);
     }
   };
 
@@ -3314,48 +3353,231 @@ function StudioContent() {
             >
               Regenerate story details
             </button>
-            <Dialog open={pasteDialogOpen} onOpenChange={setPasteDialogOpen}>
+            <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
               <DialogTrigger asChild>
                 <button
                   onClick={() => {
-                    setPasteStoryText(storyDetails ? JSON.stringify(storyDetails, null, 2) : "");
-                    setPasteDialogOpen(true);
+                    // Pre-fill form from existing storyDetails if present
+                    if (storyDetails) {
+                      const form: Record<string, string> = {
+                        title: String(storyDetails.title ?? ""),
+                        genre: String(storyDetails.genre ?? ""),
+                        story_theme: String(storyDetails.story_theme ?? ""),
+                        main_character_name: String(storyDetails.main_character_name ?? ""),
+                        central_conflict: String(storyDetails.central_conflict ?? ""),
+                        setting: String(storyDetails.setting ?? ""),
+                        plot_summary: String(storyDetails.plot_summary ?? ""),
+                        target_age_range: String(storyDetails.target_age_range ?? ""),
+                        narrative_style: String(storyDetails.narrative_style ?? ""),
+                        novel_about: String(storyDetails.novel_about ?? ""),
+                      };
+                      setDetailsForm(form);
+                      setDetailsFreeText("");
+                    } else {
+                      setDetailsForm({
+                        title: title || "",
+                        genre: "",
+                        story_theme: "",
+                        main_character_name: "",
+                        central_conflict: "",
+                        setting: "",
+                        plot_summary: "",
+                        target_age_range: "",
+                        narrative_style: "",
+                        novel_about: novelAbout || "",
+                      });
+                      setDetailsFreeText("");
+                    }
+                    setDetailsDialogTab("form");
+                    setDetailsDialogOpen(true);
                   }}
                   className="inline-flex items-center gap-2 rounded-full border border-zinc-700 px-5 py-2 text-sm hover:border-zinc-500 transition-colors"
                 >
                   <ClipboardPaste className="h-4 w-4" />
-                  Paste Story Details
+                  Enter Story Details
                 </button>
               </DialogTrigger>
-              <DialogContent className="bg-zinc-900 border-zinc-800 max-w-lg">
+              <DialogContent className="bg-zinc-900 border-zinc-800 max-w-xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle className="text-zinc-100">Paste Story Details</DialogTitle>
+                  <DialogTitle className="text-zinc-100">Enter Story Details</DialogTitle>
                   <DialogDescription className="text-zinc-400">
-                    Paste your story details as a JSON object. This will be saved to the database and unlock all downstream generation steps.
+                    Fill in the details you know, or describe your book in plain text and let AI create the details.
                   </DialogDescription>
                 </DialogHeader>
-                <Textarea
-                  value={pasteStoryText}
-                  onChange={(e) => setPasteStoryText(e.target.value)}
-                  placeholder='{"title": "My Novel", "genre": "Young Adult Fiction", "story_theme": "...", ...}'
-                  className="min-h-[240px] bg-zinc-950 border-zinc-700 text-zinc-200 text-xs font-mono focus:border-zinc-500 focus:ring-zinc-500"
-                />
-                <div className="flex justify-end gap-3 mt-2">
-                  <Button
-                    variant="ghost"
-                    onClick={() => setPasteDialogOpen(false)}
-                    className="text-zinc-400 hover:text-zinc-200"
+                {/* Tab switcher */}
+                <div className="flex gap-2 border-b border-zinc-800 pb-2">
+                  <button
+                    onClick={() => setDetailsDialogTab("form")}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                      detailsDialogTab === "form"
+                        ? "bg-zinc-800 text-white"
+                        : "text-zinc-500 hover:text-zinc-300"
+                    }`}
                   >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={savePastedStoryDetails}
-                    disabled={!pasteStoryText.trim()}
-                    className="bg-white text-zinc-900 hover:bg-zinc-200"
+                    Fill in Fields
+                  </button>
+                  <button
+                    onClick={() => setDetailsDialogTab("describe")}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                      detailsDialogTab === "describe"
+                        ? "bg-zinc-800 text-white"
+                        : "text-zinc-500 hover:text-zinc-300"
+                    }`}
                   >
-                    Save Story Details
-                  </Button>
+                    Describe Your Book
+                  </button>
                 </div>
+
+                {/* Form tab */}
+                {detailsDialogTab === "form" && (
+                  <div className="space-y-4 mt-2">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-400 mb-1">Title</label>
+                        <Input
+                          value={detailsForm.title}
+                          onChange={(e) => setDetailsForm((f) => ({ ...f, title: e.target.value }))}
+                          placeholder="My Novel"
+                          className="bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-400 mb-1">Genre</label>
+                        <Input
+                          value={detailsForm.genre}
+                          onChange={(e) => setDetailsForm((f) => ({ ...f, genre: e.target.value }))}
+                          placeholder="Young Adult Fiction"
+                          className="bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-400 mb-1">Theme</label>
+                        <Input
+                          value={detailsForm.story_theme}
+                          onChange={(e) => setDetailsForm((f) => ({ ...f, story_theme: e.target.value }))}
+                          placeholder="Coming of age, identity"
+                          className="bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-400 mb-1">Main Character</label>
+                        <Input
+                          value={detailsForm.main_character_name}
+                          onChange={(e) => setDetailsForm((f) => ({ ...f, main_character_name: e.target.value }))}
+                          placeholder="Protagonist name"
+                          className="bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-400 mb-1">Central Conflict</label>
+                        <Input
+                          value={detailsForm.central_conflict}
+                          onChange={(e) => setDetailsForm((f) => ({ ...f, central_conflict: e.target.value }))}
+                          placeholder="The main challenge the protagonist faces"
+                          className="bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-400 mb-1">Setting</label>
+                        <Input
+                          value={detailsForm.setting}
+                          onChange={(e) => setDetailsForm((f) => ({ ...f, setting: e.target.value }))}
+                          placeholder="Modern day Lagos, fantasy kingdom..."
+                          className="bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-400 mb-1">Target Age Range</label>
+                        <Input
+                          value={detailsForm.target_age_range}
+                          onChange={(e) => setDetailsForm((f) => ({ ...f, target_age_range: e.target.value }))}
+                          placeholder="13-18"
+                          className="bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-zinc-400 mb-1">Narrative Style</label>
+                        <Input
+                          value={detailsForm.narrative_style}
+                          onChange={(e) => setDetailsForm((f) => ({ ...f, narrative_style: e.target.value }))}
+                          placeholder="First person, third person limited..."
+                          className="bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-400 mb-1">Plot Summary</label>
+                      <Textarea
+                        value={detailsForm.plot_summary}
+                        onChange={(e) => setDetailsForm((f) => ({ ...f, plot_summary: e.target.value }))}
+                        placeholder="A brief summary of the plot..."
+                        className="min-h-[80px] bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-400 mb-1">About This Novel</label>
+                      <Textarea
+                        value={detailsForm.novel_about}
+                        onChange={(e) => setDetailsForm((f) => ({ ...f, novel_about: e.target.value }))}
+                        placeholder="What is this novel about? Any details you want to include..."
+                        className="min-h-[80px] bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
+                      />
+                    </div>
+                    <p className="text-xs text-zinc-500">Only filled-in fields will be saved. Leave blank any fields you don&apos;t know.</p>
+                    <div className="flex justify-end gap-3">
+                      <Button
+                        variant="ghost"
+                        onClick={() => setDetailsDialogOpen(false)}
+                        className="text-zinc-400 hover:text-zinc-200"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={saveFormStoryDetails}
+                        className="bg-white text-zinc-900 hover:bg-zinc-200"
+                      >
+                        Save Story Details
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Describe tab */}
+                {detailsDialogTab === "describe" && (
+                  <div className="space-y-4 mt-2">
+                    <p className="text-sm text-zinc-400">
+                      Write or paste a description of your book in plain English — a blurb, a few sentences, or even your Amazon description. The AI will convert it into structured story details.
+                    </p>
+                    <Textarea
+                      value={detailsFreeText}
+                      onChange={(e) => setDetailsFreeText(e.target.value)}
+                      placeholder="e.g. &quot;Shadows of Tomorrow is a YA dystopian novel set in 2089 Lagos. 16-year-old Amara discovers she has the ability to see parallel timelines, and must choose between saving her family or her city from a corrupt government...&quot;"
+                      className="min-h-[180px] bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
+                    />
+                    <div className="flex justify-end gap-3">
+                      <Button
+                        variant="ghost"
+                        onClick={() => setDetailsDialogOpen(false)}
+                        className="text-zinc-400 hover:text-zinc-200"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={convertFreeTextToDetails}
+                        disabled={!detailsFreeText.trim() || detailsConverting}
+                        className="bg-white text-zinc-900 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {detailsConverting ? "Converting with AI..." : "Convert & Save"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </DialogContent>
             </Dialog>
           </div>
