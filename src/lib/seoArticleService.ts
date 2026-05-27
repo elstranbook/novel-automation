@@ -705,7 +705,7 @@ Themes: ${book.themes.join(", ") || "N/A"}
 Topics: ${book.topics.join(", ") || "N/A"}
 Emotions: ${book.emotions.join(", ") || "N/A"}
 Audience: ${book.audience.join(", ") || "Young Adult"}
-Marketing Summary: ${book.marketing_summary || "N/A"}
+Marketing Summary: ${book.marketingSummary || "N/A"}
 Synopsis: ${book.synopsis ? book.synopsis.substring(0, 500) + "..." : "N/A"}`;
         })
         .join("\n\n")
