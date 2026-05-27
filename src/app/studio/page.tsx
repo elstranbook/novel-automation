@@ -18,6 +18,7 @@ import { ArrowLeft, ClipboardPaste, Menu, Plus } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { SearchQuestionArticle } from "@/components/seo/SearchQuestionArticle";
 import type { Template, Category, TemplatesResponse } from "@/types";
 
 const AUTO = "auto" as const;
@@ -4929,6 +4930,9 @@ function StudioContent() {
           </div>
         )}
       </section>
+
+      {/* Search Question → SEO Article */}
+      <SearchQuestionArticle userId={userId} supabase={supabase} />
     </div>
   )}
 

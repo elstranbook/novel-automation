@@ -47,6 +47,11 @@ export enum PipelineStep {
   QUOTES = "quotes",
   COVER_PROMPT = "cover_prompt",
   DEDICATION = "dedication",
+
+  // SEO article generation
+  SEO_INTENT = "seo_intent",
+  SEO_ARTICLE = "seo_article",
+  NOVEL_ENRICHMENT = "novel_enrichment",
 }
 
 // ─── Default models per pipeline step ─────────────────────────────────
@@ -83,6 +88,11 @@ const STEP_MODEL_MAP: Record<PipelineStep, string> = {
   [PipelineStep.QUOTES]: QWEN3_MODELS.QWEN3_14B,
   [PipelineStep.COVER_PROMPT]: QWEN3_MODELS.QWEN3_14B,
   [PipelineStep.DEDICATION]: QWEN3_MODELS.QWEN3_14B,
+
+  // SEO article generation — thinking model for intent analysis, 14b for article writing
+  [PipelineStep.SEO_INTENT]: QWEN3_MODELS.QWEN3_235B_THINKING,
+  [PipelineStep.SEO_ARTICLE]: QWEN3_MODELS.QWEN3_14B,
+  [PipelineStep.NOVEL_ENRICHMENT]: QWEN3_MODELS.QWEN3_14B,
 };
 
 /**
