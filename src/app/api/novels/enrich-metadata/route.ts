@@ -13,17 +13,43 @@ export const maxDuration = 300;
  *   userId: string (required)
  *   novelId: string (optional — if provided, enrich only this novel; otherwise batch)
  *   model: string (optional)
+ *   embedOnly: boolean (optional — if true, only generate embedding from existing search_text)
  */
 export async function POST(request: Request) {
   try {
-    const { userId, novelId, model } = await request.json();
+    const { userId, novelId, model, embedOnly } = await request.json();
 
     if (!userId) {
       return NextResponse.json({ error: "userId is required" }, { status: 400 });
     }
 
     if (novelId) {
-      // Enrich a single novel
+      // Embed-only mode: skip metadata enrichment, just generate embedding
+      if (embedOnly) {
+        const { data: novel } = await supabaseAdmin
+          .from("novels")
+          .select("id, search_text")
+          .eq("id", novelId)
+          .eq("user_id", userId)
+          .single();
+
+        if (!novel?.search_text) {
+          return NextResponse.json(
+            { error: "Novel has no search_text. Run full enrichment first." },
+            { status: 400 }
+          );
+        }
+
+        const success = await generateAndStoreEmbedding(novelId, userId, novel.search_text);
+
+        return NextResponse.json({
+          success,
+          novelId,
+          mode: "embed_only",
+        });
+      }
+
+      // Full enrichment of a single novel
       const result = await enrichNovelMetadata(novelId, userId, model);
 
       if (!result) {

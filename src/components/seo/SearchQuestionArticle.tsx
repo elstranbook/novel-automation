@@ -20,6 +20,8 @@ import {
   RefreshCw,
   Star,
   ExternalLink,
+  Database,
+  AlertCircle,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -149,6 +151,13 @@ export function SearchQuestionArticle({ userId, supabase }: SearchQuestionArticl
   const [showIntentDetails, setShowIntentDetails] = useState(false);
   const [showFaq, setShowFaq] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  // Enrichment admin state
+  const [showSeoTools, setShowSeoTools] = useState(false);
+  const [enrichmentStatus, setEnrichmentStatus] = useState<"idle" | "loading" | "running" | "done" | "error">("idle");
+  const [enrichProgress, setEnrichProgress] = useState({ current: 0, total: 0, enriched: 0, failed: 0 });
+  const [enrichLog, setEnrichLog] = useState<Array<{ title: string; status: string; detail?: string }>>([]);
+  const [catalogStats, setCatalogStats] = useState<{ total: number; enriched: number; withEmbeddings: number } | null>(null);
 
   // ─── Pipeline Functions ──────────────────────────────────────────
 
@@ -344,6 +353,170 @@ export function SearchQuestionArticle({ userId, supabase }: SearchQuestionArticl
     }
   };
 
+  // ─── Enrichment Admin Functions ────────────────────────────────────
+
+  const loadCatalogStats = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const { data: total } = supabase.from("novels").select("id", { count: "exact", head: true }).eq("user_id", userId);
+      const { count: totalNovels } = await supabase.from("novels").select("*", { count: "exact", head: true }).eq("user_id", userId);
+      const { count: enrichedNovels } = await supabase.from("novels").select("*", { count: "exact", head: true }).eq("user_id", userId).not("metadata_enriched_at", "is", null);
+      const { count: withEmbeddings } = await supabase.from("novels").select("*", { count: "exact", head: true }).eq("user_id", userId).not("embedding", "is", null);
+      setCatalogStats({
+        total: totalNovels || 0,
+        enriched: enrichedNovels || 0,
+        withEmbeddings: withEmbeddings || 0,
+      });
+    } catch {
+      // ignore
+    }
+  }, [userId, supabase]);
+
+  const enrichAllNovels = useCallback(async () => {
+    if (!userId) return;
+
+    setEnrichmentStatus("loading");
+    setEnrichLog([]);
+    setEnrichProgress({ current: 0, total: 0, enriched: 0, failed: 0 });
+
+    try {
+      // Step 1: Get all novels that need enrichment
+      const { data: novels, error: fetchError } = await supabase
+        .from("novels")
+        .select("id, title, metadata_enriched_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true });
+
+      if (fetchError) throw fetchError;
+      if (!novels || novels.length === 0) {
+        setEnrichmentStatus("done");
+        setEnrichLog([{ title: "No novels found", status: "warning", detail: "Create at least one novel first." }]);
+        return;
+      }
+
+      const unenriched = novels.filter((n: any) => !n.metadata_enriched_at);
+      const needsEmbedding = novels; // We'll re-embed all (idempotent)
+
+      const totalJobs = unenriched.length;
+      setEnrichProgress((p) => ({ ...p, total: totalJobs }));
+      setEnrichmentStatus("running");
+
+      if (totalJobs === 0) {
+        setEnrichLog((prev) => [...prev, { title: "All novels already enriched", status: "info" }]);
+      }
+
+      let enriched = 0;
+      let failed = 0;
+
+      // Step 2: Enrich each novel one by one (for progress tracking)
+      for (let i = 0; i < unenriched.length; i++) {
+        const novel = unenriched[i] as any;
+        setEnrichProgress((p) => ({ ...p, current: i + 1 }));
+
+        try {
+          const response = await fetch("/api/novels/enrich-metadata", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: AbortSignal.timeout(180000),
+            body: JSON.stringify({ userId, novelId: novel.id }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            enriched += 1;
+            setEnrichLog((prev) => [
+              ...prev,
+              {
+                title: novel.title || "Untitled",
+                status: "success",
+                detail: `themes: ${data.themes?.length || 0}, topics: ${data.topics?.length || 0}`,
+              },
+            ]);
+          } else {
+            const errData = await response.json().catch(() => ({}));
+            failed += 1;
+            setEnrichLog((prev) => [
+              ...prev,
+              {
+                title: novel.title || "Untitled",
+                status: "error",
+                detail: errData.error || "Unknown error",
+              },
+            ]);
+          }
+        } catch (err) {
+          failed += 1;
+          setEnrichLog((prev) => [
+            ...prev,
+            {
+              title: novel.title || "Untitled",
+              status: "error",
+              detail: err instanceof Error ? err.message : "Timeout or network error",
+            },
+          ]);
+        }
+
+        setEnrichProgress((p) => ({ ...p, enriched, failed }));
+      }
+
+      // Step 3: Generate embeddings for all novels that have search_text but no embedding
+      const { data: needsEmbed } = await supabase
+        .from("novels")
+        .select("id, title")
+        .eq("user_id", userId)
+        .not("search_text", "is", null)
+        .is("embedding", null);
+
+      if (needsEmbed && needsEmbed.length > 0) {
+        setEnrichLog((prev) => [
+          ...prev,
+          { title: `Generating embeddings for ${needsEmbed.length} novels…`, status: "info" },
+        ]);
+
+        for (const novel of needsEmbed) {
+          try {
+            await fetch("/api/novels/enrich-metadata", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal: AbortSignal.timeout(120000),
+              body: JSON.stringify({ userId, novelId: (novel as any).id, embedOnly: true }),
+            });
+          } catch {
+            // embedding errors are non-critical
+          }
+        }
+
+        setEnrichLog((prev) => [
+          ...prev,
+          { title: "Embedding generation complete", status: "success" },
+        ]);
+      }
+
+      setEnrichmentStatus("done");
+      await loadCatalogStats();
+    } catch (err) {
+      setEnrichmentStatus("error");
+      setEnrichLog((prev) => [
+        ...prev,
+        {
+          title: "Enrichment failed",
+          status: "error",
+          detail: err instanceof Error ? err.message : "Unknown error",
+        },
+      ]);
+    }
+  }, [userId, supabase, loadCatalogStats]);
+
+  const reEnrichAll = useCallback(async () => {
+    if (!userId) return;
+    // Reset enrichment timestamps so all novels get re-processed
+    await supabase
+      .from("novels")
+      .update({ metadata_enriched_at: null })
+      .eq("user_id", userId);
+    await enrichAllNovels();
+  }, [userId, supabase, enrichAllNovels]);
+
   // ─── Render ──────────────────────────────────────────────────────
 
   const isRunning = phase !== "idle" && phase !== "completed";
@@ -361,6 +534,16 @@ export function SearchQuestionArticle({ userId, supabase }: SearchQuestionArticl
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => {
+              setShowSeoTools((prev) => !prev);
+              if (!showSeoTools) loadCatalogStats();
+            }}
+            className="rounded-full border border-zinc-700 px-4 py-2 text-xs inline-flex items-center gap-1.5"
+          >
+            <Database className="h-3.5 w-3.5" />
+            {showSeoTools ? "Hide SEO Tools" : "SEO Tools"}
+          </button>
           <button
             onClick={() => {
               setShowArticleLibrary((prev) => !prev);
@@ -464,6 +647,158 @@ export function SearchQuestionArticle({ userId, supabase }: SearchQuestionArticl
                 <strong>{PROMOTION_LABELS[settings.promotionIntensity]?.label}</strong>:{" "}
                 {PROMOTION_LABELS[settings.promotionIntensity]?.desc}
               </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SEO Tools Admin Panel */}
+      {showSeoTools && (
+        <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Database className="h-5 w-5 text-amber-400" />
+            <h3 className="text-sm font-semibold text-zinc-100">SEO Tools</h3>
+            <span className="rounded-full border border-amber-500/30 px-2 py-0.5 text-[10px] text-amber-300">Admin</span>
+          </div>
+
+          {/* Catalog Stats */}
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wide">Total Novels</p>
+              <p className="text-2xl font-bold text-zinc-100">{catalogStats?.total ?? "—"}</p>
+            </div>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wide">Enriched</p>
+              <p className={`text-2xl font-bold ${catalogStats && catalogStats.enriched === catalogStats.total ? "text-emerald-400" : "text-amber-300"}`}>
+                {catalogStats?.enriched ?? "—"}
+              </p>
+              {catalogStats && catalogStats.total > 0 && (
+                <div className="mt-1 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                    style={{ width: `${(catalogStats.enriched / catalogStats.total) * 100}%` }}
+                  />
+                </div>
+              )}
+            </div>
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wide">With Embeddings</p>
+              <p className={`text-2xl font-bold ${catalogStats && catalogStats.withEmbeddings === catalogStats.total ? "text-emerald-400" : "text-amber-300"}`}>
+                {catalogStats?.withEmbeddings ?? "—"}
+              </p>
+              {catalogStats && catalogStats.total > 0 && (
+                <div className="mt-1 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                    style={{ width: `${(catalogStats.withEmbeddings / catalogStats.total) * 100}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              onClick={enrichAllNovels}
+              disabled={!userId || enrichmentStatus === "running" || enrichmentStatus === "loading"}
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+            >
+              {enrichmentStatus === "running" || enrichmentStatus === "loading" ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  Enriching… ({enrichProgress.current}/{enrichProgress.total})
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  Enrich All Existing Novels
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={reEnrichAll}
+              disabled={!userId || enrichmentStatus === "running" || enrichmentStatus === "loading"}
+              className="rounded-full border border-amber-500/40 px-5 py-2 text-sm text-amber-200 hover:bg-amber-500/10 transition-all disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Re-Enrich All (Force)
+            </button>
+
+            <button
+              onClick={loadCatalogStats}
+              disabled={!userId}
+              className="rounded-full border border-zinc-700 px-4 py-2 text-xs"
+            >
+              Refresh Stats
+            </button>
+          </div>
+
+          {/* What enrichment does */}
+          <div className="mt-3 text-xs text-zinc-400 space-y-1">
+            <p><strong className="text-zinc-300">Enrich</strong> extracts themes, topics, emotions, audience, and a marketing summary from each novel using AI, then generates a vector embedding for semantic search.</p>
+            <p><strong className="text-amber-300">Re-Enrich All</strong> resets enrichment timestamps and re-processes every novel. Use after prompt changes, model upgrades, or scoring adjustments.</p>
+          </div>
+
+          {/* Progress Bar */}
+          {(enrichmentStatus === "running" || enrichmentStatus === "loading") && enrichProgress.total > 0 && (
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-xs text-zinc-400 mb-1">
+                <span>Processing novel {enrichProgress.current} of {enrichProgress.total}</span>
+                <span>{Math.round((enrichProgress.current / enrichProgress.total) * 100)}%</span>
+              </div>
+              <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                  style={{ width: `${(enrichProgress.current / enrichProgress.total) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Summary */}
+          {enrichmentStatus === "done" && (enrichProgress.enriched > 0 || enrichProgress.failed > 0) && (
+            <div className={`mt-4 rounded-lg border p-3 ${
+              enrichProgress.failed === 0
+                ? "border-emerald-500/20 bg-emerald-500/5"
+                : "border-amber-500/20 bg-amber-500/5"
+            }`}>
+              <p className={`text-sm font-semibold ${enrichProgress.failed === 0 ? "text-emerald-200" : "text-amber-200"}`}>
+                Enrichment Complete
+              </p>
+              <p className="text-xs text-zinc-400 mt-1">
+                ✅ {enrichProgress.enriched} enriched
+                {enrichProgress.failed > 0 && ` · ❌ ${enrichProgress.failed} failed`}
+              </p>
+            </div>
+          )}
+
+          {/* Activity Log */}
+          {enrichLog.length > 0 && (
+            <div className="mt-4">
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-2">Activity Log</p>
+              <div className="space-y-1 max-h-64 overflow-y-auto">
+                {enrichLog.map((entry, i) => (
+                  <div
+                    key={`${entry.title}-${i}`}
+                    className="flex items-start gap-2 text-xs"
+                  >
+                    <span className="shrink-0 mt-0.5">
+                      {entry.status === "success" && <Check className="h-3.5 w-3.5 text-emerald-400" />}
+                      {entry.status === "error" && <AlertCircle className="h-3.5 w-3.5 text-red-400" />}
+                      {entry.status === "warning" && <AlertCircle className="h-3.5 w-3.5 text-amber-400" />}
+                      {entry.status === "info" && <Database className="h-3.5 w-3.5 text-zinc-500" />}
+                    </span>
+                    <div className="min-w-0">
+                      <span className="text-zinc-200">{entry.title}</span>
+                      {entry.detail && (
+                        <span className="text-zinc-500 ml-1">— {entry.detail}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
