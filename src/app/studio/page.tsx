@@ -14,7 +14,7 @@ import { PSDUploadDialog } from "@/components/editor/PSDUploadDialog";
 import { useMockupState } from "@/hooks/useMockupState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, ClipboardPaste, Menu, Plus } from "lucide-react";
+import { ArrowLeft, ClipboardPaste, Menu, Plus, Sparkles, RefreshCw } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -423,6 +423,8 @@ function StudioContent() {
   const [showBookDescriptions, setShowBookDescriptions] = useState(false);
   const [novelKeywords, setNovelKeywords] = useState<string[] | null>(null);
   const [novelBisac, setNovelBisac] = useState<string[] | null>(null);
+  const [seoEnriching, setSeoEnriching] = useState(false);
+  const [seoEnriched, setSeoEnriched] = useState(false);
   const [novelPlan, setNovelPlan] = useState<string | null>(null);
   const [chapterOutline, setChapterOutline] = useState<ChapterOutline | null>(
     null
@@ -687,6 +689,12 @@ function StudioContent() {
         status: isFilled(novelBisac) ? "ready" : "missing",
       },
       {
+        step: "SEO Enrichment",
+        requires: ["storyDetails", "novelSynopsis"],
+        produces: ["seoEnriched"],
+        status: seoEnriched ? "ready" : "missing",
+      },
+      {
         step: "Novel plan",
         requires: ["storyDetails", "novelSynopsis", "characterProfiles"],
         produces: ["novelPlan"],
@@ -767,6 +775,7 @@ function StudioContent() {
       bookDescriptions,
       novelKeywords,
       novelBisac,
+      seoEnriched,
       novelPlan,
       chapterOutline,
       chapterGuide,
@@ -972,6 +981,7 @@ function StudioContent() {
       setMaxSceneLength(novel.max_scene_length ?? 1000);
       setMinSceneLength(novel.min_scene_length ?? 300);
       setStoryDetails(novel.story_details ?? null);
+      setSeoEnriched(!!novel.metadata_enriched_at);
 
       // Reset cover state — will be set from cover_design_prompts query below
       setGeneratedCoverUrl(null);
@@ -1616,6 +1626,24 @@ function StudioContent() {
           .eq("series_id", seriesId)
           .eq("book_number", seriesBookNumber);
       }
+
+      // Auto-enrich: fire-and-forget enrichment after synopsis is saved
+      // This populates themes, topics, emotions, audience, marketing_summary, and embedding
+      // for the Search Question → Article tool. Non-blocking; failures are logged silently.
+      fetch("/api/novels/enrich-metadata", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, novelId: novelIdValue }),
+      }).then((res) => {
+        if (res.ok) {
+          console.log(`✅ Auto-enrichment completed for novel ${novelIdValue}`);
+          setSeoEnriched(true);
+        } else {
+          console.warn(`⚠️ Auto-enrichment returned non-OK for novel ${novelIdValue}`);
+        }
+      }).catch((err) => {
+        console.warn(`⚠️ Auto-enrichment failed for novel ${novelIdValue}:`, err?.message || err);
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -2248,6 +2276,31 @@ function StudioContent() {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setLoadingStep(null);
+    }
+  };
+
+  const enrichForSeo = async () => {
+    if (!novelId) return;
+    setSeoEnriching(true);
+    setError(null);
+    try {
+      const user = await requireUser();
+      const response = await fetch("/api/novels/enrich-metadata", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(180000),
+        body: JSON.stringify({ userId: user.id, novelId }),
+      });
+      if (response.ok) {
+        setSeoEnriched(true);
+      } else {
+        const errData = await response.json().catch(() => ({}));
+        setError(errData.error || "SEO enrichment failed");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "SEO enrichment failed");
+    } finally {
+      setSeoEnriching(false);
     }
   };
 
@@ -3934,6 +3987,50 @@ function StudioContent() {
                 </div>
               </Collapsible>
             </div>
+          )}
+        </section>
+
+        {/* SEO Enrichment — enables Search Question → Article tool */}
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+          <div className="flex items-center gap-2">
+            <SectionHeading title="SEO Enrichment" step="SEO Enrichment" />
+            {seoEnriched && (
+              <span className="rounded-full border border-emerald-400/60 px-2 py-0.5 text-xs text-emerald-200">
+                Enriched ✓
+              </span>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-zinc-400">
+            Extracts themes, topics, emotions, audience, and a marketing summary from this novel. 
+            Required before the &quot;Search Question → Article&quot; tool can match this book to search queries. 
+            Auto-runs after synopsis generation.
+          </p>
+          <button
+            onClick={enrichForSeo}
+            disabled={!novelId || !novelSynopsis || seoEnriching}
+            className="mt-4 rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+          >
+            {seoEnriching ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                Enriching…
+              </>
+            ) : seoEnriched ? (
+              <>
+                <Sparkles className="h-4 w-4" />
+                Re-Enrich for SEO
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                Enrich for SEO
+              </>
+            )}
+          </button>
+          {!novelSynopsis && (
+            <p className="mt-2 text-xs text-amber-300">
+              ⚠️ Generate a synopsis first — enrichment needs it to extract meaningful metadata.
+            </p>
           )}
         </section>
 
