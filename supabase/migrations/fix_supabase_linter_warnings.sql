@@ -51,8 +51,7 @@ $$;
 --    Supabase recommends keeping extensions in a dedicated schema.
 --    First create the extensions schema if it doesn't exist, then migrate.
 create schema if not exists extensions;
-drop extension if exists vector;
-create extension vector schema extensions;
+alter extension vector set schema extensions;
 
 -- 3. Fix: Public Bucket Allows Listing
 --    Replace the broad SELECT policy on novel-covers with a targeted one

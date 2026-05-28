@@ -5,7 +5,7 @@
 
 -- 1. Enable pgvector extension (in extensions schema to avoid linter warning)
 create schema if not exists extensions;
-create extension if not exists vector schema extensions;
+alter extension vector set schema extensions;
 
 -- 2. Add search metadata columns to novels table
 alter table public.novels
