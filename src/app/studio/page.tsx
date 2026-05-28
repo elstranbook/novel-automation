@@ -1627,23 +1627,9 @@ function StudioContent() {
           .eq("book_number", seriesBookNumber);
       }
 
-      // Auto-enrich: fire-and-forget enrichment after synopsis is saved
-      // This populates themes, topics, emotions, audience, marketing_summary, and embedding
-      // for the Search Question → Article tool. Non-blocking; failures are logged silently.
-      fetch("/api/novels/enrich-metadata", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, novelId: novelIdValue }),
-      }).then((res) => {
-        if (res.ok) {
-          console.log(`✅ Auto-enrichment completed for novel ${novelIdValue}`);
-          setSeoEnriched(true);
-        } else {
-          console.warn(`⚠️ Auto-enrichment returned non-OK for novel ${novelIdValue}`);
-        }
-      }).catch((err) => {
-        console.warn(`⚠️ Auto-enrichment failed for novel ${novelIdValue}:`, err?.message || err);
-      });
+      // Auto-enrichment is now triggered after keywords generation (see generateKeywords)
+      // to ensure story_details, synopsis, characters, descriptions, and keywords
+      // are all available for the richest possible metadata extraction.
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -1773,6 +1759,26 @@ function StudioContent() {
         novelIdValue,
         user.id
       );
+
+      // Auto-enrich: fire-and-forget enrichment after keywords are saved
+      // By this point, story_details, synopsis, characters, descriptions, and keywords
+      // are all available — giving the enrichment the richest possible input.
+      // This populates themes, topics, emotions, audience, marketing_summary, and embedding
+      // for the Search Question → Article tool. Non-blocking; failures are logged silently.
+      fetch("/api/novels/enrich-metadata", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, novelId: novelIdValue }),
+      }).then((res) => {
+        if (res.ok) {
+          console.log(`✅ Auto-enrichment completed for novel ${novelIdValue}`);
+          setSeoEnriched(true);
+        } else {
+          console.warn(`⚠️ Auto-enrichment returned non-OK for novel ${novelIdValue}`);
+        }
+      }).catch((err) => {
+        console.warn(`⚠️ Auto-enrichment failed for novel ${novelIdValue}:`, err?.message || err);
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
