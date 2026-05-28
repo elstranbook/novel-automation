@@ -95,7 +95,7 @@ create index if not exists seo_articles_slug_idx on public.seo_articles (slug);
 
 -- 10. Create a function for vector similarity search (used by the app)
 create or replace function match_novels(
-  query_embedding vector(1536),
+  query_embedding extensions.vector(1536),
   match_user_id uuid,
   match_threshold float default 0.5,
   match_count int default 10
@@ -112,7 +112,7 @@ returns table (
   similarity float
 )
 language sql stable
-set search_path = public
+set search_path = public, extensions
 as $$
   select
     n.id,

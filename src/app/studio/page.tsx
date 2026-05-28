@@ -3147,7 +3147,7 @@ function StudioContent() {
 
         {(message || error) && (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-200">
-            {error ?? message}
+            {typeof error === "string" ? error : typeof error === "object" && error ? JSON.stringify(error) : message}
           </div>
         )}
 
