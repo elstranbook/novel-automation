@@ -942,9 +942,9 @@ CREATE POLICY "Authenticated users can upload covers" ON storage.objects
   FOR INSERT TO authenticated
   WITH CHECK (bucket_id = 'novel-covers' AND auth.role() = 'authenticated');
 
-CREATE POLICY "Anyone can view covers" ON storage.objects
-  FOR SELECT TO public
-  USING (bucket_id = 'novel-covers');
+-- NOTE: "Anyone can view covers" SELECT policy removed.
+-- Public bucket files are accessible via their public URL without any
+-- storage policy. A broad SELECT policy only exposed the file listing.
 
 CREATE POLICY "Authenticated users can update their covers" ON storage.objects
   FOR UPDATE TO authenticated
@@ -959,8 +959,9 @@ CREATE POLICY "Authenticated users can delete their covers" ON storage.objects
 -- Feature: Search Question → Promotional Article
 -- =============================================
 
--- Enable pgvector extension
-create extension if not exists vector;
+-- Enable pgvector extension (in extensions schema to avoid linter warning)
+create schema if not exists extensions;
+create extension if not exists vector schema extensions;
 
 -- Add search metadata columns to novels
 alter table public.novels
@@ -1033,6 +1034,7 @@ returns table (
   similarity float
 )
 language sql stable
+set search_path = public
 as $$
   select
     n.id,

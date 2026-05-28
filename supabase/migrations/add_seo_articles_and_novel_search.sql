@@ -3,8 +3,9 @@
 -- Feature: Search Question → Promotional Article
 -- ============================================================
 
--- 1. Enable pgvector extension
-create extension if not exists vector;
+-- 1. Enable pgvector extension (in extensions schema to avoid linter warning)
+create schema if not exists extensions;
+create extension if not exists vector schema extensions;
 
 -- 2. Add search metadata columns to novels table
 alter table public.novels
@@ -111,6 +112,7 @@ returns table (
   similarity float
 )
 language sql stable
+set search_path = public
 as $$
   select
     n.id,
