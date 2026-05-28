@@ -415,6 +415,13 @@ function StudioContent() {
   });
   const [premisesAndEndings, setPremisesAndEndings] =
     useState<PremisesAndEndings | null>(null);
+  const [premisesDialogOpen, setPremisesDialogOpen] = useState(false);
+  const [premisesDialogTab, setPremisesDialogTab] = useState<"fields" | "paste">("fields");
+  const [premisesFieldChosenPremise, setPremisesFieldChosenPremise] = useState("");
+  const [premisesFieldChosenEnding, setPremisesFieldChosenEnding] = useState("");
+  const [premisesFieldAllPremises, setPremisesFieldAllPremises] = useState("");
+  const [premisesFieldAllEndings, setPremisesFieldAllEndings] = useState("");
+  const [premisesPasteText, setPremisesPasteText] = useState("");
 
   const [novelSynopsis, setNovelSynopsis] = useState<string | null>(null);
   const [characterProfiles, setCharacterProfiles] = useState<string | null>(null);
@@ -1590,6 +1597,144 @@ function StudioContent() {
     } finally {
       setLoadingStep(null);
     }
+  };
+
+  const savePastedPremises = async (
+    chosenPremise: string,
+    chosenEnding: string,
+    allPremises: string[],
+    allEndings: string[]
+  ) => {
+    setError(null);
+    try {
+      const user = await requireUser();
+      const novelIdValue = await ensureNovel(user.id);
+      const data: PremisesAndEndings = {
+        premises: allPremises.length > 0 ? allPremises : [chosenPremise],
+        chosen_premise: chosenPremise,
+        potential_endings: allEndings.length > 0 ? allEndings : [chosenEnding],
+        chosen_ending: chosenEnding,
+      };
+      setPremisesAndEndings(data);
+      await saveSingleRow(
+        "premises_and_endings",
+        {
+          premises: data.premises,
+          chosen_premise: data.chosen_premise,
+          potential_endings: data.potential_endings,
+          chosen_ending: data.chosen_ending,
+        },
+        novelIdValue,
+        user.id
+      );
+      setPremisesDialogOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save premises & endings");
+    }
+  };
+
+  const saveFieldsPremises = async () => {
+    const premise = premisesFieldChosenPremise.trim();
+    const ending = premisesFieldChosenEnding.trim();
+    if (!premise || !ending) {
+      setError("Chosen premise and chosen ending are required.");
+      return;
+    }
+    // Parse comma/newline-separated additional premises and endings
+    const extraPremises = premisesFieldAllPremises
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const extraEndings = premisesFieldAllEndings
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    // Ensure chosen ones are in the list
+    const allPremises = [premise, ...extraPremises.filter((p) => p !== premise)];
+    const allEndings = [ending, ...extraEndings.filter((e) => e !== ending)];
+    await savePastedPremises(premise, ending, allPremises, allEndings);
+  };
+
+  const savePasteTextPremises = async () => {
+    const text = premisesPasteText.trim();
+    if (!text) {
+      setError("Paste your premises and endings text first.");
+      return;
+    }
+    // Try to parse structured text:
+    // Look for sections like "Premise:", "Ending:", "Premises:", "Endings:"
+    // or just use the first line as premise and rest as ending context
+    const lines = text.split(/\n/).filter((l) => l.trim());
+    let chosenPremise = "";
+    let chosenEnding = "";
+    let premisesList: string[] = [];
+    let endingsList: string[] = [];
+
+    // Try JSON parse first
+    try {
+      const json = JSON.parse(text);
+      if (typeof json === "object" && json !== null) {
+        chosenPremise = String(json.chosen_premise || json.chosenPremise || "");
+        chosenEnding = String(json.chosen_ending || json.chosenEnding || "");
+        premisesList = Array.isArray(json.premises) ? json.premises.map(String) : [];
+        endingsList = Array.isArray(json.potential_endings || json.endings) ? (json.potential_endings || json.endings).map(String) : [];
+        if (chosenPremise && chosenEnding) {
+          await savePastedPremises(
+            chosenPremise,
+            chosenEnding,
+            premisesList.length > 0 ? premisesList : [chosenPremise],
+            endingsList.length > 0 ? endingsList : [chosenEnding]
+          );
+          return;
+        }
+      }
+    } catch {
+      // Not JSON, continue to text parsing
+    }
+
+    // Text parsing: find premise and ending sections
+    const premiseMatch = text.match(/(?:chosen\s+)?premise\s*[:\-–]\s*\n?([\s\S]*?)(?=(?:chosen\s+)?ending|$)/i);
+    const endingMatch = text.match(/(?:chosen\s+)?ending\s*[:\-–]\s*\n?([\s\S]*?)$/i);
+
+    if (premiseMatch) {
+      chosenPremise = premiseMatch[1].trim().split(/\n/)[0].replace(/^[\-\*\d.]+\s*/, "").trim();
+    }
+    if (endingMatch) {
+      chosenEnding = endingMatch[1].trim().split(/\n/)[0].replace(/^[\-\*\d.]+\s*/, "").trim();
+    }
+
+    // Collect all premises/endings from lists
+    const allPremisesMatch = text.match(/premises?\s*[:\-–]\s*\n([\s\S]*?)(?=(?:potential\s+)?endings?|$)/i);
+    const allEndingsMatch = text.match(/(?:potential\s+)?endings?\s*[:\-–]\s*\n([\s\S]*?)$/i);
+
+    if (allPremisesMatch) {
+      premisesList = allPremisesMatch[1]
+        .split(/\n/)
+        .map((l) => l.replace(/^[\-\*\d.]+\s*/, "").trim())
+        .filter(Boolean);
+    }
+    if (allEndingsMatch) {
+      endingsList = allEndingsMatch[1]
+        .split(/\n/)
+        .map((l) => l.replace(/^[\-\*\d.]+\s*/, "").trim())
+        .filter(Boolean);
+    }
+
+    // Fallback: use first two non-empty lines
+    if (!chosenPremise && lines.length >= 1) chosenPremise = lines[0];
+    if (!chosenEnding && lines.length >= 2) chosenEnding = lines[1];
+
+    if (!chosenPremise || !chosenEnding) {
+      setError("Could not parse a premise and ending from the text. Try using the Fields tab instead.");
+      return;
+    }
+
+    await savePastedPremises(
+      chosenPremise,
+      chosenEnding,
+      premisesList.length > 0 ? premisesList : [chosenPremise],
+      endingsList.length > 0 ? endingsList : [chosenEnding]
+    );
   };
 
   const generateSynopsis = async () => {
@@ -3683,6 +3828,170 @@ function StudioContent() {
             >
               ♻️ Regenerate Premises & Endings
             </button>
+            <Dialog open={premisesDialogOpen} onOpenChange={setPremisesDialogOpen}>
+              <DialogTrigger asChild>
+                <button
+                  onClick={() => {
+                    // Pre-fill from existing premisesAndEndings if present
+                    if (premisesAndEndings) {
+                      setPremisesFieldChosenPremise(premisesAndEndings.chosen_premise || "");
+                      setPremisesFieldChosenEnding(premisesAndEndings.chosen_ending || "");
+                      setPremisesFieldAllPremises(
+                        Array.isArray(premisesAndEndings.premises)
+                          ? premisesAndEndings.premises.join("\n")
+                          : ""
+                      );
+                      setPremisesFieldAllEndings(
+                        Array.isArray(premisesAndEndings.potential_endings)
+                          ? premisesAndEndings.potential_endings.join("\n")
+                          : ""
+                      );
+                      setPremisesPasteText("");
+                    } else {
+                      setPremisesFieldChosenPremise("");
+                      setPremisesFieldChosenEnding("");
+                      setPremisesFieldAllPremises("");
+                      setPremisesFieldAllEndings("");
+                      setPremisesPasteText("");
+                    }
+                    setPremisesDialogTab("fields");
+                    setPremisesDialogOpen(true);
+                  }}
+                  className="inline-flex items-center gap-2 rounded-full border border-zinc-700 px-5 py-2 text-sm hover:border-zinc-500 transition-colors"
+                >
+                  <ClipboardPaste className="h-4 w-4" />
+                  Enter Premises & Endings
+                </button>
+              </DialogTrigger>
+              <DialogContent className="bg-zinc-900 border-zinc-800 max-w-xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="text-zinc-100">Enter Premises & Endings</DialogTitle>
+                  <DialogDescription className="text-zinc-400">
+                    Paste or type your chosen premise and ending. You can also add all the alternative premises and endings you considered.
+                  </DialogDescription>
+                </DialogHeader>
+                {/* Tab switcher */}
+                <div className="flex gap-2 border-b border-zinc-800 pb-2">
+                  <button
+                    onClick={() => setPremisesDialogTab("fields")}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                      premisesDialogTab === "fields"
+                        ? "bg-zinc-800 text-white"
+                        : "text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    Fill in Fields
+                  </button>
+                  <button
+                    onClick={() => setPremisesDialogTab("paste")}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                      premisesDialogTab === "paste"
+                        ? "bg-zinc-800 text-white"
+                        : "text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    Paste Text
+                  </button>
+                </div>
+
+                {/* Fields tab */}
+                {premisesDialogTab === "fields" && (
+                  <div className="space-y-4 mt-2">
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-400 mb-1">
+                        Chosen Premise <span className="text-red-400">*</span>
+                      </label>
+                      <Textarea
+                        value={premisesFieldChosenPremise}
+                        onChange={(e) => setPremisesFieldChosenPremise(e.target.value)}
+                        placeholder="e.g. A 16-year-old discovers she can see parallel timelines and must choose between saving her family or her city..."
+                        className="min-h-[80px] bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-400 mb-1">
+                        Chosen Ending <span className="text-red-400">*</span>
+                      </label>
+                      <Textarea
+                        value={premisesFieldChosenEnding}
+                        onChange={(e) => setPremisesFieldChosenEnding(e.target.value)}
+                        placeholder="e.g. She merges the timelines, losing her ability but saving both worlds, and learns that sacrifice is the truest form of power..."
+                        className="min-h-[80px] bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-400 mb-1">
+                        All Premises <span className="text-zinc-600">(one per line, optional)</span>
+                      </label>
+                      <Textarea
+                        value={premisesFieldAllPremises}
+                        onChange={(e) => setPremisesFieldAllPremises(e.target.value)}
+                        placeholder={"Premise 1\nPremise 2\nPremise 3"}
+                        className="min-h-[100px] bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-400 mb-1">
+                        All Endings <span className="text-zinc-600">(one per line, optional)</span>
+                      </label>
+                      <Textarea
+                        value={premisesFieldAllEndings}
+                        onChange={(e) => setPremisesFieldAllEndings(e.target.value)}
+                        placeholder={"Ending 1\nEnding 2\nEnding 3"}
+                        className="min-h-[100px] bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-3">
+                      <Button
+                        variant="ghost"
+                        onClick={() => setPremisesDialogOpen(false)}
+                        className="text-zinc-400 hover:text-zinc-200"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={saveFieldsPremises}
+                        disabled={!premisesFieldChosenPremise.trim() || !premisesFieldChosenEnding.trim()}
+                        className="bg-white text-zinc-900 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Save Premises & Endings
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Paste tab */}
+                {premisesDialogTab === "paste" && (
+                  <div className="space-y-4 mt-2">
+                    <p className="text-sm text-zinc-400">
+                      Paste your premises and endings in any format — structured text, a numbered list, or even JSON from a previous generation. The parser will extract the chosen premise and ending.
+                    </p>
+                    <Textarea
+                      value={premisesPasteText}
+                      onChange={(e) => setPremisesPasteText(e.target.value)}
+                      placeholder={'Chosen Premise: A girl discovers she can see parallel timelines...\n\nChosen Ending: She merges the timelines, losing her ability...\n\nPremises:\n1. A girl discovers parallel timelines\n2. A boy wakes up in a different reality\n\nEndings:\n1. She merges the timelines\n2. She stays in the parallel world'}
+                      className="min-h-[220px] bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
+                    />
+                    <div className="flex justify-end gap-3">
+                      <Button
+                        variant="ghost"
+                        onClick={() => setPremisesDialogOpen(false)}
+                        className="text-zinc-400 hover:text-zinc-200"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={savePasteTextPremises}
+                        disabled={!premisesPasteText.trim()}
+                        className="bg-white text-zinc-900 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Parse & Save
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
           </div>
           {premisesAndEndings && (
             <div className="mt-4 space-y-3">
