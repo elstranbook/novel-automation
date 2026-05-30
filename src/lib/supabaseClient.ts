@@ -12,6 +12,8 @@ function buildMissingEnvClient() {
   return {
     auth: {
       getUser: async () => ({ data: { user: null }, error }),
+      getSession: async () => ({ data: { session: null }, error }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
       signInWithPassword: async () => ({ data: { user: null, session: null }, error }),
       resetPasswordForEmail: async () => ({ data: null, error }),
       signOut: async () => ({ error }),

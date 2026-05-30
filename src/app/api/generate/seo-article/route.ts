@@ -16,6 +16,25 @@ export const maxDuration = 300;
  */
 export async function POST(request: Request) {
   try {
+    // ── Upfront environment validation ──────────────────────────────
+    // Default models use OpenRouter (Qwen3); embeddings require OpenAI.
+    const missingKeys: string[] = [];
+    if (!process.env.OPENROUTER_API_KEY) missingKeys.push("OPENROUTER_API_KEY");
+    if (!process.env.OPENAI_API_KEY) missingKeys.push("OPENAI_API_KEY");
+
+    if (missingKeys.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            `Missing required environment variable(s): ${missingKeys.join(", ")}. ` +
+            `Please set them in your deployment environment. ` +
+            `OPENROUTER_API_KEY is required for the default Qwen3 models; ` +
+            `OPENAI_API_KEY is required for embedding generation.`,
+        },
+        { status: 400 }
+      );
+    }
+
     const {
       question,
       userId,

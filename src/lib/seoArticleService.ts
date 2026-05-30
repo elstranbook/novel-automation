@@ -379,14 +379,30 @@ export async function batchEnrichNovels(
 }
 
 /**
- * Generate embedding and store it directly via Supabase.
+ * Generate embedding and store it via the update_novel_embedding RPC (preferred)
+ * or fall back to a direct update if the RPC is unavailable.
  */
 export async function generateAndStoreEmbedding(novelId: string, userId: string, searchText: string): Promise<boolean> {
   const embedding = await generateEmbedding(searchText);
   if (!embedding) return false;
 
-  // Use Supabase RPC to store the vector
-  // We'll try the direct approach first, then fall back
+  // Primary: use the RPC function which correctly handles the vector type
+  try {
+    const { error } = await supabaseAdmin.rpc("update_novel_embedding", {
+      p_novel_id: novelId,
+      p_user_id: userId,
+      p_embedding: embedding,
+    });
+
+    if (!error) return true;
+
+    // RPC failed — log and fall back to direct update
+    console.warn("[generateAndStoreEmbedding] RPC update_novel_embedding failed, falling back to direct update:", error.message);
+  } catch (rpcErr) {
+    console.warn("[generateAndStoreEmbedding] RPC update_novel_embedding threw, falling back to direct update:", rpcErr instanceof Error ? rpcErr.message : rpcErr);
+  }
+
+  // Fallback: direct Supabase update (may not correctly serialize vector type for PostgREST)
   try {
     const { error } = await supabaseAdmin
       .from("novels")
@@ -395,12 +411,12 @@ export async function generateAndStoreEmbedding(novelId: string, userId: string,
       .eq("user_id", userId);
 
     if (error) {
-      console.error("Failed to store embedding:", error.message);
+      console.error("[generateAndStoreEmbedding] Direct update also failed:", error.message);
       return false;
     }
     return true;
   } catch (err) {
-    console.error("Embedding storage error:", err);
+    console.error("[generateAndStoreEmbedding] Direct update threw:", err);
     return false;
   }
 }
@@ -846,8 +862,22 @@ export async function runFullPipeline(
 }> {
   const startTime = Date.now();
 
-  // Phase 1: Analyze search intent
-  const intent = await analyzeSearchIntent(question, settings.model);
+  // Phase 1: Analyze search intent (with graceful fallback)
+  let intent: SearchIntent;
+  try {
+    intent = await analyzeSearchIntent(question, settings.model);
+  } catch (err) {
+    console.warn("[SEO Pipeline] analyzeSearchIntent failed, using fallback intent:", err instanceof Error ? err.message : err);
+    intent = {
+      intent: "informational",
+      themes: [],
+      topics: [],
+      emotions: [],
+      audience: [],
+      genreFit: [],
+      searchSummary: question,
+    };
+  }
 
   // Phase 2: Find relevant books
   let candidates = await findRelevantBooks(question, intent, userId);
@@ -899,8 +929,16 @@ export async function runFullPipeline(
     selectionReason = selection.reason;
   }
 
-  // Phase 3: Generate article
-  const article = await generateSeoArticle(question, intent, selected, settings);
+  // Phase 3: Generate article (with better error handling)
+  let article: GeneratedArticle;
+  try {
+    article = await generateSeoArticle(question, intent, selected, settings);
+  } catch (err) {
+    throw new Error(
+      "SEO article generation failed during the writing phase. " +
+      (err instanceof Error ? err.message : String(err))
+    );
+  }
 
   const generationTimeMs = Date.now() - startTime;
 
