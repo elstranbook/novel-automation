@@ -19,8 +19,7 @@ security definer
 set search_path = public, extensions
 as $$
   update public.novels
-  set embedding = p_embedding,
-      updated_at = now()
+  set embedding = p_embedding
   where id = p_novel_id
     and user_id = p_user_id;
 $$;
