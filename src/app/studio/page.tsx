@@ -14,7 +14,7 @@ import { PSDUploadDialog } from "@/components/editor/PSDUploadDialog";
 import { useMockupState } from "@/hooks/useMockupState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, ClipboardPaste, Menu, Plus, Sparkles, RefreshCw } from "lucide-react";
+import { ArrowLeft, BookOpen, ClipboardPaste, Eye, EyeOff, Menu, Plus, RefreshCw, Search, Sparkles, Trash2 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -496,6 +496,10 @@ function StudioContent() {
   // Blog publish state — per-article editable overrides
   const [blogArticleEdits, setBlogArticleEdits] = useState<Record<number, { title: string; excerpt: string; category: string; tags: string }>>({});
 
+
+  // SEO Articles for publish page
+  const [seoArticles, setSeoArticles] = useState<any[]>([]);
+  const [seoArticlesLoaded, setSeoArticlesLoaded] = useState(false);
   // Mockup App State
   const {
     selectedTemplate,
@@ -1365,6 +1369,21 @@ function StudioContent() {
     return data.context;
   };
 
+  const loadSeoArticles = async (userIdValue: string) => {
+    try {
+      const response = await fetch(`/api/seo-articles?userId=${userIdValue}`);
+      if (!response.ok) {
+        console.error("Failed to load SEO articles");
+        return;
+      }
+      const data = await response.json();
+      setSeoArticles(data.articles ?? []);
+      setSeoArticlesLoaded(true);
+    } catch (err) {
+      console.error("Failed to load SEO articles:", err);
+    }
+  };
+
   useEffect(() => {
     const bootstrap = async () => {
       const {
@@ -1375,6 +1394,7 @@ function StudioContent() {
         setUserId(user.id);
         setAuthEmail(user.email ?? null);
         await loadNovels(user.id);
+        loadSeoArticles(user.id);
         let loadedLatest = false;
         resetPipeline();
         if (seriesId) {
@@ -1420,6 +1440,14 @@ function StudioContent() {
       loadSeriesContext(seriesId, seriesBookNumber).catch(() => null);
     }
   }, [seriesId, seriesBookNumber]);
+
+  // Load SEO articles when publish view is shown
+  useEffect(() => {
+    if (view === "publish" && userId) {
+      loadSeoArticles(userId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, userId]);
 
   // GENERATORS
   const resetPipeline = () => {
@@ -1488,6 +1516,7 @@ function StudioContent() {
         .eq("id", novelIdValue);
 
       await loadNovels(user.id);
+        loadSeoArticles(user.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -1515,6 +1544,7 @@ function StudioContent() {
       .eq("id", novelIdValue);
 
     await loadNovels(user.id);
+        loadSeoArticles(user.id);
     setDetailsDialogOpen(false);
   };
 
@@ -6394,6 +6424,232 @@ function StudioContent() {
                       </div>
                     )}
                   </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+
+    {/* Section - SEO Articles */}
+    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+      <h3 className="text-lg font-bold text-zinc-100 mb-6 flex items-center gap-2">
+        <span className="text-xl"><Search className="inline h-5 w-5" /></span> SEO Articles
+        {seoArticles.length > 0 && (
+          <span className="inline-flex rounded-full border border-emerald-400/40 px-2 py-0.5 text-xs text-emerald-200">
+            {seoArticles.length} article{seoArticles.length !== 1 ? "s" : ""}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => { if (userId) loadSeoArticles(userId); }}
+          className="ml-auto inline-flex items-center gap-1 rounded-full border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors"
+          title="Refresh SEO articles"
+        >
+          <RefreshCw className="h-3.5 w-3.5" /> Refresh
+        </button>
+      </h3>
+      {!seoArticlesLoaded ? (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 sm:p-8 text-center">
+          <p className="text-zinc-500 text-sm">Loading SEO articles...</p>
+        </div>
+      ) : seoArticles.length === 0 ? (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 sm:p-8 text-center">
+          <p className="text-zinc-500 text-sm">No SEO articles generated yet.</p>
+          <p className="text-zinc-600 text-xs mt-1">Use the Search Question → Article tool to create articles that answer search questions while promoting your books.</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {seoArticles.map((article: any, articleIndex: number) => {
+            const articleQuestion = String(article.question ?? "Untitled Question");
+            const articleMetaTitle = String(article.meta_title ?? article.title ?? "");
+            const articleSlug = articleMetaTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+            const articleMetaDesc = String(article.meta_description ?? article.excerpt ?? "");
+            const articleHtml = String(article.article_html ?? "");
+            const articleFaq = Array.isArray(article.faq) ? article.faq : [];
+            const articleStatus = String(article.status ?? "draft");
+            const promotedBooks = Array.isArray(article.promoted_books) ? article.promoted_books : [];
+            const hasPromotedBooks = promotedBooks.length > 0;
+
+            return (
+              <div key={`seo-${article.id ?? articleIndex}`} className="rounded-xl border border-zinc-700/60 bg-zinc-950/40 p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-zinc-800 text-xs font-bold text-zinc-300">{articleIndex + 1}</span>
+                  <Search className="h-4 w-4 text-zinc-500" />
+                  <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider truncate max-w-md">{articleQuestion.length > 80 ? articleQuestion.substring(0, 80) + "..." : articleQuestion}</span>
+                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] ml-auto ${articleStatus === "published" ? "border-emerald-400/40 text-emerald-300" : "border-amber-400/40 text-amber-300"}`}>
+                    {articleStatus}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+                  {/* Question */}
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Search Question</label>
+                    <p className="mt-1 text-sm text-zinc-200">{articleQuestion}</p>
+                  </div>
+                  {/* Meta Title */}
+                  <div>
+                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Meta Title</label>
+                    <Input
+                      value={articleMetaTitle}
+                      onChange={(e) => {
+                        setSeoArticles((prev) =>
+                          prev.map((a: any, i: number) =>
+                            i === articleIndex ? { ...a, meta_title: e.target.value } : a
+                          )
+                        );
+                      }}
+                      className="mt-1 bg-zinc-800/50 border-zinc-700 text-zinc-100"
+                      placeholder="Meta title"
+                    />
+                  </div>
+                  {/* Slug */}
+                  <div>
+                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Slug</label>
+                    <p className="mt-1 text-sm text-zinc-300 font-mono bg-zinc-800/50 rounded-md border border-zinc-700 px-3 py-2 truncate">{articleSlug || "auto-generated"}</p>
+                  </div>
+                  {/* Meta Description */}
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Meta Description</label>
+                    <textarea
+                      value={articleMetaDesc}
+                      onChange={(e) => {
+                        setSeoArticles((prev) =>
+                          prev.map((a: any, i: number) =>
+                            i === articleIndex ? { ...a, meta_description: e.target.value } : a
+                          )
+                        );
+                      }}
+                      rows={3}
+                      className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y"
+                      placeholder="Meta description"
+                    />
+                  </div>
+                  {/* Promoted Books */}
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> Promoted Books</label>
+                    {hasPromotedBooks ? (
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        {promotedBooks.map((book: any, bookIdx: number) => (
+                          <span key={bookIdx} className="inline-flex items-center gap-1 rounded-full border border-sky-400/30 px-2.5 py-1 text-xs text-sky-300">
+                            <BookOpen className="h-3 w-3" />
+                            {typeof book === "string" ? book : book.title ?? book.name ?? "Book"}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-xs text-zinc-500 italic">Informational only</p>
+                    )}
+                  </div>
+                  {/* Article HTML */}
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Article HTML</label>
+                    <textarea
+                      value={articleHtml}
+                      readOnly
+                      rows={8}
+                      className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y font-mono cursor-text"
+                      placeholder="Article HTML content"
+                    />
+                  </div>
+                  {/* FAQ */}
+                  {articleFaq.length > 0 && (
+                    <div className="md:col-span-2">
+                      <Collapsible label={`FAQ (${articleFaq.length} question${articleFaq.length !== 1 ? "s" : ""})`}>
+                        <div className="space-y-3">
+                          {articleFaq.map((faqItem: any, faqIdx: number) => (
+                            <div key={faqIdx} className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
+                              <p className="text-xs font-semibold text-zinc-300">Q: {typeof faqItem === "object" ? faqItem.question ?? faqItem.q : String(faqItem)}</p>
+                              <p className="text-xs text-zinc-500 mt-1">{typeof faqItem === "object" ? faqItem.answer ?? faqItem.a ?? "" : ""}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </Collapsible>
+                    </div>
+                  )}
+                  {/* Cover Image */}
+                  <div className="md:col-span-2">
+                    <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Cover Image</p>
+                    {hasPromotedBooks && generatedCoverUrl ? (
+                      <img src={generatedCoverUrl} alt="SEO article cover" className="max-w-48 rounded-lg border border-zinc-800 shadow-lg" />
+                    ) : (
+                      <div className="w-48 h-32 rounded-lg border border-zinc-800 bg-zinc-950/50 flex items-center justify-center">
+                        <p className="text-xs text-zinc-600 italic">No cover image</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {/* Action Buttons */}
+                <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-zinc-800">
+                  {articleStatus === "draft" ? (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await fetch(`/api/seo-articles/${article.id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ userId, status: "published" }),
+                          });
+                          if (res.ok) {
+                            setSeoArticles((prev) =>
+                              prev.map((a: any, i: number) =>
+                                i === articleIndex ? { ...a, status: "published", published_at: new Date().toISOString() } : a
+                              )
+                            );
+                          }
+                        } catch (err) {
+                          console.error("Failed to publish SEO article:", err);
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+                    >
+                      <Eye className="h-3.5 w-3.5" /> Publish
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await fetch(`/api/seo-articles/${article.id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ userId, status: "draft" }),
+                          });
+                          if (res.ok) {
+                            setSeoArticles((prev) =>
+                              prev.map((a: any, i: number) =>
+                                i === articleIndex ? { ...a, status: "draft", published_at: null } : a
+                              )
+                            );
+                          }
+                        } catch (err) {
+                          console.error("Failed to unpublish SEO article:", err);
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/10 transition-colors"
+                    >
+                      <EyeOff className="h-3.5 w-3.5" /> Unpublish
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!confirm("Delete this SEO article? This cannot be undone.")) return;
+                      try {
+                        const res = await fetch(`/api/seo-articles/${article.id}?userId=${userId}`, { method: "DELETE" });
+                        if (res.ok) {
+                          setSeoArticles((prev) => prev.filter((_: any, i: number) => i !== articleIndex));
+                        }
+                      } catch (err) {
+                        console.error("Failed to delete SEO article:", err);
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-red-500/40 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/10 transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Delete
+                  </button>
                 </div>
               </div>
             );

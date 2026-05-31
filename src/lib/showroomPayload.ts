@@ -339,3 +339,196 @@ export async function buildShowroomNovelsList(): Promise<ShowroomNovelListItem[]
 
   return items;
 }
+
+// ---------------------------------------------------------------------------
+// SEO Article showroom types & builders
+// ---------------------------------------------------------------------------
+
+/** Showroom payload for a single SEO article */
+export type ShowroomSeoArticle = {
+  id: string;
+  question: string;
+  slug: string | null;
+  metaTitle: string | null;
+  metaDescription: string | null;
+  excerpt: string | null;
+  articleHtml: string | null;
+  articleMarkdown: string | null;
+  faq: Array<{ question: string; answer: string }> | null;
+  promotedBooks: Array<{ title: string; id: string | null }> | null;
+  promotionReason: string | null;
+  selectedBooks: string[] | null;
+  searchIntent: Record<string, unknown> | null;
+  relevanceScores: Array<Record<string, unknown>> | null;
+  tone: string | null;
+  wordCount: number | null;
+  promotionIntensity: number | null;
+  targetAudience: string | null;
+  primaryKey: string | null;
+  secondaryKeywords: string[] | null;
+  internalLinks: string[] | null;
+  readingGrade: number | null;
+  generationTimeMs: number | null;
+  status: string | null;
+  createdAt: string | null;
+  publishedAt: string | null;
+};
+
+/** Lightweight list item for SEO articles */
+export type ShowroomSeoArticleListItem = {
+  id: string;
+  question: string;
+  slug: string | null;
+  metaTitle: string | null;
+  status: string | null;
+  createdAt: string | null;
+  publishedAt: string | null;
+};
+
+/** Row shape returned by Supabase for the seo_articles list query */
+type SeoArticleListRow = {
+  id: string;
+  question: string;
+  slug: string | null;
+  meta_title: string | null;
+  status: string | null;
+  created_at: string | null;
+  published_at: string | null;
+};
+
+/** Row shape returned by Supabase for a single seo_articles detail query */
+type SeoArticleDetailRow = {
+  id: string;
+  question: string;
+  slug: string | null;
+  meta_title: string | null;
+  meta_description: string | null;
+  excerpt: string | null;
+  article_html: string | null;
+  article_markdown: string | null;
+  faq: unknown;
+  promoted_books: unknown;
+  promotion_reason: string | null;
+  selected_books: unknown;
+  search_intent: unknown;
+  relevance_scores: unknown;
+  tone: string | null;
+  word_count: number | null;
+  promotion_intensity: number | null;
+  target_audience: string | null;
+  primary_keyword: string | null;
+  secondary_keywords: unknown;
+  internal_links: unknown;
+  reading_grade: number | null;
+  generation_time_ms: number | null;
+  status: string | null;
+  created_at: string | null;
+  published_at: string | null;
+};
+
+/**
+ * Fetch all published SEO articles for a user and return lightweight list items.
+ */
+export async function buildShowroomSeoArticlesList(
+  userId: string
+): Promise<ShowroomSeoArticleListItem[]> {
+  const { data, error } = await supabaseAdmin
+    .from("seo_articles")
+    .select("id,question,slug,meta_title,status,created_at,published_at")
+    .eq("user_id", userId)
+    .eq("status", "published")
+    .order("published_at", { ascending: false })
+    .returns<SeoArticleListRow[]>();
+
+  if (error || !data) return [];
+
+  return data.map((row) => ({
+    id: row.id,
+    question: row.question,
+    slug: row.slug,
+    metaTitle: row.meta_title,
+    status: row.status,
+    createdAt: row.created_at,
+    publishedAt: row.published_at,
+  }));
+}
+
+/**
+ * Fetch a single published SEO article by ID and return the full showroom payload.
+ * Returns null if the article is not found or not published.
+ */
+export async function buildShowroomSeoArticlePayload(
+  articleId: string,
+  userId: string
+): Promise<ShowroomSeoArticle | null> {
+  const { data, error } = await supabaseAdmin
+    .from("seo_articles")
+    .select(
+      "id,question,slug,meta_title,meta_description,excerpt,article_html,article_markdown,faq,promoted_books,promotion_reason,selected_books,search_intent,relevance_scores,tone,word_count,promotion_intensity,target_audience,primary_keyword,secondary_keywords,internal_links,reading_grade,generation_time_ms,status,created_at,published_at"
+    )
+    .eq("id", articleId)
+    .eq("user_id", userId)
+    .eq("status", "published")
+    .maybeSingle<SeoArticleDetailRow>();
+
+  if (error || !data) return null;
+
+  // Safely cast jsonb fields
+  const faq = Array.isArray(data.faq)
+    ? (data.faq as Array<{ question: string; answer: string }>)
+    : null;
+
+  const promotedBooks = Array.isArray(data.promoted_books)
+    ? (data.promoted_books as Array<{ title: string; id: string | null }>)
+    : null;
+
+  const selectedBooks = Array.isArray(data.selected_books)
+    ? (data.selected_books as string[])
+    : null;
+
+  const searchIntent =
+    data.search_intent && typeof data.search_intent === "object"
+      ? (data.search_intent as Record<string, unknown>)
+      : null;
+
+  const relevanceScores = Array.isArray(data.relevance_scores)
+    ? (data.relevance_scores as Array<Record<string, unknown>>)
+    : null;
+
+  const secondaryKeywords = Array.isArray(data.secondary_keywords)
+    ? (data.secondary_keywords as string[])
+    : null;
+
+  const internalLinks = Array.isArray(data.internal_links)
+    ? (data.internal_links as string[])
+    : null;
+
+  return {
+    id: data.id,
+    question: data.question,
+    slug: data.slug,
+    metaTitle: data.meta_title,
+    metaDescription: data.meta_description,
+    excerpt: data.excerpt,
+    articleHtml: data.article_html,
+    articleMarkdown: data.article_markdown,
+    faq,
+    promotedBooks,
+    promotionReason: data.promotion_reason,
+    selectedBooks,
+    searchIntent,
+    relevanceScores,
+    tone: data.tone,
+    wordCount: data.word_count,
+    promotionIntensity: data.promotion_intensity,
+    targetAudience: data.target_audience,
+    primaryKey: data.primary_keyword,
+    secondaryKeywords,
+    internalLinks,
+    readingGrade: data.reading_grade,
+    generationTimeMs: data.generation_time_ms,
+    status: data.status,
+    createdAt: data.created_at,
+    publishedAt: data.published_at,
+  };
+}
