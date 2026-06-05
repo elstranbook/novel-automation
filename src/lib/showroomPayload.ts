@@ -404,7 +404,13 @@ export async function buildShowroomChaptersPayload(
     .returns<ProseSceneRow[]>();
 
   if (scenesError) {
-    throw new Error(scenesError.message);
+    const message = scenesError.message ?? "Failed to load prose scenes";
+    if (/prose_scenes|relation.*does not exist/i.test(message)) {
+      throw new Error(
+        "prose_scenes table is missing in Supabase. Run supabase/migrations/add_prose_scenes.sql"
+      );
+    }
+    throw new Error(message);
   }
 
   if (!rows?.length) {

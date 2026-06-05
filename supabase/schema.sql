@@ -90,6 +90,17 @@ create table if not exists public.scenes (
   created_at timestamptz default now()
 );
 
+create table if not exists public.prose_scenes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  novel_id uuid references public.novels(id) on delete cascade,
+  chapter_title text not null,
+  scene_content text not null,
+  scene_order integer not null,
+  chapter_order integer not null default 0,
+  created_at timestamptz default now()
+);
+
 create table if not exists public.novel_formats (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade,
@@ -320,6 +331,7 @@ alter table public.chapter_outlines enable row level security;
 alter table public.chapter_guides enable row level security;
 alter table public.chapter_beats enable row level security;
 alter table public.scenes enable row level security;
+alter table public.prose_scenes enable row level security;
 alter table public.novel_formats enable row level security;
 alter table public.premises_and_endings enable row level security;
 alter table public.novel_synopsis enable row level security;
@@ -740,6 +752,7 @@ create policy "chapter outlines owner" on public.chapter_outlines for all using 
 create policy "chapter guides owner" on public.chapter_guides for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "chapter beats owner" on public.chapter_beats for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "scenes owner" on public.scenes for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "prose_scenes owner" on public.prose_scenes for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "novel formats owner" on public.novel_formats for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "premises owner" on public.premises_and_endings for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "synopsis owner" on public.novel_synopsis for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
