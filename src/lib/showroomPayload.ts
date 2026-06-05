@@ -94,6 +94,29 @@ export type ShowroomNovelListItem = {
   coverUrl: string | null;
 };
 
+/** Single chapter for the showroom chapters sync endpoint */
+export type ShowroomChapterItem = {
+  id: string;
+  chapterNumber: number;
+  title: string;
+  content: string;
+  isPreview?: boolean;
+};
+
+/** Payload returned by GET /api/showroom/novels/{novelId}/chapters */
+export type ShowroomChaptersPayload = {
+  source: "elstran-studio";
+  novelId: string;
+  chapters: ShowroomChapterItem[];
+};
+
+type ProseSceneRow = {
+  chapter_title: string;
+  scene_content: string;
+  scene_order: number;
+  chapter_order: number;
+};
+
 const parseStringArray = (value: unknown): string[] => {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string");
@@ -338,6 +361,100 @@ export async function buildShowroomNovelsList(): Promise<ShowroomNovelListItem[]
   );
 
   return items;
+}
+
+const getChapterNumberFromTitle = (chapterTitle: string, fallback: number): number => {
+  const [numberPart] = chapterTitle.split(":");
+  const parsed = parseInt(numberPart?.trim() ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const parseChapterDisplayTitle = (chapterTitle: string, chapterNumber: number): string => {
+  const parts = chapterTitle.split(":");
+  if (parts.length > 1) {
+    const name = parts.slice(1).join(":").trim();
+    if (name) return name;
+  }
+  const trimmed = chapterTitle.trim();
+  return trimmed || `Chapter ${chapterNumber}`;
+};
+
+/**
+ * Build chapter prose for showroom sync (elstranbooks.com reader).
+ * Groups prose_scenes by chapter_order and joins scene text per chapter.
+ * Chapter IDs are deterministic so re-sync updates existing book chapters.
+ */
+export async function buildShowroomChaptersPayload(
+  novelId: string
+): Promise<ShowroomChaptersPayload | null> {
+  const { data: novel, error: novelError } = await supabaseAdmin
+    .from("novels")
+    .select("id")
+    .eq("id", novelId)
+    .maybeSingle<{ id: string }>();
+
+  if (novelError || !novel) return null;
+
+  const { data: rows, error: scenesError } = await supabaseAdmin
+    .from("prose_scenes")
+    .select("chapter_title,scene_content,scene_order,chapter_order")
+    .eq("novel_id", novelId)
+    .order("chapter_order", { ascending: true })
+    .order("scene_order", { ascending: true })
+    .returns<ProseSceneRow[]>();
+
+  if (scenesError) {
+    throw new Error(scenesError.message);
+  }
+
+  if (!rows?.length) {
+    return {
+      source: "elstran-studio",
+      novelId,
+      chapters: [],
+    };
+  }
+
+  const chapterMap = new Map<number, ProseSceneRow[]>();
+  for (const row of rows) {
+    const existing = chapterMap.get(row.chapter_order) ?? [];
+    existing.push(row);
+    chapterMap.set(row.chapter_order, existing);
+  }
+
+  const chapters: ShowroomChapterItem[] = [];
+  const sortedOrders = [...chapterMap.keys()].sort((a, b) => a - b);
+
+  for (const chapterOrder of sortedOrders) {
+    const sceneRows = chapterMap.get(chapterOrder)!;
+    const rawTitle = sceneRows[0]?.chapter_title ?? `Chapter ${chapterOrder + 1}`;
+    const chapterNumber = getChapterNumberFromTitle(rawTitle, chapterOrder + 1);
+    const title = parseChapterDisplayTitle(rawTitle, chapterNumber);
+    const content = sceneRows
+      .map((row) =>
+        typeof row.scene_content === "string"
+          ? row.scene_content
+          : String(row.scene_content ?? "")
+      )
+      .filter((text) => text.trim().length > 0)
+      .join("\n\n");
+
+    if (!content.trim()) continue;
+
+    chapters.push({
+      id: `${novelId}-chapter-${chapterOrder}`,
+      chapterNumber,
+      title,
+      content,
+      isPreview: chapterNumber === 1,
+    });
+  }
+
+  return {
+    source: "elstran-studio",
+    novelId,
+    chapters,
+  };
 }
 
 // ---------------------------------------------------------------------------
