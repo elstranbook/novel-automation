@@ -642,34 +642,21 @@ export default function SeriesPage() {
 
   const loadSeries = async (userIdValue: string) => {
     console.log(`[loadSeries] Loading series for user ${userIdValue}`);
-    // Use select("*") to avoid 400 errors from missing columns.
-    // PostgREST returns 400 if you explicitly name a column that doesn't exist,
-    // but select("*") always returns whatever columns are actually present.
-    let data = null as SeriesSummary[] | null;
+    // Use server-side API route (bypasses RLS) instead of direct browser Supabase query
+    let data: SeriesSummary[] | null = null;
 
-    const result = await supabase
-      .from("series")
-      .select("*")
-      .eq("user_id", userIdValue)
-      .order("created_at", { ascending: false });
-
-    if (result.error) {
-      console.error("[loadSeries] Failed to load series list:", result.error.message, result.error);
-      // Final fallback: try minimal select
-      const basicResult = await supabase
-        .from("series")
-        .select("id,title,description,num_books")
-        .eq("user_id", userIdValue)
-        .order("created_at", { ascending: false });
-      if (basicResult.error) {
-        console.error("Basic select also failed:", basicResult.error.message);
+    try {
+      const res = await fetch(`/api/series/list?userId=${userIdValue}`);
+      if (!res.ok) {
+        console.error("[loadSeries] API returned status", res.status);
       }
-      data = (basicResult.data ?? null) as SeriesSummary[] | null;
-    } else {
-      data = (result.data ?? null) as SeriesSummary[] | null;
+      const json = await res.json();
+      data = (json.series ?? null) as SeriesSummary[] | null;
+    } catch (err) {
+      console.error("[loadSeries] Failed to fetch series list:", err);
     }
 
-    if (data) {
+    if (data && data.length > 0) {
       console.log(`[loadSeries] Found ${data.length} series, selecting target`);
       setSeriesList(data);
       const targetId = selectedSeriesId ?? (data[0]?.id ?? null);
@@ -738,14 +725,16 @@ export default function SeriesPage() {
       setShowCreateForm(false);
       await loadSeries(user.id);
       // Auto-select the newly created series (it will be first after reload)
-      const { data: freshList } = await supabase
-        .from("series")
-        .select("id")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1);
-      if (freshList && freshList[0]) {
-        setSelectedSeriesId(freshList[0].id);
+      // Use the server-side API to avoid RLS issues
+      try {
+        const listRes = await fetch(`/api/series/list?userId=${user.id}`);
+        const listJson = await listRes.json();
+        const freshList = listJson.series as SeriesSummary[] | undefined;
+        if (freshList && freshList[0]) {
+          setSelectedSeriesId(freshList[0].id);
+        }
+      } catch {
+        // ignore — loadSeries already selected the series
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
@@ -1225,34 +1214,37 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setSeriesBible(data.bible ?? null);
                   if (activeSeries) {
-                    // Save suite fields back to the series row so they persist
-                    await supabase.from("series").update({
-                      tone: suiteTone || null,
-                      genre: suiteGenre || null,
-                      target_audience: suiteTargetAudience || null,
-                      themes: suiteThemes ? suiteThemes.split(",").map((t: string) => t.trim()).filter(Boolean) : null,
-                      main_conflict: suiteCoreConflict || null,
-                      world_name: suiteSetting ? suiteSetting.split(" — ")[0] : null,
-                      world_description: suiteSetting || null,
-                    }).eq("id", activeSeries.id);
-                    await supabase.from("series_worlds").upsert({
-                      series_id: activeSeries.id,
-                      setting: suiteSetting,
-                      rules: data.bible?.world_rules ?? null,
-                      lore: data.bible?.history_lore ?? null,
-                    });
+                    // Save suite fields, world, and characters via server-side API (bypasses RLS)
                     const characterFiles = data.bible?.character_files ?? {};
-                    await supabase.from("series_characters").delete().eq("series_id", activeSeries.id);
-                    const rows = Object.entries(characterFiles).map(([name, info]) => ({
+                    const charRows = Object.entries(characterFiles).map(([name, info]) => ({
                       series_id: activeSeries.id,
                       name,
                       role: "Main",
                       description: (info as Record<string, unknown>)?.arc_summary ?? null,
                       arc: info,
                     }));
-                    if (rows.length) {
-                      await supabase.from("series_characters").insert(rows);
-                    }
+                    await fetch("/api/series/save-suite", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        seriesId: activeSeries.id,
+                        suiteFields: {
+                          tone: suiteTone || null,
+                          genre: suiteGenre || null,
+                          target_audience: suiteTargetAudience || null,
+                          themes: suiteThemes ? suiteThemes.split(",").map((t: string) => t.trim()).filter(Boolean) : null,
+                          main_conflict: suiteCoreConflict || null,
+                          world_name: suiteSetting ? suiteSetting.split(" — ")[0] : null,
+                          world_description: suiteSetting || null,
+                        },
+                        world: {
+                          setting: suiteSetting,
+                          rules: data.bible?.world_rules ?? null,
+                          lore: data.bible?.history_lore ?? null,
+                        },
+                        characters: charRows,
+                      }),
+                    });
                   }
                 } catch (err) {
                   setError(err instanceof Error ? err.message : "Unknown error");
@@ -1322,10 +1314,15 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setCharacterEvolution(data.evolution ?? null);
                   if (activeSeries) {
-                    await supabase.from("series_memory").insert({
-                      series_id: activeSeries.id,
-                      category: "character_evolution",
-                      content: JSON.stringify(data.evolution ?? {}),
+                    // Save to series_memory via server-side API (bypasses RLS)
+                    await fetch("/api/series/memory/save", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        seriesId: activeSeries.id,
+                        category: "character_evolution",
+                        content: JSON.stringify(data.evolution ?? {}),
+                      }),
                     });
                   }
                 } catch (err) {
@@ -1359,10 +1356,15 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setBookBlueprint(data.blueprint ?? null);
                   if (activeSeries) {
-                    await supabase.from("series_memory").insert({
-                      series_id: activeSeries.id,
-                      category: `book_${suiteBookNumber}_blueprint`,
-                      content: JSON.stringify(data.blueprint ?? {}),
+                    // Save to series_memory via server-side API (bypasses RLS)
+                    await fetch("/api/series/memory/save", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        seriesId: activeSeries.id,
+                        category: `book_${suiteBookNumber}_blueprint`,
+                        content: JSON.stringify(data.blueprint ?? {}),
+                      }),
                     });
                   }
                 } catch (err) {
