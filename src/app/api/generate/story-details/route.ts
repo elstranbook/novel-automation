@@ -7,7 +7,7 @@ export const maxDuration = 300;
 
 export async function POST(request: Request) {
   try {
-    const { title, novelAbout, model, seriesContext } = await request.json();
+    const { title, novelAbout, model, seriesContext, bookBlueprint } = await request.json();
 
     if (!title) {
       return NextResponse.json(
@@ -16,8 +16,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const blueprintSection = seriesContext?.book_blueprint
-      ? `\n═══ BOOK BLUEPRINT — MANDATORY STRUCTURAL PLAN ═══\nYou MUST follow this blueprint closely. It defines the structural arc this book must follow:\n${JSON.stringify(seriesContext.book_blueprint, null, 2)}\n\nBlueprint Usage Instructions:\n- opening_shift: This MUST be the starting situation for the protagonist. Build the story_theme and central_conflict around this opening.\n- midpoint_shock: This is the pivotal reversal at the story's midpoint. Your plot_summary MUST build toward this moment.\n- lowest_point: This is the protagonist's darkest hour. Make sure central_conflict leads naturally to this point.\n- climax: This is the decisive confrontation. Your plot_summary MUST resolve through this climax.\n- ending_change: This is the transformative resolution. Your plot_summary MUST end with this change.\n- relationship_changes: Weave these into supporting_characters and plot_summary.\n- theme_pressure: This is the thematic weight the story carries. Your story_theme MUST reflect this pressure.\n- full_outline: Use this as the overarching narrative framework.\n═══ END BLUEPRINT ═══\n`
+    // Use series blueprint if available, otherwise fall back to standalone bookBlueprint
+    const effectiveBlueprint = seriesContext?.book_blueprint ?? bookBlueprint ?? null;
+
+    const blueprintSection = effectiveBlueprint
+      ? `\n═══ BOOK BLUEPRINT — MANDATORY STRUCTURAL PLAN ═══\nYou MUST follow this blueprint closely. It defines the structural arc this book must follow:\n${JSON.stringify(effectiveBlueprint, null, 2)}\n\nBlueprint Usage Instructions:\n- opening_shift: This MUST be the starting situation for the protagonist. Build the story_theme and central_conflict around this opening.\n- midpoint_shock: This is the pivotal reversal at the story's midpoint. Your plot_summary MUST build toward this moment.\n- lowest_point: This is the protagonist's darkest hour. Make sure central_conflict leads naturally to this point.\n- climax: This is the decisive confrontation. Your plot_summary MUST resolve through this climax.\n- ending_change: This is the transformative resolution. Your plot_summary MUST end with this change.\n- relationship_changes: Weave these into supporting_characters and plot_summary.\n- theme_pressure: This is the thematic weight the story carries. Your story_theme MUST reflect this pressure.\n- full_outline: Use this as the overarching narrative framework.\n═══ END BLUEPRINT ═══\n`
       : "";
 
     const prompt = `

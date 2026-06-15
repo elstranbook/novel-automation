@@ -31,6 +31,9 @@ export enum PipelineStep {
   EDITING_SUGGESTIONS = "editing_suggestions",
   SYNOPSIS = "synopsis",
 
+  // Standalone book planning
+  STANDALONE_BLUEPRINT = "standalone_blueprint",
+
   // Series planning
   SERIES_CREATE = "series_create",
   SERIES_BLUEPRINT = "series_blueprint",
@@ -71,6 +74,9 @@ const STEP_MODEL_MAP: Record<PipelineStep, string> = {
   [PipelineStep.PREMISES_ENDINGS]: QWEN3_MODELS.QWEN3_235B_THINKING,
   [PipelineStep.EDITING_SUGGESTIONS]: QWEN3_MODELS.QWEN3_235B_THINKING,
   [PipelineStep.SYNOPSIS]: QWEN3_MODELS.QWEN3_235B_THINKING,
+
+  // Standalone book planning — thinking model for narrative structure
+  [PipelineStep.STANDALONE_BLUEPRINT]: QWEN3_MODELS.QWEN3_235B_THINKING,
 
   // Series planning — thinking model for long-term narrative coherence
   [PipelineStep.SERIES_CREATE]: QWEN3_MODELS.QWEN3_235B_THINKING,

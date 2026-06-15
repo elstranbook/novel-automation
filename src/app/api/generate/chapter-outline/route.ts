@@ -71,8 +71,11 @@ export async function POST(request: Request) {
     const structuredPlan = novelPlan ?? "";
     const novelAbout = storyDetails.novel_about ?? "";
 
-    const blueprintSection = storyDetails.series_context?.book_blueprint
-      ? `\n═══ BOOK BLUEPRINT — MANDATORY STRUCTURAL PLAN ═══\nYour chapter outline MUST follow this blueprint exactly. It defines the structural arc this book must follow:\n${JSON.stringify(storyDetails.series_context.book_blueprint, null, 2)}\n\nBlueprint Alignment Rules:\n- opening_shift: Your FIRST 2-3 chapters MUST establish this starting situation for the protagonist.\n- midpoint_shock: Place this pivotal reversal at approximately the MIDDLE of your chapter outline (around chapter 50% mark).\n- lowest_point: Position this darkest hour at approximately the 70-75% mark of your chapters.\n- climax: Place the decisive confrontation at approximately the 85-90% mark.\n- ending_change: Your LAST 1-2 chapters MUST deliver this transformative resolution.\n- relationship_changes: Distribute these across chapters, showing gradual evolution.\n- theme_pressure: Every chapter's theme_focus should reflect or build upon this pressure.\n- full_outline: Use this as the overarching framework for chapter sequencing.\n═══ END BLUEPRINT ═══\n`
+    // Use series blueprint if available, otherwise fall back to standalone book_blueprint
+    const effectiveBlueprint = storyDetails.series_context?.book_blueprint ?? storyDetails.book_blueprint ?? null;
+
+    const blueprintSection = effectiveBlueprint
+      ? `\n═══ BOOK BLUEPRINT — MANDATORY STRUCTURAL PLAN ═══\nYour chapter outline MUST follow this blueprint exactly. It defines the structural arc this book must follow:\n${JSON.stringify(effectiveBlueprint, null, 2)}\n\nBlueprint Alignment Rules:\n- opening_shift: Your FIRST 2-3 chapters MUST establish this starting situation for the protagonist.\n- midpoint_shock: Place this pivotal reversal at approximately the MIDDLE of your chapter outline (around chapter 50% mark).\n- lowest_point: Position this darkest hour at approximately the 70-75% mark of your chapters.\n- climax: Place the decisive confrontation at approximately the 85-90% mark.\n- ending_change: Your LAST 1-2 chapters MUST deliver this transformative resolution.\n- relationship_changes: Distribute these across chapters, showing gradual evolution.\n- theme_pressure: Every chapter's theme_focus should reflect or build upon this pressure.\n- full_outline: Use this as the overarching framework for chapter sequencing.\n═══ END BLUEPRINT ═══\n`
       : "";
 
     const prompt = `

@@ -395,6 +395,7 @@ function StudioContent() {
   const [prefillTitle] = useState<string>(searchParams.get("title") ?? "");
   const [prefillAbout] = useState<string>(searchParams.get("about") ?? "");
   const [seriesContext, setSeriesContext] = useState<Record<string, unknown> | null>(null);
+  const [bookBlueprint, setBookBlueprint] = useState<Record<string, unknown> | null>(null);
 
   const [storyDetails, setStoryDetails] = useState<StoryDetails | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
@@ -994,6 +995,15 @@ function StudioContent() {
       setStoryDetails(novel.story_details ?? null);
       setSeoEnriched(!!novel.metadata_enriched_at);
 
+      // Load standalone blueprint (only if no series context provides one)
+      if (!seriesId) {
+        if (novel.blueprint) {
+          setBookBlueprint(novel.blueprint as Record<string, unknown>);
+        } else if (novel.story_details?.book_blueprint) {
+          setBookBlueprint(novel.story_details.book_blueprint as Record<string, unknown>);
+        }
+      }
+
       // Reset cover state — will be set from cover_design_prompts query below
       setGeneratedCoverUrl(null);
       setCoverUrl("");
@@ -1484,6 +1494,64 @@ function StudioContent() {
     setProseScenes(null);
   };
 
+  const generateBlueprint = async () => {
+    setLoadingStep("blueprint");
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/generate/blueprint", {
+        method: "POST",
+        signal: AbortSignal.timeout(240000),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, novelAbout, model }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        const errorMsg = errorData?.error || `Server error (${response.status})`;
+        throw new Error(errorMsg);
+      }
+
+      const data = await response.json();
+      const bp = data.blueprint ?? null;
+      setBookBlueprint(bp);
+
+      // Also inject into existing storyDetails so downstream steps (2-4) can use it
+      if (bp && storyDetails) {
+        const updated = { ...storyDetails, book_blueprint: bp };
+        setStoryDetails(updated);
+        try {
+          const user = await requireUser();
+          const novelIdValue = await ensureNovel(user.id);
+          await supabase
+            .from("novels")
+            .update({ story_details: updated })
+            .eq("id", novelIdValue);
+        } catch {
+          // Best effort — not critical if story_details update fails
+        }
+      }
+
+      // Save blueprint column to DB if novel exists
+      try {
+        const user = await requireUser();
+        const novelIdValue = await ensureNovel(user.id);
+        await supabase
+          .from("novels")
+          .update({ blueprint: bp })
+          .eq("id", novelIdValue);
+      } catch {
+        // Novel may not exist yet — that's OK, blueprint is in state
+      }
+
+      setMessage("Blueprint generated! It will be used to guide Steps 1-4 of the writing pipeline.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setLoadingStep(null);
+    }
+  };
+
   const generateStoryDetails = async () => {
     setLoadingStep("story");
     setError(null);
@@ -1494,7 +1562,14 @@ function StudioContent() {
         method: "POST",
         signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, novelAbout, model, seriesContext }),
+        body: JSON.stringify({
+          title,
+          novelAbout,
+          model,
+          seriesContext,
+          // Pass standalone blueprint only when no series context provides one
+          bookBlueprint: !seriesContext?.book_blueprint ? bookBlueprint : null,
+        }),
       });
 
       if (!response.ok) {
@@ -1506,7 +1581,7 @@ function StudioContent() {
       const data = await response.json();
       const combined = seriesContext
         ? { ...data, series_context: seriesContext }
-        : data;
+        : { ...data, ...(bookBlueprint ? { book_blueprint: bookBlueprint } : {}) };
       setStoryDetails(combined);
 
       const novelIdValue = await ensureNovel(user.id);
@@ -3565,6 +3640,92 @@ function StudioContent() {
           </div>
         </div>
         </section>
+
+        {/* Blueprint — only shown for standalone books (no series context with blueprint) */}
+        {!seriesContext?.book_blueprint && (
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
+          <SectionHeading title="0. Book Blueprint" step="Blueprint" />
+          <p className="mt-2 text-sm text-zinc-400">
+            Generate a structural blueprint for your book before writing. This defines the narrative arc — opening shift, midpoint shock, lowest point, climax, and ending change — so the AI writes with purpose and pacing.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              onClick={generateBlueprint}
+              disabled={!title || loadingStep === "blueprint"}
+              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loadingStep === "blueprint"
+                ? "Generating Blueprint..."
+                : bookBlueprint
+                  ? "Regenerate Blueprint"
+                  : "Generate Blueprint"}
+            </button>
+            {bookBlueprint && (
+              <button
+                onClick={() => setBookBlueprint(null)}
+                className="rounded-full border border-zinc-700 px-5 py-2 text-sm hover:bg-zinc-800 transition-all"
+              >
+                Clear Blueprint
+              </button>
+            )}
+          </div>
+          {bookBlueprint && (
+            <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs text-zinc-300">
+              <p className="font-semibold text-zinc-200 mb-2">Blueprint for &quot;{title}&quot;</p>
+              <div className="space-y-3">
+                {typeof bookBlueprint.opening_shift === "string" && bookBlueprint.opening_shift && (
+                  <div>
+                    <p className="font-medium text-amber-400">Opening Shift</p>
+                    <p className="whitespace-pre-wrap">{bookBlueprint.opening_shift}</p>
+                  </div>
+                )}
+                {typeof bookBlueprint.midpoint_shock === "string" && bookBlueprint.midpoint_shock && (
+                  <div>
+                    <p className="font-medium text-red-400">Midpoint Shock</p>
+                    <p className="whitespace-pre-wrap">{bookBlueprint.midpoint_shock}</p>
+                  </div>
+                )}
+                {typeof bookBlueprint.lowest_point === "string" && bookBlueprint.lowest_point && (
+                  <div>
+                    <p className="font-medium text-purple-400">Lowest Point</p>
+                    <p className="whitespace-pre-wrap">{bookBlueprint.lowest_point}</p>
+                  </div>
+                )}
+                {typeof bookBlueprint.climax === "string" && bookBlueprint.climax && (
+                  <div>
+                    <p className="font-medium text-orange-400">Climax</p>
+                    <p className="whitespace-pre-wrap">{bookBlueprint.climax}</p>
+                  </div>
+                )}
+                {typeof bookBlueprint.ending_change === "string" && bookBlueprint.ending_change && (
+                  <div>
+                    <p className="font-medium text-green-400">Ending Change</p>
+                    <p className="whitespace-pre-wrap">{bookBlueprint.ending_change}</p>
+                  </div>
+                )}
+                {typeof bookBlueprint.relationship_changes === "string" && bookBlueprint.relationship_changes && (
+                  <div>
+                    <p className="font-medium text-pink-400">Relationship Changes</p>
+                    <p className="whitespace-pre-wrap">{bookBlueprint.relationship_changes}</p>
+                  </div>
+                )}
+                {typeof bookBlueprint.theme_pressure === "string" && bookBlueprint.theme_pressure && (
+                  <div>
+                    <p className="font-medium text-cyan-400">Theme Pressure</p>
+                    <p className="whitespace-pre-wrap">{bookBlueprint.theme_pressure}</p>
+                  </div>
+                )}
+                {typeof bookBlueprint.full_outline === "string" && bookBlueprint.full_outline && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer font-medium text-zinc-200">Full Chapter Outline</summary>
+                    <p className="mt-2 whitespace-pre-wrap">{bookBlueprint.full_outline}</p>
+                  </details>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+        )}
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <SectionHeading title="1. Story details" step="Story details" />
