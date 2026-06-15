@@ -148,6 +148,15 @@ export default function SeriesPage() {
   const [editingTimelineDescription, setEditingTimelineDescription] = useState("");
   const [editingTimelineOrder, setEditingTimelineOrder] = useState(1);
   const [editingTimelineBook, setEditingTimelineBook] = useState(1);
+  const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const activeSeries = useMemo(() => {
+    if (selectedSeriesId) {
+      return seriesList.find(s => s.id === selectedSeriesId) ?? seriesList[0] ?? null;
+    }
+    return seriesList[0] ?? null;
+  }, [selectedSeriesId, seriesList]);
 
   const filteredCanon = useMemo(() => {
     const query = canonSearch.trim().toLowerCase();
@@ -369,6 +378,37 @@ export default function SeriesPage() {
     Array<{ id: string; message: string; severity: string }>
   >([]);
 
+  const clearSeriesData = () => {
+    setSeriesBooks([]);
+    setSeriesCharacters([]);
+    setSelectedCharacterId(null);
+    setSeriesWorld(null);
+    setWorldSettingDraft("");
+    setWorldRulesDraft("");
+    setWorldLoreDraft("");
+    setSeriesMemory([]);
+    setSeriesTimeline([]);
+    setPlotThreads([]);
+    setSeriesLogs([]);
+    setArc(null);
+    setSeriesBible(null);
+    setSeriesMap(null);
+    setCharacterEvolution(null);
+    setBookBlueprint(null);
+  };
+
+  const selectSeries = async (seriesId: string) => {
+    setSelectedSeriesId(seriesId);
+    clearSeriesData();
+    const { data: bookRows } = await supabase
+      .from("series_books")
+      .select("id,series_id,book_number,title,status,summary,novel_id")
+      .eq("series_id", seriesId)
+      .order("book_number", { ascending: true });
+    setSeriesBooks(bookRows ?? []);
+    setSidebarOpen(false);
+  };
+
   const loadSeries = async (userIdValue: string) => {
     const { data } = await supabase
       .from("series")
@@ -378,7 +418,17 @@ export default function SeriesPage() {
 
     if (data) {
       setSeriesList(data as SeriesSummary[]);
-      if (data[0]) {
+      const targetId = selectedSeriesId ?? (data[0]?.id ?? null);
+      if (targetId && data.some(s => s.id === targetId)) {
+        setSelectedSeriesId(targetId);
+        const { data: bookRows } = await supabase
+          .from("series_books")
+          .select("id,series_id,book_number,title,status,summary,novel_id")
+          .eq("series_id", targetId)
+          .order("book_number", { ascending: true });
+        setSeriesBooks(bookRows ?? []);
+      } else if (data[0]) {
+        setSelectedSeriesId(data[0].id);
         const { data: bookRows } = await supabase
           .from("series_books")
           .select("id,series_id,book_number,title,status,summary,novel_id")
@@ -441,6 +491,16 @@ export default function SeriesPage() {
       setTitle("");
       setDescription("");
       await loadSeries(user.id);
+      // Auto-select the newly created series (it will be first after reload)
+      const { data: freshList } = await supabase
+        .from("series")
+        .select("id")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (freshList && freshList[0]) {
+        setSelectedSeriesId(freshList[0].id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -533,59 +593,159 @@ export default function SeriesPage() {
           </div>
         </div>
       )}
-      <div className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-12">
-        <header className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Link href="/" className="text-sm text-zinc-400">
-              ← Back to home
-            </Link>
-            <div className="flex flex-wrap items-center gap-3">
-              <Link
-                href="/studio"
-                className="rounded-full border border-emerald-500/60 px-3 py-1 text-xs text-emerald-200"
-              >
-                Go to Studio
-              </Link>
-              {authEmail && (
-                <div className="flex items-center gap-3 text-xs text-zinc-400">
-                  <span>{authEmail}</span>
-                  <button
-                    onClick={async () => {
-                      setSeriesBooks([]);
-                      setSuiteThemes("Coming of age, identity, relationships");
-                      setSuiteCoreConflict("");
-                      setSeriesCharacters([]);
-                      setSelectedCharacterId(null);
-                      setSeriesMemory([]);
-                      setSeriesTimeline([]);
-                      setPlotThreads([]);
-                      setSeriesLogs([]);
-                      setSuiteBookNumber(1);
-                      setUserId(null);
-                      setAuthEmail(null);
-                      await supabase.auth.signOut();
-                      window.location.href = "/login";
-                    }}
-                    className="rounded-full border border-zinc-700 px-3 py-1 text-xs"
-                  >
-                    Sign out
-                  </button>
-                </div>
-              )}
+
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <div className="flex min-h-screen">
+        {/* Sidebar */}
+        <aside
+          className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-zinc-800 bg-zinc-900 transition-transform duration-200 md:static md:translate-x-0 ${
+            sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          {/* Sidebar header */}
+          <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-4">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-zinc-100">My Series</h2>
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500/20 px-1.5 text-[10px] font-semibold text-emerald-300">
+                {seriesList.length}
+              </span>
             </div>
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 hover:text-zinc-200 md:hidden"
+              aria-label="Close sidebar"
+            >
+              ✕
+            </button>
           </div>
-          <h1 className="text-3xl font-semibold">Series Mode</h1>
-          <p className="text-zinc-300">
-            Create series arcs and jump directly into book generation.
-          </p>
-          {userId ? (
-            <span className="text-xs text-zinc-400">Signed in</span>
-          ) : (
-            <Link href="/login" className="text-xs underline text-zinc-400">
-              Sign in to save series
-            </Link>
-          )}
-        </header>
+
+          {/* New Series button */}
+          <div className="px-3 pt-3">
+            <button
+              onClick={() => {
+                setActiveTab("overview");
+                setSidebarOpen(false);
+              }}
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-emerald-500/40 hover:text-emerald-200"
+            >
+              + New Series
+            </button>
+          </div>
+
+          {/* Series list */}
+          <div className="flex-1 overflow-y-auto px-3 py-3" style={{ scrollbarWidth: "thin", scrollbarColor: "#3f3f46 transparent" }}>
+            {seriesList.length === 0 && (
+              <p className="px-2 py-4 text-center text-xs text-zinc-500">No series yet.</p>
+            )}
+            {seriesList.map((series) => (
+              <button
+                key={series.id}
+                onClick={() => selectSeries(series.id)}
+                className={`mb-1 w-full rounded-lg px-3 py-2.5 text-left transition ${
+                  activeSeries?.id === series.id
+                    ? "border-l-2 border-l-emerald-500 bg-emerald-500/10"
+                    : "border-l-2 border-l-transparent hover:bg-zinc-800/60"
+                }`}
+              >
+                <p className={`truncate text-sm font-medium ${
+                  activeSeries?.id === series.id ? "text-emerald-200" : "text-zinc-200"
+                }`}>
+                  {series.title}
+                </p>
+                <p className="mt-0.5 truncate text-[11px] text-zinc-500">
+                  {series.description || "No description"}
+                </p>
+                <p className="mt-1 text-[10px] text-zinc-600">
+                  {series.num_books} book{series.num_books !== 1 ? "s" : ""}
+                </p>
+              </button>
+            ))}
+          </div>
+
+          {/* Sidebar footer - user info */}
+          <div className="border-t border-zinc-800 px-4 py-3">
+            {authEmail && (
+              <div className="flex flex-col gap-2">
+                <span className="truncate text-[11px] text-zinc-500">{authEmail}</span>
+                <button
+                  onClick={async () => {
+                    clearSeriesData();
+                    setSuiteThemes("Coming of age, identity, relationships");
+                    setSuiteCoreConflict("");
+                    setSuiteBookNumber(1);
+                    setUserId(null);
+                    setAuthEmail(null);
+                    setSeriesList([]);
+                    setSelectedSeriesId(null);
+                    await supabase.auth.signOut();
+                    window.location.href = "/login";
+                  }}
+                  className="rounded-full border border-zinc-700 px-3 py-1 text-[11px] text-zinc-400 transition hover:text-zinc-200"
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
+            {userId ? (
+              <span className="text-[10px] text-zinc-600">Signed in</span>
+            ) : (
+              <Link href="/login" className="text-[11px] underline text-zinc-400">
+                Sign in to save series
+              </Link>
+            )}
+          </div>
+        </aside>
+
+        {/* Main content */}
+        <main className="flex-1 overflow-x-hidden">
+          <div className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-12">
+            {/* Mobile hamburger + header */}
+            <header className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setSidebarOpen(true)}
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-700 text-zinc-400 transition hover:text-zinc-200 md:hidden"
+                    aria-label="Open sidebar"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                      <line x1="2" y1="4" x2="16" y2="4" />
+                      <line x1="2" y1="9" x2="16" y2="9" />
+                      <line x1="2" y1="14" x2="16" y2="14" />
+                    </svg>
+                  </button>
+                  <Link href="/" className="text-sm text-zinc-400">
+                    ← Back to home
+                  </Link>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Link
+                    href="/studio"
+                    className="rounded-full border border-emerald-500/60 px-3 py-1 text-xs text-emerald-200"
+                  >
+                    Go to Studio
+                  </Link>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-semibold">Series Mode</h1>
+                {activeSeries && (
+                  <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs text-emerald-300">
+                    {activeSeries.title}
+                  </span>
+                )}
+              </div>
+              <p className="text-zinc-300">
+                Create series arcs and jump directly into book generation.
+              </p>
+            </header>
 
         {error && (
           <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
@@ -649,7 +809,7 @@ export default function SeriesPage() {
               {loading ? "Creating..." : "Create series & arc"}
             </button>
             <p className="text-xs text-zinc-500">
-              The series suite uses the most recent series in your list.
+              Select a series from the sidebar, or create a new one below.
             </p>
           </div>
         </section>
@@ -762,13 +922,13 @@ export default function SeriesPage() {
                 setLoadingStep("bible");
                 setError(null);
                 try {
-                  if (!seriesList[0]) throw new Error("Create a series first");
+                  if (!activeSeries) throw new Error("Create a series first");
                   const response = await fetch("/api/generate/series/bible", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                      seriesId: seriesList[0].id,
-                      title: seriesList[0].title,
+                      seriesId: activeSeries.id,
+                      title: activeSeries.title,
                       genre: "Young Adult Fiction",
                       targetAge: "13-18",
                       tone: suiteTone,
@@ -776,24 +936,24 @@ export default function SeriesPage() {
                       mainCharacters: suiteCharacters,
                       coreConflict: suiteCoreConflict || description || "",
                       themes: suiteThemes,
-                      numBooks: seriesList[0].num_books,
+                      numBooks: activeSeries.num_books,
                       model,
                     }),
                   });
                   if (!response.ok) throw new Error("Failed to generate series bible");
                   const data = await response.json();
                   setSeriesBible(data.bible ?? null);
-                  if (seriesList[0]) {
+                  if (activeSeries) {
                     await supabase.from("series_worlds").upsert({
-                      series_id: seriesList[0].id,
+                      series_id: activeSeries.id,
                       setting: suiteSetting,
                       rules: data.bible?.world_rules ?? null,
                       lore: data.bible?.history_lore ?? null,
                     });
                     const characterFiles = data.bible?.character_files ?? {};
-                    await supabase.from("series_characters").delete().eq("series_id", seriesList[0].id);
+                    await supabase.from("series_characters").delete().eq("series_id", activeSeries.id);
                     const rows = Object.entries(characterFiles).map(([name, info]) => ({
-                      series_id: seriesList[0].id,
+                      series_id: activeSeries.id,
                       name,
                       role: "Main",
                       description: (info as Record<string, unknown>)?.arc_summary ?? null,
@@ -818,25 +978,25 @@ export default function SeriesPage() {
                 setLoadingStep("map");
                 setError(null);
                 try {
-                  if (!seriesList[0]) throw new Error("Create a series first");
+                  if (!activeSeries) throw new Error("Create a series first");
                   if (!userId) throw new Error("Please sign in");
                   const response = await fetch("/api/generate/series/map", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                      seriesId: seriesList[0].id,
-                      title: seriesList[0].title,
-                      numBooks: seriesList[0].num_books,
+                      seriesId: activeSeries.id,
+                      title: activeSeries.title,
+                      numBooks: activeSeries.num_books,
                       model,
                     }),
                   });
                   if (!response.ok) throw new Error("Failed to generate series map");
                   const data = await response.json();
                   setSeriesMap(data.maps ?? null);
-                  if (seriesList[0] && Array.isArray(data.maps)) {
-                    await supabase.from("series_books").delete().eq("series_id", seriesList[0].id);
+                  if (activeSeries && Array.isArray(data.maps)) {
+                    await supabase.from("series_books").delete().eq("series_id", activeSeries.id);
                     const rows = data.maps.map((book: Record<string, unknown>) => ({
-                      series_id: seriesList[0].id,
+                      series_id: activeSeries.id,
                       book_number: Number(book.book_number ?? 1),
                       title: String(book.title ?? `Book ${book.book_number ?? 1}`),
                       status: "planned",
@@ -900,13 +1060,13 @@ export default function SeriesPage() {
                 setLoadingStep("evolution");
                 setError(null);
                 try {
-                  if (!seriesList[0]) throw new Error("Create a series first");
+                  if (!activeSeries) throw new Error("Create a series first");
                   const response = await fetch("/api/generate/series/evolution", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                      seriesId: seriesList[0].id,
-                      numBooks: seriesList[0].num_books,
+                      seriesId: activeSeries.id,
+                      numBooks: activeSeries.num_books,
                       characters: suiteCharacters
                         ? suiteCharacters.split(",").map((name) => name.trim())
                         : ["Main Character"],
@@ -916,9 +1076,9 @@ export default function SeriesPage() {
                   if (!response.ok) throw new Error("Failed to generate evolution");
                   const data = await response.json();
                   setCharacterEvolution(data.evolution ?? null);
-                  if (seriesList[0]) {
+                  if (activeSeries) {
                     await supabase.from("series_memory").insert({
-                      series_id: seriesList[0].id,
+                      series_id: activeSeries.id,
                       category: "character_evolution",
                       content: JSON.stringify(data.evolution ?? {}),
                     });
@@ -938,14 +1098,14 @@ export default function SeriesPage() {
                 setLoadingStep("blueprint");
                 setError(null);
                 try {
-                  if (!seriesList[0]) throw new Error("Create a series first");
+                  if (!activeSeries) throw new Error("Create a series first");
                   const response = await fetch("/api/generate/series/blueprint", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                      seriesId: seriesList[0].id,
-                      title: seriesList[0].title,
-                      numBooks: seriesList[0].num_books,
+                      seriesId: activeSeries.id,
+                      title: activeSeries.title,
+                      numBooks: activeSeries.num_books,
                       bookNumber: suiteBookNumber,
                       model,
                     }),
@@ -953,9 +1113,9 @@ export default function SeriesPage() {
                   if (!response.ok) throw new Error("Failed to generate blueprint");
                   const data = await response.json();
                   setBookBlueprint(data.blueprint ?? null);
-                  if (seriesList[0]) {
+                  if (activeSeries) {
                     await supabase.from("series_memory").insert({
-                      series_id: seriesList[0].id,
+                      series_id: activeSeries.id,
                       category: `book_${suiteBookNumber}_blueprint`,
                       content: JSON.stringify(data.blueprint ?? {}),
                     });
@@ -1111,9 +1271,9 @@ export default function SeriesPage() {
               </div>
               <button
                 onClick={async () => {
-                  if (!seriesList[0]) return;
+                  if (!activeSeries) return;
                   const response = await fetch(
-                    `/api/series/characters?seriesId=${seriesList[0].id}`
+                    `/api/series/characters?seriesId=${activeSeries.id}`
                   );
                   const data = await response.json();
                   setSeriesCharacters(data.characters ?? []);
@@ -1331,9 +1491,9 @@ export default function SeriesPage() {
               </div>
               <button
                 onClick={async () => {
-                  if (!seriesList[0]) return;
+                  if (!activeSeries) return;
                   const response = await fetch(
-                    `/api/series/world?seriesId=${seriesList[0].id}`
+                    `/api/series/world?seriesId=${activeSeries.id}`
                   );
                   const data = await response.json();
                   setSeriesWorld(data.world ?? null);
@@ -1384,19 +1544,19 @@ export default function SeriesPage() {
                 </div>
                 <button
                   onClick={async () => {
-                    if (!seriesList[0]) return;
+                    if (!activeSeries) return;
                     await fetch("/api/series/world", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
-                        seriesId: seriesList[0].id,
+                        seriesId: activeSeries.id,
                         setting: worldSettingDraft,
                         rules: worldRulesDraft,
                         lore: worldLoreDraft,
                       }),
                     });
                     const response = await fetch(
-                      `/api/series/world?seriesId=${seriesList[0].id}`
+                      `/api/series/world?seriesId=${activeSeries.id}`
                     );
                     const data = await response.json();
                     setSeriesWorld(data.world ?? null);
@@ -1489,12 +1649,12 @@ export default function SeriesPage() {
               </label>
               <button
                 onClick={async () => {
-                  if (!seriesList[0] || !canonFact) return;
+                  if (!activeSeries || !canonFact) return;
                   await fetch("/api/series/canon", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                      seriesId: seriesList[0].id,
+                      seriesId: activeSeries.id,
                       category: canonCategory,
                       fact: canonFact,
                       source: canonSource,
@@ -1502,7 +1662,7 @@ export default function SeriesPage() {
                   });
                   setCanonFact("");
                   const response = await fetch(
-                    `/api/series/canon?seriesId=${seriesList[0].id}`
+                    `/api/series/canon?seriesId=${activeSeries.id}`
                   );
                   const data = await response.json();
                   setSeriesMemory(data.entries ?? []);
@@ -1522,9 +1682,9 @@ export default function SeriesPage() {
               </button>
               <button
                 onClick={async () => {
-                  if (!seriesList[0]) return;
+                  if (!activeSeries) return;
                   const response = await fetch(
-                    `/api/series/canon?seriesId=${seriesList[0].id}`
+                    `/api/series/canon?seriesId=${activeSeries.id}`
                   );
                   const data = await response.json();
                   setSeriesMemory(data.entries ?? []);
@@ -1582,7 +1742,7 @@ export default function SeriesPage() {
                           });
                           setEditingCanonId(null);
                           const refreshed = await fetch(
-                            `/api/series/canon?seriesId=${seriesList[0].id}`
+                            `/api/series/canon?seriesId=${activeSeries.id}`
                           );
                           const data = await refreshed.json();
                           setSeriesMemory(data.entries ?? []);
@@ -1610,7 +1770,7 @@ export default function SeriesPage() {
                           endpoint: "/api/series/canon/delete",
                           refresh: async () => {
                             const refreshed = await fetch(
-                              `/api/series/canon?seriesId=${seriesList[0].id}`
+                              `/api/series/canon?seriesId=${activeSeries.id}`
                             );
                             const data = await refreshed.json();
                             setSeriesMemory(data.entries ?? []);
@@ -1701,13 +1861,13 @@ export default function SeriesPage() {
               </button>
               <button
                 onClick={async () => {
-                  if (!seriesList[0] || !mysteryTitle || !mysteryDescription) return;
+                  if (!activeSeries || !mysteryTitle || !mysteryDescription) return;
                   await fetch("/api/series/mystery", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                       type: "secret",
-                      seriesId: seriesList[0].id,
+                      seriesId: activeSeries.id,
                       title: mysteryTitle,
                       description: mysteryDescription,
                     }),
@@ -1715,7 +1875,7 @@ export default function SeriesPage() {
                   setMysteryTitle("");
                   setMysteryDescription("");
                   const response = await fetch(
-                    `/api/series/mystery?seriesId=${seriesList[0].id}`
+                    `/api/series/mystery?seriesId=${activeSeries.id}`
                   );
                   const data = await response.json();
                   setSeriesMemory(data.secrets ?? []);
@@ -1726,20 +1886,20 @@ export default function SeriesPage() {
               </button>
               <button
                 onClick={async () => {
-                  if (!seriesList[0] || !clueDescription) return;
+                  if (!activeSeries || !clueDescription) return;
                   await fetch("/api/series/mystery", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                       type: "clue",
-                      seriesId: seriesList[0].id,
+                      seriesId: activeSeries.id,
                       description: clueDescription,
                       plantedInBook: clueBook,
                     }),
                   });
                   setClueDescription("");
                   const response = await fetch(
-                    `/api/series/mystery?seriesId=${seriesList[0].id}`
+                    `/api/series/mystery?seriesId=${activeSeries.id}`
                   );
                   const data = await response.json();
                   setSeriesMemory(data.secrets ?? []);
@@ -1750,9 +1910,9 @@ export default function SeriesPage() {
               </button>
               <button
                 onClick={async () => {
-                  if (!seriesList[0]) return;
+                  if (!activeSeries) return;
                   const response = await fetch(
-                    `/api/series/mystery?seriesId=${seriesList[0].id}`
+                    `/api/series/mystery?seriesId=${activeSeries.id}`
                   );
                   const data = await response.json();
                   setSeriesMemory(data.secrets ?? []);
@@ -1807,7 +1967,7 @@ export default function SeriesPage() {
                           });
                           setEditingSecretId(null);
                           const refreshed = await fetch(
-                            `/api/series/mystery?seriesId=${seriesList[0].id}`
+                            `/api/series/mystery?seriesId=${activeSeries.id}`
                           );
                           const data = await refreshed.json();
                           setSeriesMemory(data.secrets ?? []);
@@ -1835,7 +1995,7 @@ export default function SeriesPage() {
                           endpoint: "/api/series/mystery/secret/delete",
                           refresh: async () => {
                             const refreshed = await fetch(
-                              `/api/series/mystery?seriesId=${seriesList[0].id}`
+                              `/api/series/mystery?seriesId=${activeSeries.id}`
                             );
                             const data = await refreshed.json();
                             setSeriesMemory(data.secrets ?? []);
@@ -1892,7 +2052,7 @@ export default function SeriesPage() {
                           });
                           setEditingClueId(null);
                           const refreshed = await fetch(
-                            `/api/series/mystery?seriesId=${seriesList[0].id}`
+                            `/api/series/mystery?seriesId=${activeSeries.id}`
                           );
                           const data = await refreshed.json();
                           setSeriesMemory(data.secrets ?? []);
@@ -1920,7 +2080,7 @@ export default function SeriesPage() {
                           endpoint: "/api/series/mystery/clue/delete",
                           refresh: async () => {
                             const refreshed = await fetch(
-                              `/api/series/mystery?seriesId=${seriesList[0].id}`
+                              `/api/series/mystery?seriesId=${activeSeries.id}`
                             );
                             const data = await refreshed.json();
                             setSeriesMemory(data.secrets ?? []);
@@ -2024,12 +2184,12 @@ export default function SeriesPage() {
               </button>
               <button
                 onClick={async () => {
-                  if (!seriesList[0] || !relationshipA || !relationshipB) return;
+                  if (!activeSeries || !relationshipA || !relationshipB) return;
                   await fetch("/api/series/relationships/entries", {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                      seriesId: seriesList[0].id,
+                      seriesId: activeSeries.id,
                       characterAName: relationshipA,
                       characterBName: relationshipB,
                       relationshipType,
@@ -2039,7 +2199,7 @@ export default function SeriesPage() {
                   setRelationshipA("");
                   setRelationshipB("");
                   const response = await fetch(
-                    `/api/series/relationships/entries?seriesId=${seriesList[0].id}`
+                    `/api/series/relationships/entries?seriesId=${activeSeries.id}`
                   );
                   const data = await response.json();
                   setSeriesMemory(data.entries ?? []);
@@ -2050,9 +2210,9 @@ export default function SeriesPage() {
               </button>
               <button
                 onClick={async () => {
-                  if (!seriesList[0]) return;
+                  if (!activeSeries) return;
                   const response = await fetch(
-                    `/api/series/relationships/entries?seriesId=${seriesList[0].id}`
+                    `/api/series/relationships/entries?seriesId=${activeSeries.id}`
                   );
                   const data = await response.json();
                   setSeriesMemory(data.entries ?? []);
@@ -2127,7 +2287,7 @@ export default function SeriesPage() {
                             method: "PUT",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
-                              seriesId: seriesList[0].id,
+                              seriesId: activeSeries.id,
                               relationshipLogId: relationship.relationship_log_id,
                               characterAName: editingRelationshipA,
                               characterBName: editingRelationshipB,
@@ -2137,7 +2297,7 @@ export default function SeriesPage() {
                           });
                           setEditingRelationshipId(null);
                           const response = await fetch(
-                            `/api/series/relationships/entries?seriesId=${seriesList[0].id}`
+                            `/api/series/relationships/entries?seriesId=${activeSeries.id}`
                           );
                           const data = await response.json();
                           setSeriesMemory(data.entries ?? []);
@@ -2167,7 +2327,7 @@ export default function SeriesPage() {
                           endpoint: "/api/series/relationships/entries/delete",
                           refresh: async () => {
                             const refreshed = await fetch(
-                              `/api/series/relationships/entries?seriesId=${seriesList[0].id}`
+                              `/api/series/relationships/entries?seriesId=${activeSeries.id}`
                             );
                             const data = await refreshed.json();
                             setSeriesMemory(data.entries ?? []);
@@ -2304,12 +2464,12 @@ export default function SeriesPage() {
               </button>
               <button
                 onClick={async () => {
-                  if (!seriesList[0] || !plotName || !plotDescription) return;
+                  if (!activeSeries || !plotName || !plotDescription) return;
                   await fetch("/api/series/plot-threads", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                      seriesId: seriesList[0].id,
+                      seriesId: activeSeries.id,
                       name: plotName,
                       description: plotDescription,
                       type: plotType,
@@ -2320,7 +2480,7 @@ export default function SeriesPage() {
                   setPlotName("");
                   setPlotDescription("");
                   const response = await fetch(
-                    `/api/series/plot-threads?seriesId=${seriesList[0].id}`
+                    `/api/series/plot-threads?seriesId=${activeSeries.id}`
                   );
                   const data = await response.json();
                   setPlotThreads(data.threads ?? []);
@@ -2331,9 +2491,9 @@ export default function SeriesPage() {
               </button>
               <button
                 onClick={async () => {
-                  if (!seriesList[0]) return;
+                  if (!activeSeries) return;
                   const response = await fetch(
-                    `/api/series/plot-threads?seriesId=${seriesList[0].id}`
+                    `/api/series/plot-threads?seriesId=${activeSeries.id}`
                   );
                   const data = await response.json();
                   setPlotThreads(data.threads ?? []);
@@ -2380,7 +2540,7 @@ export default function SeriesPage() {
                             }),
                           });
                           const response = await fetch(
-                            `/api/series/plot-threads?seriesId=${seriesList[0].id}`
+                            `/api/series/plot-threads?seriesId=${activeSeries.id}`
                           );
                           const data = await response.json();
                           setPlotThreads(data.threads ?? []);
@@ -2396,7 +2556,7 @@ export default function SeriesPage() {
                             endpoint: "/api/series/plot-threads/delete",
                             refresh: async () => {
                               const response = await fetch(
-                                `/api/series/plot-threads?seriesId=${seriesList[0].id}`
+                                `/api/series/plot-threads?seriesId=${activeSeries.id}`
                               );
                               const data = await response.json();
                               setPlotThreads(data.threads ?? []);
@@ -2455,11 +2615,11 @@ export default function SeriesPage() {
               </div>
               <button
                 onClick={async () => {
-                  if (!seriesList[0]) return;
+                  if (!activeSeries) return;
                   const { data } = await supabase
                     .from("series_books")
                     .select("*")
-                    .eq("series_id", seriesList[0].id)
+                    .eq("series_id", activeSeries.id)
                     .order("book_number", { ascending: true });
                   setSeriesBooks(data ?? []);
                 }}
@@ -2517,14 +2677,14 @@ export default function SeriesPage() {
               </div>
               <button
                 onClick={async () => {
-                  if (!seriesList[0]) return;
+                  if (!activeSeries) return;
                   const response = await fetch(
-                    `/api/series/memory?seriesId=${seriesList[0].id}`
+                    `/api/series/memory?seriesId=${activeSeries.id}`
                   );
                   const data = await response.json();
                   setSeriesMemory(data.entries ?? []);
                   const warningsResponse = await fetch(
-                    `/api/series/memory/validate?seriesId=${seriesList[0].id}`
+                    `/api/series/memory/validate?seriesId=${activeSeries.id}`
                   );
                   const warningsData = await warningsResponse.json();
                   setMemoryWarnings(warningsData.warnings ?? []);
@@ -2593,12 +2753,12 @@ export default function SeriesPage() {
                     <div className="flex flex-wrap gap-3">
                       <button
                         onClick={async () => {
-                          if (!seriesList[0] || !newMemoryContent) return;
+                          if (!activeSeries || !newMemoryContent) return;
                           const response = await fetch("/api/series/memory", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
-                              seriesId: seriesList[0].id,
+                              seriesId: activeSeries.id,
                               category: newMemoryCategory,
                               content: newMemoryContent,
                             }),
@@ -2607,12 +2767,12 @@ export default function SeriesPage() {
                             setMemoryStatus("Saved memory entry.");
                             setNewMemoryContent("");
                             const refreshed = await fetch(
-                              `/api/series/memory?seriesId=${seriesList[0].id}`
+                              `/api/series/memory?seriesId=${activeSeries.id}`
                             );
                             const data = await refreshed.json();
                             setSeriesMemory(data.entries ?? []);
                             const warningsResponse = await fetch(
-                              `/api/series/memory/validate?seriesId=${seriesList[0].id}`
+                              `/api/series/memory/validate?seriesId=${activeSeries.id}`
                             );
                             const warningsData = await warningsResponse.json();
                             setMemoryWarnings(warningsData.warnings ?? []);
@@ -2733,7 +2893,7 @@ export default function SeriesPage() {
             <div className="mt-4 flex flex-wrap gap-3">
               <button
                 onClick={async () => {
-                  if (!seriesList[0]) return;
+                  if (!activeSeries) return;
                   if (!timelineTitle || !timelineDescription) {
                     setFormError("Title and description are required.");
                     return;
@@ -2743,7 +2903,7 @@ export default function SeriesPage() {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                      seriesId: seriesList[0].id,
+                      seriesId: activeSeries.id,
                       eventOrder: timelineOrder,
                       title: timelineTitle,
                       description: timelineDescription,
@@ -2753,7 +2913,7 @@ export default function SeriesPage() {
                   setTimelineTitle("");
                   setTimelineDescription("");
                   const response = await fetch(
-                    `/api/series/timeline?seriesId=${seriesList[0].id}`
+                    `/api/series/timeline?seriesId=${activeSeries.id}`
                   );
                   const data = await response.json();
                   setSeriesTimeline(data.events ?? []);
@@ -2764,9 +2924,9 @@ export default function SeriesPage() {
               </button>
               <button
                 onClick={async () => {
-                  if (!seriesList[0]) return;
+                  if (!activeSeries) return;
                   const response = await fetch(
-                    `/api/series/timeline?seriesId=${seriesList[0].id}`
+                    `/api/series/timeline?seriesId=${activeSeries.id}`
                   );
                   const data = await response.json();
                   setSeriesTimeline(data.events ?? []);
@@ -2805,9 +2965,9 @@ export default function SeriesPage() {
               </button>
               <button
                 onClick={async () => {
-                  if (!seriesList[0]) return;
+                  if (!activeSeries) return;
                   const response = await fetch(
-                    `/api/series/timeline?seriesId=${seriesList[0].id}`
+                    `/api/series/timeline?seriesId=${activeSeries.id}`
                   );
                   const data = await response.json();
                   setSeriesTimeline(data.events ?? []);
@@ -2920,7 +3080,7 @@ export default function SeriesPage() {
                                   });
                                   setEditingTimelineId(null);
                                   const response = await fetch(
-                                    `/api/series/timeline?seriesId=${seriesList[0].id}`
+                                    `/api/series/timeline?seriesId=${activeSeries.id}`
                                   );
                                   const data = await response.json();
                                   setSeriesTimeline(data.events ?? []);
@@ -2950,7 +3110,7 @@ export default function SeriesPage() {
                                   endpoint: "/api/series/timeline-events/delete",
                                   refresh: async () => {
                                     const response = await fetch(
-                                      `/api/series/timeline?seriesId=${seriesList[0].id}`
+                                      `/api/series/timeline?seriesId=${activeSeries.id}`
                                     );
                                     const data = await response.json();
                                     setSeriesTimeline(data.events ?? []);
@@ -2984,9 +3144,9 @@ export default function SeriesPage() {
               </div>
               <button
                 onClick={async () => {
-                  if (!seriesList[0]) return;
+                  if (!activeSeries) return;
                   const response = await fetch(
-                    `/api/series/generation-log?seriesId=${seriesList[0].id}`
+                    `/api/series/generation-log?seriesId=${activeSeries.id}`
                   );
                   const data = await response.json();
                   setSeriesLogs(data.logs ?? []);
@@ -3051,14 +3211,14 @@ export default function SeriesPage() {
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-xl font-semibold">Your series</h2>
+            <h2 className="text-xl font-semibold">Tools</h2>
             <button
               onClick={async () => {
-                if (!seriesList[0]) return;
+                if (!activeSeries) return;
                 await fetch("/api/series/migrate", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ seriesId: seriesList[0].id }),
+                  body: JSON.stringify({ seriesId: activeSeries.id }),
                 });
               }}
               className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
@@ -3066,34 +3226,12 @@ export default function SeriesPage() {
               Run Legacy Migration
             </button>
           </div>
-          <div className="mt-4 grid gap-4">
-            {seriesList.length === 0 && (
-              <span className="text-sm text-zinc-500">No series yet.</span>
-            )}
-            {seriesList.map((series) => (
-              <div
-                key={series.id}
-                className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4"
-              >
-                <h3 className="text-lg font-semibold text-zinc-100">
-                  {series.title}
-                </h3>
-                <p className="text-sm text-zinc-400">
-                  {series.description || "No description provided."}
-                </p>
-                <p className="mt-2 text-xs text-zinc-500">
-                  {series.num_books} books
-                </p>
-                <Link
-                  href={`/studio?seriesId=${series.id}&bookNumber=1`}
-                  className="mt-3 inline-flex rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
-                >
-                  Start book 1
-                </Link>
-              </div>
-            ))}
-          </div>
+          <p className="mt-2 text-xs text-zinc-500">
+            Select a series from the sidebar to work with it.
+          </p>
         </section>
+          </div>
+        </main>
       </div>
     </div>
   );
