@@ -471,7 +471,14 @@ export default function SeriesPage() {
 
       // Books (from supabase directly)
       if (booksRes.status === "fulfilled") {
-        setSeriesBooks(booksRes.value.data ?? []);
+        if (booksRes.value.error) {
+          console.error("Error loading series_books:", booksRes.value.error);
+        }
+        const booksData = booksRes.value.data ?? [];
+        console.log(`Loaded ${booksData.length} series_books for series ${seriesId}`);
+        setSeriesBooks(booksData);
+      } else {
+        console.error("series_books query rejected:", booksRes.reason);
       }
 
       // Characters
@@ -1136,7 +1143,8 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setSeriesMap(data.maps ?? null);
                   if (activeSeries && Array.isArray(data.maps)) {
-                    await supabase.from("series_books").delete().eq("series_id", activeSeries.id);
+                    const { error: deleteError } = await supabase.from("series_books").delete().eq("series_id", activeSeries.id);
+                    if (deleteError) console.error("Failed to delete old series_books:", deleteError);
                     const rows = data.maps.map((book: Record<string, unknown>) => ({
                       series_id: activeSeries.id,
                       book_number: Number(book.book_number ?? 1),
@@ -1145,10 +1153,11 @@ export default function SeriesPage() {
                       summary: String(book.central_conflict ?? ""),
                     }));
                     if (rows.length) {
-                      const { data: inserted } = await supabase
+                      const { data: inserted, error: insertError } = await supabase
                         .from("series_books")
                         .insert(rows)
                         .select("id,series_id,book_number,title,status,summary");
+                      if (insertError) console.error("Failed to insert series_books:", insertError);
                       if (inserted) {
                         const insertedBooks = inserted as SeriesBookInsertedRow[];
                         const novelRows = insertedBooks.map((bookRow) => ({
@@ -1157,13 +1166,14 @@ export default function SeriesPage() {
                           series_id: bookRow.series_id,
                           book_number: bookRow.book_number,
                         }));
-                        const { data: novelsInserted } = await supabase
+                        const { data: novelsInserted, error: novelInsertError } = await supabase
                           .from("novels")
                           .insert(novelRows)
                           .select("id,series_id,book_number");
+                        if (novelInsertError) console.error("Failed to insert novels:", novelInsertError);
                         const novels = (novelsInserted ?? []) as NovelInsertedRow[];
                         if (novels.length) {
-                          await Promise.all(
+                          const updateResults = await Promise.all(
                             novels.map((novelRow) =>
                               supabase
                                 .from("series_books")
@@ -1172,18 +1182,26 @@ export default function SeriesPage() {
                                 .eq("book_number", novelRow.book_number)
                             )
                           );
+                          updateResults.forEach((r, i) => {
+                            if (r.error) console.error(`Failed to update novel_id for book ${i+1}:`, r.error);
+                          });
                         }
-                        setSeriesBooks(
-                          insertedBooks.map((bookRow) => ({
-                            ...bookRow,
-                            novel_id:
-                              novels.find(
-                                (novelRow) =>
-                                  novelRow.series_id === bookRow.series_id &&
-                                  novelRow.book_number === bookRow.book_number
-                              )?.id ?? null,
-                          }))
-                        );
+                        // Reload books from database to ensure we have the full, correct data including novel_id
+                        const { data: refreshedBooks, error: refreshError } = await supabase
+                          .from("series_books")
+                          .select("id,series_id,book_number,title,status,summary,novel_id")
+                          .eq("series_id", activeSeries.id)
+                          .order("book_number", { ascending: true });
+                        if (refreshError) console.error("Failed to refresh series_books:", refreshError);
+                        setSeriesBooks(refreshedBooks ?? insertedBooks.map((bookRow) => ({
+                          ...bookRow,
+                          novel_id:
+                            novels.find(
+                              (novelRow) =>
+                                novelRow.series_id === bookRow.series_id &&
+                                novelRow.book_number === bookRow.book_number
+                            )?.id ?? null,
+                        })));
                       }
                     }
                   }
@@ -1377,6 +1395,19 @@ export default function SeriesPage() {
             {seriesMap && (
               <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
                 <h3 className="text-sm font-semibold text-zinc-100">Series Map</h3>
+                {activeSeries && Array.isArray(seriesMap) && seriesMap.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {seriesMap.map((mapItem: Record<string, unknown>, idx: number) => (
+                      <Link
+                        key={idx}
+                        href={`/studio?seriesId=${activeSeries.id}&bookNumber=${mapItem.book_number ?? idx + 1}`}
+                        className="rounded-full border border-blue-500/40 px-3 py-1 text-[10px] text-blue-200 transition hover:bg-blue-500/10"
+                      >
+                        Book {String(mapItem.book_number ?? idx + 1)} → Studio
+                      </Link>
+                    ))}
+                  </div>
+                )}
                 <pre className="mt-2 whitespace-pre-wrap text-xs text-zinc-200">
                   {JSON.stringify(seriesMap, null, 2)}
                 </pre>
@@ -2801,6 +2832,12 @@ export default function SeriesPage() {
                     <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
                       Chapters: {String(book.chapter_count ?? "?")}
                     </span>
+                    <Link
+                      href={`/studio?seriesId=${book.series_id}&bookNumber=${book.book_number}`}
+                      className="rounded-full border border-blue-500/40 px-2 py-0.5 text-[10px] text-blue-200 transition hover:bg-blue-500/10"
+                    >
+                      Open in Studio
+                    </Link>
                   </div>
                 </div>
               ))}
