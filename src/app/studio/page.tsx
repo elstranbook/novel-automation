@@ -105,6 +105,9 @@ type NovelSummary = {
   book_number: number | null;
 };
 
+/** Lightweight map from series_id → series title for sidebar display */
+type SeriesLookup = Record<string, string>;
+
 const downloadText = (filename: string, content: string, mime = "text/plain") => {
   const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);
@@ -373,6 +376,7 @@ function StudioContent() {
 
   const [userId, setUserId] = useState<string | null>(null);
   const [novels, setNovels] = useState<NovelSummary[]>([]);
+  const [seriesLookup, setSeriesLookup] = useState<SeriesLookup>({});
   const [showSavedNovels, setShowSavedNovels] = useState(false);
   const [selectedNovelId, setSelectedNovelId] = useState<string | null>(null);
   const [novelId, setNovelId] = useState<string | null>(null);
@@ -893,6 +897,22 @@ function StudioContent() {
 
     if (!loadError && data) {
       setNovels(data as NovelSummary[]);
+
+      // Fetch series titles for any novels that belong to a series
+      const seriesIds = [...new Set(data.map((n: Record<string, unknown>) => n.series_id).filter(Boolean))] as string[];
+      if (seriesIds.length > 0) {
+        const { data: seriesRows } = await supabase
+          .from("series")
+          .select("id,title")
+          .in("id", seriesIds);
+        if (seriesRows) {
+          const lookup: SeriesLookup = {};
+          for (const row of seriesRows) {
+            lookup[row.id] = row.title;
+          }
+          setSeriesLookup(lookup);
+        }
+      }
     }
   };
 
@@ -3281,24 +3301,38 @@ function StudioContent() {
         {novels.length === 0 && (
           <span className="text-xs text-zinc-500">No novels saved yet.</span>
         )}
-        {novels.map((novel) => (
-          <button
-            key={novel.id}
-            onClick={() => handleSelectNovel(novel.id)}
-            className={`group flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs transition ${
-              novel.id === selectedNovelId
-                ? "border-emerald-400/60 bg-emerald-500/10 text-emerald-200"
-                : "border-zinc-800 text-zinc-300 hover:border-zinc-600"
-            }`}
-          >
-            <span className="truncate" title={novel.title}>
-              {novel.title}
-            </span>
-            <span className="text-xs text-zinc-500">
-              {new Date(novel.created_at).toLocaleDateString()}
-            </span>
-          </button>
-        ))}
+        {novels.map((novel) => {
+          const isSeriesBook = novel.series_id && novel.book_number;
+          const seriesTitle = isSeriesBook ? seriesLookup[novel.series_id!] : null;
+          const displayName = isSeriesBook && seriesTitle
+            ? `${seriesTitle} — ${novel.title}`
+            : novel.title;
+          return (
+            <button
+              key={novel.id}
+              onClick={() => handleSelectNovel(novel.id)}
+              className={`group flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs transition ${
+                novel.id === selectedNovelId
+                  ? "border-emerald-400/60 bg-emerald-500/10 text-emerald-200"
+                  : "border-zinc-800 text-zinc-300 hover:border-zinc-600"
+              }`}
+            >
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="truncate" title={displayName}>
+                  {displayName}
+                </span>
+                {isSeriesBook && seriesTitle && (
+                  <span className="text-[10px] text-zinc-500">
+                    Book {novel.book_number}
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-zinc-500 shrink-0">
+                {new Date(novel.created_at).toLocaleDateString()}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </>
   );
