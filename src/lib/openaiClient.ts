@@ -1,10 +1,43 @@
 import OpenAI from "openai";
 import { isDashScopeModel, runDashScopeCompletion } from "./dashscopeClient";
 
-export const openaiClient = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  timeout: 120_000, // 2 minute timeout per request
-});
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? "";
+
+if (!OPENAI_API_KEY) {
+  console.warn(
+    "[openaiClient] WARNING: OPENAI_API_KEY is not set. " +
+    "OpenAI-dependent routes will return errors at runtime. " +
+    "Set this environment variable to enable OpenAI features."
+  );
+}
+
+/**
+ * Lazily-initialised OpenAI client.  We cannot call `new OpenAI()` at
+ * module-load time when the API key is missing because the constructor
+ * throws — which kills the Next.js build during "collect page data".
+ * Instead we create the instance on first use.
+ */
+let _openaiClient: OpenAI | null = null;
+
+export const getOpenAIClient = (): OpenAI => {
+  if (!_openaiClient) {
+    if (!OPENAI_API_KEY) {
+      throw new Error(
+        "OPENAI_API_KEY is not set. Add it in your environment variables to enable OpenAI features."
+      );
+    }
+    _openaiClient = new OpenAI({
+      apiKey: OPENAI_API_KEY,
+      timeout: 120_000,
+    });
+  }
+  return _openaiClient;
+};
+
+/** @deprecated Use getOpenAIClient() for lazy initialisation */
+export const openaiClient = OPENAI_API_KEY
+  ? new OpenAI({ apiKey: OPENAI_API_KEY, timeout: 120_000 })
+  : (null as unknown as OpenAI);
 
 export const runChatCompletion = async ({
   model,

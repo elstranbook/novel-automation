@@ -16,6 +16,14 @@ const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 /** Check if OpenRouter API key is configured */
 export const isOpenRouterConfigured = (): boolean => OPENROUTER_API_KEY.length > 0;
 
+if (!OPENROUTER_API_KEY) {
+  console.warn(
+    "[dashscopeClient] WARNING: OPENROUTER_API_KEY is not set. " +
+    "OpenRouter/Qwen3-dependent routes will return errors at runtime. " +
+    "Get your key from: https://openrouter.ai/keys"
+  );
+}
+
 /** Available Qwen3 creative-writing models on OpenRouter */
 export const QWEN3_MODELS = {
   /** Best for creative writing — superior human preference alignment */
@@ -38,16 +46,47 @@ export type Qwen3ModelId = (typeof QWEN3_MODELS)[keyof typeof QWEN3_MODELS];
 export const isDashScopeModel = (model: string): boolean =>
   model.startsWith("qwen3-") || model.startsWith("qwen-") || model.startsWith("qwen/");
 
-/** Create an OpenRouter OpenAI-compatible client */
-export const dashscopeClient = new OpenAI({
-  apiKey: OPENROUTER_API_KEY,
-  baseURL: OPENROUTER_BASE_URL,
-  timeout: 120_000, // 2 minute timeout per request
-  defaultHeaders: {
-    "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "https://write.elstranbooks.com",
-    "X-Title": "Novel Automation",
-  },
-});
+/**
+ * Lazily-initialised OpenRouter client.  We cannot call `new OpenAI()` at
+ * module-load time when the API key is missing because the constructor
+ * throws — which kills the Next.js build during "collect page data".
+ * Instead we create the instance on first use.
+ */
+let _dashscopeClient: OpenAI | null = null;
+
+export const getDashScopeClient = (): OpenAI => {
+  if (!_dashscopeClient) {
+    if (!OPENROUTER_API_KEY) {
+      throw new Error(
+        "OPENROUTER_API_KEY is not set. Add it in Vercel → Settings → Environment Variables. " +
+        "Get your key from: https://openrouter.ai/keys"
+      );
+    }
+    _dashscopeClient = new OpenAI({
+      apiKey: OPENROUTER_API_KEY,
+      baseURL: OPENROUTER_BASE_URL,
+      timeout: 120_000,
+      defaultHeaders: {
+        "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "https://write.elstranbooks.com",
+        "X-Title": "Novel Automation",
+      },
+    });
+  }
+  return _dashscopeClient;
+};
+
+/** @deprecated Use getDashScopeClient() for lazy initialisation */
+export const dashscopeClient = OPENROUTER_API_KEY
+  ? new OpenAI({
+      apiKey: OPENROUTER_API_KEY,
+      baseURL: OPENROUTER_BASE_URL,
+      timeout: 120_000,
+      defaultHeaders: {
+        "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL ?? "https://write.elstranbooks.com",
+        "X-Title": "Novel Automation",
+      },
+    })
+  : (null as unknown as OpenAI);
 
 /**
  * Run a chat completion against OpenRouter's Qwen3 models.
@@ -113,7 +152,7 @@ export const runDashScopeCompletion = async ({
     }
   }
 
-  const response = await dashscopeClient.chat.completions.create({
+  const response = await getDashScopeClient().chat.completions.create({
     model,
     messages,
     max_completion_tokens: maxTokens ?? 4000,
