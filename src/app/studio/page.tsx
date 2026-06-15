@@ -3447,10 +3447,10 @@ function StudioContent() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-zinc-100">
-                  Series Book #{seriesBookNumber}
+                  {seriesBookOptions.find(o => o.book_number === seriesBookNumber)?.title ?? `Book ${seriesBookNumber}`}
                 </p>
                 <p className="text-xs text-zinc-400">
-                  Manage this book from your series map.
+                  Book {seriesBookNumber} of {seriesBookOptions.length} — Manage this book from your series map.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -3468,7 +3468,7 @@ function StudioContent() {
                         key={option.book_number}
                         value={String(option.book_number)}
                       >
-                        Book {option.book_number}: {option.title}
+                        {option.title} (Book {option.book_number})
                       </option>
                     ))}
                   </select>

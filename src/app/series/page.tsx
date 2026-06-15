@@ -1478,7 +1478,7 @@ export default function SeriesPage() {
               <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-zinc-400">
                 {tensionCurveData.map((point) => (
                   <span key={point.book}>
-                    Book {point.book}: {point.score}
+                    {String(seriesBooks.find(b => Number(b.book_number) === point.book)?.title ?? `Book ${point.book}`)}: {point.score}
                   </span>
                 ))}
               </div>
@@ -1503,9 +1503,10 @@ export default function SeriesPage() {
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <p className="text-sm font-semibold text-zinc-100">
-                            Book {String(book.book_number ?? "?")}: {String(
-                              book.title ?? "Untitled"
-                            )}
+                            {String(book.title ?? "Untitled")}
+                          </p>
+                          <p className="text-xs text-zinc-400">
+                            Book {String(book.book_number ?? "?")}
                           </p>
                           <p className="text-xs text-zinc-400">
                             Status: {String(book.status ?? "draft")}
@@ -1539,7 +1540,7 @@ export default function SeriesPage() {
                         href={`/studio?seriesId=${activeSeries.id}&bookNumber=${mapItem.book_number ?? idx + 1}`}
                         className="rounded-full border border-blue-500/40 px-3 py-1 text-[10px] text-blue-200 transition hover:bg-blue-500/10"
                       >
-                        Book {String(mapItem.book_number ?? idx + 1)} → Studio
+                        {String((mapItem.map_data as Record<string, unknown>)?.title ?? (mapItem as Record<string, unknown>).title ?? `Book ${mapItem.book_number ?? idx + 1}`)} → Studio
                       </Link>
                     ))}
                   </div>
@@ -1578,7 +1579,7 @@ export default function SeriesPage() {
                               : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
                           }`}
                         >
-                          Book {bpNum}
+                          {String(seriesBooks.find(b => Number(b.book_number) === bpNum)?.title ?? `Book ${bpNum}`)}
                         </button>
                       );
                     })}
@@ -2871,8 +2872,11 @@ export default function SeriesPage() {
                     </p>
                     <p className="mt-2 text-xs">{String(thread.description ?? "")}</p>
                     <p className="mt-2 text-[10px] text-zinc-500">
-                      Book {String(thread.introduced_in_book ?? "?")}
-                      {thread.resolved_in_book ? ` → Book ${thread.resolved_in_book}` : ""}
+                      {(() => {
+                        const introTitle = seriesBooks.find(b => Number(b.book_number) === Number(thread.introduced_in_book))?.title;
+                        const resolveTitle = thread.resolved_in_book ? seriesBooks.find(b => Number(b.book_number) === Number(thread.resolved_in_book))?.title : null;
+                        return String(introTitle ?? `Book ${thread.introduced_in_book ?? "?"}`) + (resolveTitle ? ` → ${resolveTitle}` : "");
+                      })()}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
@@ -2983,10 +2987,11 @@ export default function SeriesPage() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-zinc-100">
-                      Book {String(book.book_number ?? "?")}: {String(
-                        book.title ?? "Untitled"
-                      )}
+                      {String(book.title ?? "Untitled")}
                     </p>
+                    <span className="ml-2 rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
+                      Book {String(book.book_number ?? "?")}
+                    </span>
                     <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
                       {String(book.status ?? "draft")}
                     </span>
@@ -3339,7 +3344,11 @@ export default function SeriesPage() {
                     <div key={bookNumber} className="space-y-3">
                       <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-2">
                         <p className="text-xs font-semibold text-zinc-200">
-                          Book {Number(bookNumber) || "Unassigned"}
+                          {(() => {
+                            const bn = Number(bookNumber);
+                            const bookTitle = seriesBooks.find(b => Number(b.book_number) === bn)?.title;
+                            return String(bookTitle ?? `Book ${bn || "Unassigned"}`);
+                          })()}
                         </p>
                         <span className="text-[10px] text-zinc-400">
                           {list.length} events
@@ -3397,7 +3406,11 @@ export default function SeriesPage() {
                               </p>
                               <p className="text-xs text-zinc-400">
                                 <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
-                                  Book {String(event.book_number ?? "?")}
+                                  {(() => {
+                                    const ebn = Number(event.book_number);
+                                    const evtBookTitle = seriesBooks.find(b => Number(b.book_number) === ebn)?.title;
+                                    return String(evtBookTitle ?? `Book ${event.book_number ?? "?"}`);
+                                  })()}
                                 </span>
                                 <span className="ml-2 rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
                                   Order {String(event.event_order ?? "?")}

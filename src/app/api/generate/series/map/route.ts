@@ -125,35 +125,40 @@ ${bibleContext}
 
 For EACH of the ${numBooks} books, provide:
 
-1) CENTRAL CONFLICT
+1) TITLE
+   - A unique, memorable title for this book that fits the series tone
+   - The title should distinguish this book from others in the series
+
+2) CENTRAL CONFLICT
    - The main problem/challenge of this book
    - Internal and external conflicts
 
-2) EMOTIONAL JOURNEY
+3) EMOTIONAL JOURNEY
    - The protagonist's emotional arc in this book
    - Key emotional beats and turning points
 
-3) CHARACTER GROWTH
+4) CHARACTER GROWTH
    - How characters evolve in this book
    - What lessons they learn
 
-4) TWIST OR REVEAL
+5) TWIST OR REVEAL
    - The major twist or revelation
    - How it changes everything
 
-5) FINAL STATE
+6) FINAL STATE
    - How the book ends
    - What has changed from the beginning
 
-6) FORESHADOWING SEEDS
+7) FORESHADOWING SEEDS
    - Elements planted for future books
    - Hints and setups for later payoffs
 
-7) STAKES ESCALATION
+8) STAKES ESCALATION
    - How stakes are raised from the previous book
    - Why this book matters more
 
 **CRITICAL RULES:**
+- Each book MUST have a unique, evocative title — do NOT use generic names like "Book 1" or "Book 2"
 - Each book must raise the stakes
 - Never allow emotional resets between books
 - Build toward the final book
@@ -164,6 +169,7 @@ Return as JSON object with a "books" key containing an array of book maps:
   "books": [
     {
       "book_number": 1,
+      "title": "The Awakening",
       "central_conflict": "...",
       "emotional_journey": "...",
       "character_growth": "...",

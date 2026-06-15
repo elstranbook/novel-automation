@@ -29,19 +29,18 @@ export async function POST(request: Request) {
       .eq("series_id", seriesId)
       .maybeSingle();
 
+    const { data: priorNovels } = await supabaseAdmin
+      .from("novels")
+      .select("id,title,book_number")
+      .eq("series_id", seriesId)
+      .lt("book_number", bookNumber);
+
+    const priorNovelIds = (priorNovels ?? []).map((row) => row.id);
+
     const { data: priorBooks } = await supabaseAdmin
       .from("novel_synopsis")
       .select("*")
-      .in(
-        "novel_id",
-        (
-          await supabaseAdmin
-            .from("novels")
-            .select("id")
-            .eq("series_id", seriesId)
-            .lt("book_number", bookNumber)
-        ).data?.map((row) => row.id) ?? []
-      );
+      .in("novel_id", priorNovelIds.length > 0 ? priorNovelIds : ["00000000-0000-0000-0000-000000000000"]);
 
     const [
       { data: world },
@@ -176,10 +175,13 @@ export async function POST(request: Request) {
       world_elements: worldElements ?? [],
       foreshadowing: foreshadowing ?? [],
       callbacks: callbacks ?? [],
-      prior_books: (priorBooks ?? []).map((book) => ({
-        title: `Book ${book.novel_id}`,
-        synopsis: book.synopsis,
-      })),
+      prior_books: (priorBooks ?? []).map((book) => {
+        const matchingNovel = (priorNovels ?? []).find((n) => n.id === book.novel_id);
+        return {
+          title: matchingNovel?.title ?? `Book ${matchingNovel?.book_number ?? "?"}`,
+          synopsis: book.synopsis,
+        };
+      }),
       // Blueprint for the current book (most important for writing pipeline)
       book_blueprint: blueprints?.find(
         (bp) => Number(bp.book_number) === Number(bookNumber)
