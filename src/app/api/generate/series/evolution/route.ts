@@ -27,7 +27,7 @@ export async function POST(request: Request) {
 
     const { data: bible } = await supabaseAdmin
       .from("series_bibles")
-      .select("character_files")
+      .select("*")
       .eq("series_id", seriesId)
       .maybeSingle();
 

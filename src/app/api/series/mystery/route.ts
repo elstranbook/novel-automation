@@ -24,18 +24,18 @@ export async function GET(request: Request) {
 
   const { data: log } = await supabaseAdmin
     .from("mystery_log")
-    .select("id,active_mysteries,resolved_mysteries")
+    .select("*")
     .eq("series_id", seriesId)
     .maybeSingle();
 
   const { data: secrets } = await supabaseAdmin
     .from("secret")
-    .select("id,title,description,status,revealed_in_book")
+    .select("*")
     .eq("mystery_log_id", log?.id ?? "");
 
   const { data: clues } = await supabaseAdmin
     .from("clue")
-    .select("id,description,secret_id,planted_in_book")
+    .select("*")
     .eq("mystery_log_id", log?.id ?? "");
 
   return NextResponse.json({ log: log ?? null, secrets: secrets ?? [], clues: clues ?? [] });
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
         description,
         revealed_in_book: revealedInBook ?? null,
       })
-      .select("id,title,description,status,revealed_in_book")
+      .select("*")
       .single();
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
       secret_id: secretId ?? null,
       planted_in_book: plantedInBook,
     })
-    .select("id,description,secret_id,planted_in_book")
+    .select("*")
     .single();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

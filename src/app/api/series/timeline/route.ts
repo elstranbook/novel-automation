@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabaseAdmin
     .from("series_timeline_events")
-    .select("id,event_order,title,description,book_number")
+    .select("*")
     .eq("series_id", seriesId)
     .order("event_order", { ascending: true });
 
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
         description,
         book_number: bookNumber ?? null,
       })
-      .select("id,event_order,title,description,book_number")
+      .select("*")
       .single();
 
     if (error) {

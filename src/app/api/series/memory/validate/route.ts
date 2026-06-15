@@ -144,7 +144,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabaseAdmin
     .from("series_memory")
-    .select("id,category,content")
+    .select("*")
     .eq("series_id", seriesId);
 
   if (error) {
@@ -153,7 +153,7 @@ export async function GET(request: Request) {
 
   const { data: books } = await supabaseAdmin
     .from("series_books")
-    .select("book_number")
+    .select("*")
     .eq("series_id", seriesId);
 
   const totalBooks = Math.max(

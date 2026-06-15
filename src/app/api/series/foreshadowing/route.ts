@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
   const { data } = await supabaseAdmin
     .from("foreshadowing")
-    .select("id,event_type,event_description,setup_book,payoff_book,status")
+    .select("*")
     .eq("series_id", seriesId)
     .order("setup_book", { ascending: true });
 
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
         setup_book: setupBook,
         payoff_book: payoffBook ?? null,
       })
-      .select("id,event_type,event_description,setup_book,payoff_book,status")
+      .select("*")
       .single();
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabaseAdmin
     .from("series_worlds")
-    .select("id,setting,rules,lore")
+    .select("*")
     .eq("series_id", seriesId)
     .maybeSingle();
 
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
           lore: lore ?? null,
         })
         .eq("id", existing.id)
-        .select("id,setting,rules,lore")
+        .select("*")
         .single();
     } else {
       // Insert new row
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
           rules: rules ?? null,
           lore: lore ?? null,
         })
-        .select("id,setting,rules,lore")
+        .select("*")
         .single();
     }
 

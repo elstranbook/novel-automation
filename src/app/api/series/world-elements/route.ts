@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
   const { data } = await supabaseAdmin
     .from("world_element")
-    .select("id,type,name,description,importance")
+    .select("*")
     .eq("series_id", seriesId)
     .order("created_at", { ascending: true });
 
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
         description,
         importance: importance ?? "moderate",
       })
-      .select("id,type,name,description,importance")
+      .select("*")
       .single();
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

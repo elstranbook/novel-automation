@@ -16,7 +16,7 @@ export async function GET(request: Request) {
 
   const { data: canonEntries } = await supabaseAdmin
     .from("canon_log_entry")
-    .select("fact")
+    .select("*")
     .in(
       "canon_log_id",
       (
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
   const { data: foreshadowing } = await supabaseAdmin
     .from("foreshadowing")
-    .select("event_description,payoff_book,existing_hints,required_hints,status")
+    .select("*")
     .eq("series_id", seriesId);
 
   const warnings: ValidationResult[] = [];

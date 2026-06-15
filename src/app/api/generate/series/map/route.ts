@@ -114,12 +114,15 @@ Return as JSON array with one object per book:
       maxTokens: 5000,
     });
 
-    const { error } = await supabaseAdmin
+    const { error: deleteError } = await supabaseAdmin
       .from("series_book_maps")
       .delete()
       .eq("series_id", seriesId);
 
-    if (error) throw error;
+    if (deleteError) {
+      console.error("Failed to delete old series_book_maps:", deleteError.message);
+      // Don't throw — the map generation itself succeeded, we just can't persist it
+    }
 
     if (Array.isArray(response)) {
       const rows = response.map((bookMap) => ({
@@ -128,7 +131,11 @@ Return as JSON array with one object per book:
         map_data: bookMap,
       }));
       if (rows.length) {
-        await supabaseAdmin.from("series_book_maps").insert(rows);
+        const { error: insertError } = await supabaseAdmin.from("series_book_maps").insert(rows);
+        if (insertError) {
+          console.error("Failed to insert series_book_maps:", insertError.message);
+          // Don't throw — the map generation itself succeeded, we just can't persist it
+        }
       }
     }
 

@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   }
   const { data } = await supabaseAdmin
     .from("callback")
-    .select("id,original_book,original_event,callback_book,callback_description")
+    .select("*")
     .eq("series_id", seriesId)
     .order("original_book", { ascending: true });
 
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
         callback_book: callbackBook,
         callback_description: callbackDescription,
       })
-      .select("id,original_book,original_event,callback_book,callback_description")
+      .select("*")
       .single();
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
