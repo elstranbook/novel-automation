@@ -16,9 +16,13 @@ export async function POST(request: Request) {
       );
     }
 
+    const blueprintSection = seriesContext?.book_blueprint
+      ? `\nBOOK BLUEPRINT (THIS BOOK'S PLANNED ARC — follow this closely):\n${JSON.stringify(seriesContext.book_blueprint, null, 2)}\n`
+      : "";
+
     const prompt = `
 I am writing a Young Adult Novel titled "${title}".
-${novelAbout ? `\nHere is what I want the novel to be about:\n${novelAbout}\n` : ""}${seriesContext ? `\nSeries context to honor:\n${JSON.stringify(seriesContext, null, 2)}\n` : ""}
+${novelAbout ? `\nHere is what I want the novel to be about:\n${novelAbout}\n` : ""}${blueprintSection}${seriesContext ? `\nSeries context to honor:\n${JSON.stringify(seriesContext, null, 2)}\n` : ""}
 Give me the following details:
 1. story_theme: The central theme or message of the novel
 2. genre: The specific genre or genres this novel belongs to

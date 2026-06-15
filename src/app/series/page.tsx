@@ -65,12 +65,14 @@ export default function SeriesPage() {
   const [model, setModel] = useState<string>("gpt-4.1");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [authEmail, setAuthEmail] = useState<string | null>(null);
   const [arc, setArc] = useState<Record<string, unknown> | null>(null);
   const [seriesBible, setSeriesBible] = useState<Record<string, unknown> | null>(null);
   const [seriesMap, setSeriesMap] = useState<Record<string, unknown>[] | null>(null);
   const [characterEvolution, setCharacterEvolution] = useState<Record<string, unknown> | null>(null);
   const [bookBlueprint, setBookBlueprint] = useState<Record<string, unknown> | null>(null);
+  const [allBlueprints, setAllBlueprints] = useState<Array<Record<string, unknown>>>([]);
   const [seriesBooks, setSeriesBooks] = useState<
     Array<Record<string, unknown>>
   >([]);
@@ -405,6 +407,7 @@ export default function SeriesPage() {
     setSeriesMap(null);
     setCharacterEvolution(null);
     setBookBlueprint(null);
+    setAllBlueprints([]);
     // Reset suite fields — they'll be repopulated from the database
     setSuiteTone("");
     setSuiteSetting("");
@@ -587,6 +590,7 @@ export default function SeriesPage() {
       if (blueprintsRes.status === "fulfilled" && blueprintsRes.value.error) {
         console.error("[selectSeries] Error loading series_book_blueprints:", blueprintsRes.value.error);
       }
+      setAllBlueprints(blueprintsData as Record<string, unknown>[]);
       if (blueprintsData.length > 0) {
         const matching = blueprintsData.find(
           (b: Record<string, unknown>) => Number(b.book_number) === suiteBookNumber
@@ -1377,6 +1381,51 @@ export default function SeriesPage() {
             >
               {loadingStep === "blueprint" ? "Generating..." : "Generate Book Blueprint"}
             </button>
+            <button
+              onClick={async () => {
+                if (!activeSeries) return;
+                setLoadingStep("all-blueprints");
+                setError(null);
+                try {
+                  const totalBooks = activeSeries.num_books || 1;
+                  const generatedBlueprints: Record<string, unknown>[] = [];
+                  for (let bn = 1; bn <= totalBooks; bn++) {
+                    setStatusMessage(`Generating blueprint for Book ${bn} of ${totalBooks}...`);
+                    const response = await fetch("/api/generate/series/blueprint", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        seriesId: activeSeries.id,
+                        title: activeSeries.title,
+                        numBooks: totalBooks,
+                        bookNumber: bn,
+                        model,
+                      }),
+                    });
+                    if (!response.ok) throw new Error(`Failed to generate blueprint for Book ${bn}`);
+                    const data = await response.json();
+                    generatedBlueprints.push({
+                      book_number: bn,
+                      blueprint: data.blueprint ?? null,
+                    });
+                  }
+                  setStatusMessage(null);
+                  // Reload all blueprints from DB
+                  if (activeSeries) {
+                    await selectSeries(activeSeries.id);
+                  }
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Unknown error");
+                } finally {
+                  setLoadingStep(null);
+                  setStatusMessage(null);
+                }
+              }}
+              disabled={loadingStep === "all-blueprints"}
+              className="rounded-full border border-emerald-700/60 px-4 py-2.5 text-sm text-emerald-200 transition hover:bg-emerald-700/10 disabled:opacity-50"
+            >
+              {loadingStep === "all-blueprints" ? (statusMessage || "Generating all...") : "Generate All Blueprints"}
+            </button>
           </div>
           <div className="mt-6 space-y-4">
             <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
@@ -1508,7 +1557,45 @@ export default function SeriesPage() {
                 </pre>
               </div>
             )}
-            {bookBlueprint && (
+            {allBlueprints.length > 0 && (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-zinc-100">Book Blueprints ({allBlueprints.length})</h3>
+                  <div className="flex gap-1">
+                    {allBlueprints.map((bp: Record<string, unknown>) => {
+                      const bpNum = Number(bp.book_number ?? 0);
+                      const isActive = bookBlueprint && Number((bookBlueprint as Record<string, unknown>).book_number ?? 0) === bpNum;
+                      return (
+                        <button
+                          key={bpNum}
+                          onClick={() => {
+                            setBookBlueprint(bp);
+                            setSuiteBookNumber(bpNum);
+                          }}
+                          className={`rounded px-2 py-0.5 text-[10px] transition ${
+                            isActive
+                              ? "bg-blue-600 text-white"
+                              : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                          }`}
+                        >
+                          Book {bpNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                {bookBlueprint && (
+                  <pre className="mt-2 whitespace-pre-wrap text-xs text-zinc-200">
+                    {JSON.stringify(
+                      bookBlueprint.blueprint ?? bookBlueprint,
+                      null,
+                      2
+                    )}
+                  </pre>
+                )}
+              </div>
+            )}
+            {allBlueprints.length === 0 && bookBlueprint && (
               <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4">
                 <h3 className="text-sm font-semibold text-zinc-100">Book Blueprint</h3>
                 <pre className="mt-2 whitespace-pre-wrap text-xs text-zinc-200">

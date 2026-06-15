@@ -71,9 +71,13 @@ export async function POST(request: Request) {
     const structuredPlan = novelPlan ?? "";
     const novelAbout = storyDetails.novel_about ?? "";
 
+    const blueprintSection = storyDetails.series_context?.book_blueprint
+      ? `\nBOOK BLUEPRINT (THIS BOOK'S PLANNED ARC — your outline MUST follow this structure):\n${JSON.stringify(storyDetails.series_context.book_blueprint, null, 2)}\n`
+      : "";
+
     const prompt = `
 Following the structured plan below, please create a detailed chapter outline for "${title}" designed to establish a powerful emotional arc that deeply explores the complexities of ${theme}.
-
+${blueprintSection}
 Break the story into the necessary chapters as you see fit that serve the purpose of the story, with word count estimates for each chapter to ensure balanced pacing and focus. Each chapter should allow room for meaningful character development, emotional depth, and tension that draws readers in.
 
 Guidelines:

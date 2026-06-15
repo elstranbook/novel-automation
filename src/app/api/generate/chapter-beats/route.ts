@@ -80,6 +80,10 @@ export async function POST(request: Request) {
 
       console.info(`Generating detailed action beats for Chapter ${chapterNum}: ${chapterTitle}...`);
 
+      const blueprintSection = storyDetails?.series_context?.book_blueprint
+        ? `\n- Book Blueprint: ${JSON.stringify(storyDetails.series_context.book_blueprint).slice(0, 2000)}`
+        : "";
+
       const baseContext = `
 Chapter: ${chapterNum}: ${chapterTitle}
 Chapter Outline: ${JSON.stringify(chapterRecord, null, 2)}
@@ -89,7 +93,7 @@ Additional Story Information:
 - Character Profiles: ${characterProfiles ?? ""}
 - Novel Plan: ${novelPlan ?? ""}
 - Author Intent: ${storyDetails?.novel_about ?? ""}
-- Series Context: ${storyDetails?.series_context ? JSON.stringify(storyDetails.series_context).slice(0, 1600) : ""}
+- Series Context: ${storyDetails?.series_context ? JSON.stringify(storyDetails.series_context).slice(0, 1600) : ""}${blueprintSection}
 - Canon Facts: ${storyDetails?.series_context?.canon_entries ? JSON.stringify(storyDetails.series_context.canon_entries).slice(0, 800) : ""}
 - Mysteries: ${storyDetails?.series_context?.secrets ? JSON.stringify(storyDetails.series_context.secrets).slice(0, 800) : ""}
 - Relationships: ${storyDetails?.series_context?.relationships ? JSON.stringify(storyDetails.series_context.relationships).slice(0, 800) : ""}

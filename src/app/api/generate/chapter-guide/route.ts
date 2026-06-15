@@ -167,6 +167,10 @@ export async function POST(request: Request) {
 
     const chapterOutlineJson = JSON.stringify(simplifiedOutline, null, 2);
 
+    const blueprintSection = storyDetails?.series_context?.book_blueprint
+      ? `\n- Book Blueprint: ${JSON.stringify(storyDetails.series_context.book_blueprint, null, 2)}`
+      : "";
+
     const prompt = `
 Create a detailed chapter guide for the young adult novel (approximately 120000 words).
 
@@ -175,7 +179,7 @@ Novel Context:
 - Main Characters: ${(characterProfiles ?? "").slice(0, 1000) || "Not provided"}
 - Novel Plan: ${(novelPlan ?? "").slice(0, 1000) || "Not provided"}
 - Author Intent: ${(storyDetails?.novel_about ?? "").slice(0, 500) || "Not provided"}
-- Series Context: ${storyDetails?.series_context ? JSON.stringify(storyDetails.series_context).slice(0, 1600) : "Not provided"}
+- Series Context: ${storyDetails?.series_context ? JSON.stringify(storyDetails.series_context).slice(0, 1600) : "Not provided"}${blueprintSection}
 - Canon Facts: ${storyDetails?.series_context?.canon_entries ? JSON.stringify(storyDetails.series_context.canon_entries).slice(0, 800) : "Not provided"}
 - Mysteries: ${storyDetails?.series_context?.secrets ? JSON.stringify(storyDetails.series_context.secrets).slice(0, 800) : "Not provided"}
 - Relationships: ${storyDetails?.series_context?.relationships ? JSON.stringify(storyDetails.series_context.relationships).slice(0, 800) : "Not provided"}

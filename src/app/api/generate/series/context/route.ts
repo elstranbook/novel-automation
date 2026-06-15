@@ -58,6 +58,7 @@ export async function POST(request: Request) {
       { data: worldElements },
       { data: foreshadowing },
       { data: callbacks },
+      { data: blueprints },
     ] = await Promise.all([
       supabaseAdmin
         .from("series_worlds")
@@ -145,6 +146,11 @@ export async function POST(request: Request) {
         .from("callback")
         .select("*")
         .eq("series_id", seriesId),
+      supabaseAdmin
+        .from("series_book_blueprints")
+        .select("*")
+        .eq("series_id", seriesId)
+        .order("book_number", { ascending: true }),
     ]);
 
     const context = {
@@ -173,6 +179,15 @@ export async function POST(request: Request) {
       prior_books: (priorBooks ?? []).map((book) => ({
         title: `Book ${book.novel_id}`,
         synopsis: book.synopsis,
+      })),
+      // Blueprint for the current book (most important for writing pipeline)
+      book_blueprint: blueprints?.find(
+        (bp) => Number(bp.book_number) === Number(bookNumber)
+      )?.blueprint ?? null,
+      // All blueprints (for cross-book reference in later steps)
+      all_blueprints: (blueprints ?? []).map((bp) => ({
+        book_number: bp.book_number,
+        blueprint: bp.blueprint,
       })),
     };
 
