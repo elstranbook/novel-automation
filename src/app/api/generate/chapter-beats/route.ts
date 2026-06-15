@@ -81,7 +81,7 @@ export async function POST(request: Request) {
       console.info(`Generating detailed action beats for Chapter ${chapterNum}: ${chapterTitle}...`);
 
       const blueprintSection = storyDetails?.series_context?.book_blueprint
-        ? `\n- Book Blueprint: ${JSON.stringify(storyDetails.series_context.book_blueprint).slice(0, 2000)}`
+        ? `\n═══ BOOK BLUEPRINT — MANDATORY STRUCTURAL PLAN ═══\nYour action beats MUST align with this blueprint:\n${JSON.stringify(storyDetails.series_context.book_blueprint, null, 2)}\n\nBlueprint Alignment Rules:\n- opening_shift: If this is an early chapter, the beats should ESTABLISH this starting situation — show the protagonist in this state.\n- midpoint_shock: If this is a mid-book chapter, the beats should BUILD TOWARD or DELIVER this pivotal reversal.\n- lowest_point: If this is a 70-75% chapter, the beats should PLUNGE the protagonist into this darkest hour.\n- climax: If this is an 85-90% chapter, the beats should ESCALATE to this decisive confrontation.\n- ending_change: If this is a late chapter, the beats should RESOLVE into this transformative change.\n- relationship_changes: Include beats that show the prescribed relationship shifts.\n- theme_pressure: Every beat's emotional_impact should echo or build upon this thematic pressure.\n═══ END BLUEPRINT ═══\n`
         : "";
 
       const baseContext = `

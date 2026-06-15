@@ -168,7 +168,7 @@ export async function POST(request: Request) {
     const chapterOutlineJson = JSON.stringify(simplifiedOutline, null, 2);
 
     const blueprintSection = storyDetails?.series_context?.book_blueprint
-      ? `\n- Book Blueprint: ${JSON.stringify(storyDetails.series_context.book_blueprint, null, 2)}`
+      ? `\n═══ BOOK BLUEPRINT — MANDATORY STRUCTURAL PLAN ═══\nYour chapter guide MUST align with this blueprint:\n${JSON.stringify(storyDetails.series_context.book_blueprint, null, 2)}\n\nBlueprint Alignment Rules:\n- opening_shift: Early chapter guides should emphasize dialogue, symbolism, and emotions that ESTABLISH this opening situation.\n- midpoint_shock: The chapter at the 50% mark should have key_dialogue and foreshadowing that DELIVER this reversal.\n- lowest_point: The 70-75% mark chapter should have emotional_pacing and sensory_details that PLUNGE into this dark moment.\n- climax: The 85-90% mark chapter should have scene_goal and tension that BUILD to this decisive confrontation.\n- ending_change: Final chapters should have symbolism and emotional_pacing that RESOLVE into this transformation.\n- relationship_changes: Weave these into key_dialogue and emotional_pacing across relevant chapters.\n- theme_pressure: Every chapter's symbolism and foreshadowing should echo or build upon this thematic pressure.\n═══ END BLUEPRINT ═══\n`
       : "";
 
     const prompt = `
