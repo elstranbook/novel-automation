@@ -615,14 +615,31 @@ export default function SeriesPage() {
   };
 
   const loadSeries = async (userIdValue: string) => {
-    const { data } = await supabase
+    // Try expanded select first (includes genre, tone, themes, etc.)
+    // If columns don't exist yet (400 error), fall back to basic select
+    let data = null as SeriesSummary[] | null;
+    const expandedSelect = "id,title,description,num_books,premise,genre,tone,themes,target_audience,world_name,world_description,main_conflict,status";
+
+    const expandedResult = await supabase
       .from("series")
-      .select("id,title,description,num_books,premise,genre,tone,themes,target_audience,world_name,world_description,main_conflict,status")
+      .select(expandedSelect)
       .eq("user_id", userIdValue)
       .order("created_at", { ascending: false });
 
+    if (expandedResult.error) {
+      console.warn("Expanded select failed, falling back to basic select:", expandedResult.error.message);
+      const basicResult = await supabase
+        .from("series")
+        .select("id,title,description,num_books")
+        .eq("user_id", userIdValue)
+        .order("created_at", { ascending: false });
+      data = (basicResult.data ?? null) as SeriesSummary[] | null;
+    } else {
+      data = (expandedResult.data ?? null) as SeriesSummary[] | null;
+    }
+
     if (data) {
-      setSeriesList(data as SeriesSummary[]);
+      setSeriesList(data);
       const targetId = selectedSeriesId ?? (data[0]?.id ?? null);
       if (targetId && data.some((s: SeriesSummary) => s.id === targetId)) {
         // Use selectSeries to load all data for the target series
