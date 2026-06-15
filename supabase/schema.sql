@@ -744,6 +744,59 @@ create table if not exists public.generation_log (
   completed_at timestamptz
 );
 
+-- =============================================
+-- Series generation output tables
+-- =============================================
+
+create table if not exists public.series_bibles (
+  id uuid primary key default gen_random_uuid(),
+  series_id uuid not null references public.series(id) on delete cascade unique,
+  world_overview text default '',
+  world_rules text default '',
+  history_lore text default '',
+  character_files jsonb default '{}'::jsonb,
+  relationship_map jsonb default '{}'::jsonb,
+  series_arc_summary text default '',
+  themes_symbols jsonb default '[]'::jsonb,
+  story_rules jsonb default '[]'::jsonb,
+  continuity_lockfile jsonb default '[]'::jsonb,
+  unanswered_mysteries jsonb default '[]'::jsonb,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists public.series_book_maps (
+  id uuid primary key default gen_random_uuid(),
+  series_id uuid not null references public.series(id) on delete cascade,
+  book_number integer not null default 1,
+  map_data jsonb not null default '{}'::jsonb,
+  created_at timestamptz default now()
+);
+
+create table if not exists public.series_character_evolution (
+  id uuid primary key default gen_random_uuid(),
+  series_id uuid not null references public.series(id) on delete cascade unique,
+  evolution jsonb not null default '{}'::jsonb,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists public.series_book_blueprints (
+  id uuid primary key default gen_random_uuid(),
+  series_id uuid not null references public.series(id) on delete cascade,
+  book_number integer not null default 1,
+  blueprint jsonb not null default '{}'::jsonb,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists idx_series_bibles_series_id on public.series_bibles(series_id);
+create index if not exists idx_series_book_maps_series_id on public.series_book_maps(series_id);
+create index if not exists idx_series_book_maps_series_book on public.series_book_maps(series_id, book_number);
+create index if not exists idx_series_character_evolution_series_id on public.series_character_evolution(series_id);
+create index if not exists idx_series_book_blueprints_series_id on public.series_book_blueprints(series_id);
+create index if not exists idx_series_book_blueprints_series_book on public.series_book_blueprints(series_id, book_number);
+
 -- Policies: users can manage their own rows
 create policy "series owner" on public.series for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "series arcs owner" on public.series_arcs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
@@ -933,6 +986,26 @@ create policy "timeline event owner" on public.timeline_event for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
 create policy "generation log owner" on public.generation_log for all using (
+  auth.uid() = (select user_id from public.series where id = series_id)
+) with check (
+  auth.uid() = (select user_id from public.series where id = series_id)
+);
+create policy "series bibles owner" on public.series_bibles for all using (
+  auth.uid() = (select user_id from public.series where id = series_id)
+) with check (
+  auth.uid() = (select user_id from public.series where id = series_id)
+);
+create policy "series book maps owner" on public.series_book_maps for all using (
+  auth.uid() = (select user_id from public.series where id = series_id)
+) with check (
+  auth.uid() = (select user_id from public.series where id = series_id)
+);
+create policy "series character evolution owner" on public.series_character_evolution for all using (
+  auth.uid() = (select user_id from public.series where id = series_id)
+) with check (
+  auth.uid() = (select user_id from public.series where id = series_id)
+);
+create policy "series book blueprints owner" on public.series_book_blueprints for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
