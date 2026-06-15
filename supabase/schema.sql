@@ -798,218 +798,818 @@ create index if not exists idx_series_book_blueprints_series_id on public.series
 create index if not exists idx_series_book_blueprints_series_book on public.series_book_blueprints(series_id, book_number);
 
 -- Policies: users can manage their own rows
-create policy "series owner" on public.series for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "series arcs owner" on public.series_arcs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "novels owner" on public.novels for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "chapter outlines owner" on public.chapter_outlines for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "chapter guides owner" on public.chapter_guides for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "chapter beats owner" on public.chapter_beats for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "scenes owner" on public.scenes for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "prose_scenes owner" on public.prose_scenes for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "novel formats owner" on public.novel_formats for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "premises owner" on public.premises_and_endings for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "synopsis owner" on public.novel_synopsis for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "profiles owner" on public.character_profiles for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "plans owner" on public.novel_plans for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "cover owner" on public.cover_design_prompts for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "editing owner" on public.editing_suggestions for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "keywords owner" on public.novel_keywords for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "bisac owner" on public.novel_bisac for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "descriptions owner" on public.book_descriptions for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "quotes owner" on public.novel_quotes for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "promotional articles owner" on public.promotional_articles for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "social snippets owner" on public.social_snippets for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "novel dedications owner" on public.novel_dedications for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "series books owner" on public.series_books for all using (
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series'
+      AND policyname = 'series owner'
+  ) THEN
+    create policy "series owner" on public.series for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_arcs'
+      AND policyname = 'series arcs owner'
+  ) THEN
+    create policy "series arcs owner" on public.series_arcs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'novels'
+      AND policyname = 'novels owner'
+  ) THEN
+    create policy "novels owner" on public.novels for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'chapter_outlines'
+      AND policyname = 'chapter outlines owner'
+  ) THEN
+    create policy "chapter outlines owner" on public.chapter_outlines for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'chapter_guides'
+      AND policyname = 'chapter guides owner'
+  ) THEN
+    create policy "chapter guides owner" on public.chapter_guides for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'chapter_beats'
+      AND policyname = 'chapter beats owner'
+  ) THEN
+    create policy "chapter beats owner" on public.chapter_beats for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'scenes'
+      AND policyname = 'scenes owner'
+  ) THEN
+    create policy "scenes owner" on public.scenes for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'prose_scenes'
+      AND policyname = 'prose_scenes owner'
+  ) THEN
+    create policy "prose_scenes owner" on public.prose_scenes for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'novel_formats'
+      AND policyname = 'novel formats owner'
+  ) THEN
+    create policy "novel formats owner" on public.novel_formats for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'premises_and_endings'
+      AND policyname = 'premises owner'
+  ) THEN
+    create policy "premises owner" on public.premises_and_endings for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'novel_synopsis'
+      AND policyname = 'synopsis owner'
+  ) THEN
+    create policy "synopsis owner" on public.novel_synopsis for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'character_profiles'
+      AND policyname = 'profiles owner'
+  ) THEN
+    create policy "profiles owner" on public.character_profiles for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'novel_plans'
+      AND policyname = 'plans owner'
+  ) THEN
+    create policy "plans owner" on public.novel_plans for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'cover_design_prompts'
+      AND policyname = 'cover owner'
+  ) THEN
+    create policy "cover owner" on public.cover_design_prompts for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'editing_suggestions'
+      AND policyname = 'editing owner'
+  ) THEN
+    create policy "editing owner" on public.editing_suggestions for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'novel_keywords'
+      AND policyname = 'keywords owner'
+  ) THEN
+    create policy "keywords owner" on public.novel_keywords for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'novel_bisac'
+      AND policyname = 'bisac owner'
+  ) THEN
+    create policy "bisac owner" on public.novel_bisac for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'book_descriptions'
+      AND policyname = 'descriptions owner'
+  ) THEN
+    create policy "descriptions owner" on public.book_descriptions for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'novel_quotes'
+      AND policyname = 'quotes owner'
+  ) THEN
+    create policy "quotes owner" on public.novel_quotes for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'promotional_articles'
+      AND policyname = 'promotional articles owner'
+  ) THEN
+    create policy "promotional articles owner" on public.promotional_articles for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'social_snippets'
+      AND policyname = 'social snippets owner'
+  ) THEN
+    create policy "social snippets owner" on public.social_snippets for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'novel_dedications'
+      AND policyname = 'novel dedications owner'
+  ) THEN
+    create policy "novel dedications owner" on public.novel_dedications for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_books'
+      AND policyname = 'series books owner'
+  ) THEN
+    create policy "series books owner" on public.series_books for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series characters owner" on public.series_characters for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_characters'
+      AND policyname = 'series characters owner'
+  ) THEN
+    create policy "series characters owner" on public.series_characters for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series worlds owner" on public.series_worlds for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_worlds'
+      AND policyname = 'series worlds owner'
+  ) THEN
+    create policy "series worlds owner" on public.series_worlds for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series memory owner" on public.series_memory for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_memory'
+      AND policyname = 'series memory owner'
+  ) THEN
+    create policy "series memory owner" on public.series_memory for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series timeline owner" on public.series_timeline for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_timeline'
+      AND policyname = 'series timeline owner'
+  ) THEN
+    create policy "series timeline owner" on public.series_timeline for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series relationships owner" on public.series_relationships for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_relationships'
+      AND policyname = 'series relationships owner'
+  ) THEN
+    create policy "series relationships owner" on public.series_relationships for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series lore owner" on public.series_lore_entries for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_lore_entries'
+      AND policyname = 'series lore owner'
+  ) THEN
+    create policy "series lore owner" on public.series_lore_entries for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series locations owner" on public.series_world_locations for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_world_locations'
+      AND policyname = 'series locations owner'
+  ) THEN
+    create policy "series locations owner" on public.series_world_locations for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series rulesets owner" on public.series_rulesets for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_rulesets'
+      AND policyname = 'series rulesets owner'
+  ) THEN
+    create policy "series rulesets owner" on public.series_rulesets for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series timeline events owner" on public.series_timeline_events for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_timeline_events'
+      AND policyname = 'series timeline events owner'
+  ) THEN
+    create policy "series timeline events owner" on public.series_timeline_events for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series continuity owner" on public.series_continuity_checks for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_continuity_checks'
+      AND policyname = 'series continuity owner'
+  ) THEN
+    create policy "series continuity owner" on public.series_continuity_checks for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series consistency flags owner" on public.series_consistency_flags for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_consistency_flags'
+      AND policyname = 'series consistency flags owner'
+  ) THEN
+    create policy "series consistency flags owner" on public.series_consistency_flags for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series book arcs owner" on public.series_book_arcs for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_book_arcs'
+      AND policyname = 'series book arcs owner'
+  ) THEN
+    create policy "series book arcs owner" on public.series_book_arcs for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series chapter beats owner" on public.series_chapter_beats for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_chapter_beats'
+      AND policyname = 'series chapter beats owner'
+  ) THEN
+    create policy "series chapter beats owner" on public.series_chapter_beats for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series memory nodes owner" on public.series_memory_nodes for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_memory_nodes'
+      AND policyname = 'series memory nodes owner'
+  ) THEN
+    create policy "series memory nodes owner" on public.series_memory_nodes for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series memory links owner" on public.series_memory_links for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_memory_links'
+      AND policyname = 'series memory links owner'
+  ) THEN
+    create policy "series memory links owner" on public.series_memory_links for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series memory embeddings owner" on public.series_memory_embeddings for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_memory_embeddings'
+      AND policyname = 'series memory embeddings owner'
+  ) THEN
+    create policy "series memory embeddings owner" on public.series_memory_embeddings for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "canon log owner" on public.canon_log for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'canon_log'
+      AND policyname = 'canon log owner'
+  ) THEN
+    create policy "canon log owner" on public.canon_log for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "canon log entry owner" on public.canon_log_entry for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'canon_log_entry'
+      AND policyname = 'canon log entry owner'
+  ) THEN
+    create policy "canon log entry owner" on public.canon_log_entry for all using (
   auth.uid() = (select user_id from public.series where id = (select series_id from public.canon_log where id = canon_log_id))
 ) with check (
   auth.uid() = (select user_id from public.series where id = (select series_id from public.canon_log where id = canon_log_id))
 );
-create policy "relationship log owner" on public.relationship_log for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'relationship_log'
+      AND policyname = 'relationship log owner'
+  ) THEN
+    create policy "relationship log owner" on public.relationship_log for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "relationship entry owner" on public.relationship_entry for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'relationship_entry'
+      AND policyname = 'relationship entry owner'
+  ) THEN
+    create policy "relationship entry owner" on public.relationship_entry for all using (
   auth.uid() = (select user_id from public.series where id = (select series_id from public.relationship_log where id = relationship_log_id))
 ) with check (
   auth.uid() = (select user_id from public.series where id = (select series_id from public.relationship_log where id = relationship_log_id))
 );
-create policy "mystery log owner" on public.mystery_log for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'mystery_log'
+      AND policyname = 'mystery log owner'
+  ) THEN
+    create policy "mystery log owner" on public.mystery_log for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "secret owner" on public.secret for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'secret'
+      AND policyname = 'secret owner'
+  ) THEN
+    create policy "secret owner" on public.secret for all using (
   auth.uid() = (select user_id from public.series where id = (select series_id from public.mystery_log where id = mystery_log_id))
 ) with check (
   auth.uid() = (select user_id from public.series where id = (select series_id from public.mystery_log where id = mystery_log_id))
 );
-create policy "clue owner" on public.clue for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'clue'
+      AND policyname = 'clue owner'
+  ) THEN
+    create policy "clue owner" on public.clue for all using (
   auth.uid() = (select user_id from public.series where id = (select series_id from public.mystery_log where id = mystery_log_id))
 ) with check (
   auth.uid() = (select user_id from public.series where id = (select series_id from public.mystery_log where id = mystery_log_id))
 );
-create policy "foreshadowing owner" on public.foreshadowing for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'foreshadowing'
+      AND policyname = 'foreshadowing owner'
+  ) THEN
+    create policy "foreshadowing owner" on public.foreshadowing for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "callback owner" on public.callback for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'callback'
+      AND policyname = 'callback owner'
+  ) THEN
+    create policy "callback owner" on public.callback for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "plot thread owner" on public.plot_thread for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'plot_thread'
+      AND policyname = 'plot thread owner'
+  ) THEN
+    create policy "plot thread owner" on public.plot_thread for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "world element owner" on public.world_element for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'world_element'
+      AND policyname = 'world element owner'
+  ) THEN
+    create policy "world element owner" on public.world_element for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "book memory owner" on public.book_memory for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'book_memory'
+      AND policyname = 'book memory owner'
+  ) THEN
+    create policy "book memory owner" on public.book_memory for all using (
   auth.uid() = (select user_id from public.series where id = (select series_id from public.series_books where id = book_id))
 ) with check (
   auth.uid() = (select user_id from public.series where id = (select series_id from public.series_books where id = book_id))
 );
-create policy "tension profile owner" on public.tension_profile for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'tension_profile'
+      AND policyname = 'tension profile owner'
+  ) THEN
+    create policy "tension profile owner" on public.tension_profile for all using (
   auth.uid() = (select user_id from public.series where id = (select series_id from public.series_books where id = book_id))
 ) with check (
   auth.uid() = (select user_id from public.series where id = (select series_id from public.series_books where id = book_id))
 );
-create policy "character state owner" on public.character_state for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'character_state'
+      AND policyname = 'character state owner'
+  ) THEN
+    create policy "character state owner" on public.character_state for all using (
   auth.uid() = (select user_id from public.series where id = (select series_id from public.series_books where id = book_id))
 ) with check (
   auth.uid() = (select user_id from public.series where id = (select series_id from public.series_books where id = book_id))
 );
-create policy "chapter owner" on public.chapter for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'chapter'
+      AND policyname = 'chapter owner'
+  ) THEN
+    create policy "chapter owner" on public.chapter for all using (
   auth.uid() = (select user_id from public.series where id = (select series_id from public.series_books where id = book_id))
 ) with check (
   auth.uid() = (select user_id from public.series where id = (select series_id from public.series_books where id = book_id))
 );
-create policy "timeline event owner" on public.timeline_event for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'timeline_event'
+      AND policyname = 'timeline event owner'
+  ) THEN
+    create policy "timeline event owner" on public.timeline_event for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "generation log owner" on public.generation_log for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'generation_log'
+      AND policyname = 'generation log owner'
+  ) THEN
+    create policy "generation log owner" on public.generation_log for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series bibles owner" on public.series_bibles for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_bibles'
+      AND policyname = 'series bibles owner'
+  ) THEN
+    create policy "series bibles owner" on public.series_bibles for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series book maps owner" on public.series_book_maps for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_book_maps'
+      AND policyname = 'series book maps owner'
+  ) THEN
+    create policy "series book maps owner" on public.series_book_maps for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series character evolution owner" on public.series_character_evolution for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_character_evolution'
+      AND policyname = 'series character evolution owner'
+  ) THEN
+    create policy "series character evolution owner" on public.series_character_evolution for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
-create policy "series book blueprints owner" on public.series_book_blueprints for all using (
+  END IF;
+END $$;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_book_blueprints'
+      AND policyname = 'series book blueprints owner'
+  ) THEN
+    create policy "series book blueprints owner" on public.series_book_blueprints for all using (
   auth.uid() = (select user_id from public.series where id = series_id)
 ) with check (
   auth.uid() = (select user_id from public.series where id = series_id)
 );
+  END IF;
+END $$;
 
 -- =============================================
 -- Storage: novel-covers bucket for cover images
@@ -1024,6 +1624,7 @@ create policy "series book blueprints owner" on public.series_book_blueprints fo
 -- VALUES ('novel-covers', 'test.txt', 'system');
 --
 -- Policy: Allow authenticated users to upload covers for their novels
+DROP POLICY IF EXISTS "Authenticated users can upload covers" ON storage.objects;
 CREATE POLICY "Authenticated users can upload covers" ON storage.objects
   FOR INSERT TO authenticated
   WITH CHECK (bucket_id = 'novel-covers' AND auth.role() = 'authenticated');
@@ -1032,10 +1633,12 @@ CREATE POLICY "Authenticated users can upload covers" ON storage.objects
 -- Public bucket files are accessible via their public URL without any
 -- storage policy. A broad SELECT policy only exposed the file listing.
 
+DROP POLICY IF EXISTS "Authenticated users can update their covers" ON storage.objects;
 CREATE POLICY "Authenticated users can update their covers" ON storage.objects
   FOR UPDATE TO authenticated
   USING (bucket_id = 'novel-covers' AND auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Authenticated users can delete their covers" ON storage.objects;
 CREATE POLICY "Authenticated users can delete their covers" ON storage.objects
   FOR DELETE TO authenticated
   USING (bucket_id = 'novel-covers' AND auth.role() = 'authenticated');
@@ -1097,9 +1700,19 @@ create table if not exists public.seo_articles (
 
 alter table public.seo_articles enable row level security;
 
-create policy "seo articles owner" on public.seo_articles
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'seo_articles'
+      AND policyname = 'seo articles owner'
+  ) THEN
+    create policy "seo articles owner" on public.seo_articles
   for all using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- Vector similarity search function
 create or replace function match_novels(

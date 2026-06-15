@@ -1,5 +1,6 @@
 -- Migration: Add series_bibles, series_book_maps, series_character_evolution, series_book_blueprints
 -- Plus: add unique constraint on series_worlds.series_id so upsert works.
+-- All policy creation is idempotent (uses DO $$ IF NOT EXISTS $$).
 
 -- =============================================
 -- Fix series_worlds: add unique constraint for upsert support
@@ -36,11 +37,19 @@ create table if not exists public.series_bibles (
 
 alter table public.series_bibles enable row level security;
 
-create policy "series bibles owner" on public.series_bibles for all using (
-  auth.uid() = (select user_id from public.series where id = series_id)
-) with check (
-  auth.uid() = (select user_id from public.series where id = series_id)
-);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_bibles'
+      AND policyname = 'series bibles owner'
+  ) THEN
+    CREATE POLICY "series bibles owner" ON public.series_bibles FOR ALL
+      USING (auth.uid() = (select user_id from public.series where id = series_id))
+      WITH CHECK (auth.uid() = (select user_id from public.series where id = series_id));
+  END IF;
+END $$;
 
 -- =============================================
 -- series_book_maps
@@ -59,11 +68,19 @@ create table if not exists public.series_book_maps (
 
 alter table public.series_book_maps enable row level security;
 
-create policy "series book maps owner" on public.series_book_maps for all using (
-  auth.uid() = (select user_id from public.series where id = series_id)
-) with check (
-  auth.uid() = (select user_id from public.series where id = series_id)
-);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_book_maps'
+      AND policyname = 'series book maps owner'
+  ) THEN
+    CREATE POLICY "series book maps owner" ON public.series_book_maps FOR ALL
+      USING (auth.uid() = (select user_id from public.series where id = series_id))
+      WITH CHECK (auth.uid() = (select user_id from public.series where id = series_id));
+  END IF;
+END $$;
 
 -- =============================================
 -- series_character_evolution
@@ -82,11 +99,19 @@ create table if not exists public.series_character_evolution (
 
 alter table public.series_character_evolution enable row level security;
 
-create policy "series character evolution owner" on public.series_character_evolution for all using (
-  auth.uid() = (select user_id from public.series where id = series_id)
-) with check (
-  auth.uid() = (select user_id from public.series where id = series_id)
-);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_character_evolution'
+      AND policyname = 'series character evolution owner'
+  ) THEN
+    CREATE POLICY "series character evolution owner" ON public.series_character_evolution FOR ALL
+      USING (auth.uid() = (select user_id from public.series where id = series_id))
+      WITH CHECK (auth.uid() = (select user_id from public.series where id = series_id));
+  END IF;
+END $$;
 
 -- =============================================
 -- series_book_blueprints
@@ -106,11 +131,19 @@ create table if not exists public.series_book_blueprints (
 
 alter table public.series_book_blueprints enable row level security;
 
-create policy "series book blueprints owner" on public.series_book_blueprints for all using (
-  auth.uid() = (select user_id from public.series where id = series_id)
-) with check (
-  auth.uid() = (select user_id from public.series where id = series_id)
-);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'series_book_blueprints'
+      AND policyname = 'series book blueprints owner'
+  ) THEN
+    CREATE POLICY "series book blueprints owner" ON public.series_book_blueprints FOR ALL
+      USING (auth.uid() = (select user_id from public.series where id = series_id))
+      WITH CHECK (auth.uid() = (select user_id from public.series where id = series_id));
+  END IF;
+END $$;
 
 -- =============================================
 -- Indexes for fast lookups
