@@ -400,13 +400,88 @@ export default function SeriesPage() {
   const selectSeries = async (seriesId: string) => {
     setSelectedSeriesId(seriesId);
     clearSeriesData();
-    const { data: bookRows } = await supabase
-      .from("series_books")
-      .select("id,series_id,book_number,title,status,summary,novel_id")
-      .eq("series_id", seriesId)
-      .order("book_number", { ascending: true });
-    setSeriesBooks(bookRows ?? []);
     setSidebarOpen(false);
+
+    // Load all series data in parallel for instant tab switching
+    try {
+      const [
+        booksRes,
+        charactersRes,
+        worldRes,
+        canonRes,
+        mysteryRes,
+        relationshipsRes,
+        plotsRes,
+        timelineRes,
+        memoryRes,
+        logsRes,
+      ] = await Promise.allSettled([
+        supabase
+          .from("series_books")
+          .select("id,series_id,book_number,title,status,summary,novel_id")
+          .eq("series_id", seriesId)
+          .order("book_number", { ascending: true }),
+        fetch(`/api/series/characters?seriesId=${seriesId}`).then(r => r.json()),
+        fetch(`/api/series/world?seriesId=${seriesId}`).then(r => r.json()),
+        fetch(`/api/series/canon?seriesId=${seriesId}`).then(r => r.json()),
+        fetch(`/api/series/mystery?seriesId=${seriesId}`).then(r => r.json()),
+        fetch(`/api/series/relationships/entries?seriesId=${seriesId}`).then(r => r.json()),
+        fetch(`/api/series/plot-threads?seriesId=${seriesId}`).then(r => r.json()),
+        fetch(`/api/series/timeline?seriesId=${seriesId}`).then(r => r.json()),
+        fetch(`/api/series/memory?seriesId=${seriesId}`).then(r => r.json()),
+        fetch(`/api/series/generation-log?seriesId=${seriesId}`).then(r => r.json()),
+      ]);
+
+      // Books (from supabase directly)
+      if (booksRes.status === "fulfilled") {
+        setSeriesBooks(booksRes.value.data ?? []);
+      }
+
+      // Characters
+      if (charactersRes.status === "fulfilled") {
+        setSeriesCharacters(charactersRes.value.characters ?? []);
+      }
+
+      // World
+      if (worldRes.status === "fulfilled") {
+        const w = worldRes.value.world;
+        setSeriesWorld(w ?? null);
+        setWorldSettingDraft(String(w?.setting ?? ""));
+        setWorldRulesDraft(String(w?.rules ?? ""));
+        setWorldLoreDraft(String(w?.lore ?? ""));
+      }
+
+      // Canon / Memory (combines canon, mystery, relationships into seriesMemory)
+      const canonEntries = canonRes.status === "fulfilled" ? (canonRes.value.entries ?? []) : [];
+      const mysteryEntries = mysteryRes.status === "fulfilled" ? (mysteryRes.value.entries ?? []) : [];
+      const relationshipEntries = relationshipsRes.status === "fulfilled" ? (relationshipsRes.value.entries ?? []) : [];
+      setSeriesMemory([...canonEntries, ...mysteryEntries, ...relationshipEntries]);
+
+      // Plot threads
+      if (plotsRes.status === "fulfilled") {
+        setPlotThreads(plotsRes.value.threads ?? []);
+      }
+
+      // Timeline
+      if (timelineRes.status === "fulfilled") {
+        setSeriesTimeline(timelineRes.value.events ?? []);
+      }
+
+      // Memory (overwrite if memory endpoint returned entries)
+      if (memoryRes.status === "fulfilled") {
+        const memEntries = memoryRes.value.entries ?? [];
+        if (memEntries.length > 0) {
+          setSeriesMemory(memEntries);
+        }
+      }
+
+      // Generation logs
+      if (logsRes.status === "fulfilled") {
+        setSeriesLogs(logsRes.value.logs ?? []);
+      }
+    } catch (err) {
+      console.error("Failed to load series data:", err);
+    }
   };
 
   const loadSeries = async (userIdValue: string) => {
@@ -420,21 +495,10 @@ export default function SeriesPage() {
       setSeriesList(data as SeriesSummary[]);
       const targetId = selectedSeriesId ?? (data[0]?.id ?? null);
       if (targetId && data.some((s: SeriesSummary) => s.id === targetId)) {
-        setSelectedSeriesId(targetId);
-        const { data: bookRows } = await supabase
-          .from("series_books")
-          .select("id,series_id,book_number,title,status,summary,novel_id")
-          .eq("series_id", targetId)
-          .order("book_number", { ascending: true });
-        setSeriesBooks(bookRows ?? []);
+        // Use selectSeries to load all data for the target series
+        await selectSeries(targetId);
       } else if (data[0]) {
-        setSelectedSeriesId(data[0].id);
-        const { data: bookRows } = await supabase
-          .from("series_books")
-          .select("id,series_id,book_number,title,status,summary,novel_id")
-          .eq("series_id", data[0].id)
-          .order("book_number", { ascending: true });
-        setSeriesBooks(bookRows ?? []);
+        await selectSeries(data[0].id);
       }
     }
   };
