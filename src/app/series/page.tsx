@@ -27,6 +27,15 @@ type SeriesSummary = {
   title: string;
   description: string | null;
   num_books: number;
+  premise: string | null;
+  genre: string | null;
+  tone: string | null;
+  themes: unknown; // jsonb
+  target_audience: string | null;
+  world_name: string | null;
+  world_description: string | null;
+  main_conflict: string | null;
+  status: string | null;
 };
 
 /** Row shape returned by series_books insert + select(...) */
@@ -66,14 +75,14 @@ export default function SeriesPage() {
     Array<Record<string, unknown>>
   >([]);
   const [loadingStep, setLoadingStep] = useState<string | null>(null);
-  const [suiteTone, setSuiteTone] = useState("Emotional, dramatic, hopeful");
-  const [suiteSetting, setSuiteSetting] = useState("Contemporary");
+  const [suiteTone, setSuiteTone] = useState("");
+  const [suiteSetting, setSuiteSetting] = useState("");
   const [suiteCharacters, setSuiteCharacters] = useState("");
-  const [suiteThemes, setSuiteThemes] = useState(
-    "Coming of age, identity, relationships"
-  );
+  const [suiteThemes, setSuiteThemes] = useState("");
   const [suiteCoreConflict, setSuiteCoreConflict] = useState("");
   const [suiteBookNumber, setSuiteBookNumber] = useState(1);
+  const [suiteGenre, setSuiteGenre] = useState("");
+  const [suiteTargetAudience, setSuiteTargetAudience] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
   const [seriesCharacters, setSeriesCharacters] = useState<
     Array<Record<string, unknown>>
@@ -396,6 +405,15 @@ export default function SeriesPage() {
     setSeriesMap(null);
     setCharacterEvolution(null);
     setBookBlueprint(null);
+    // Reset suite fields — they'll be repopulated from the database
+    setSuiteTone("");
+    setSuiteSetting("");
+    setSuiteCharacters("");
+    setSuiteCoreConflict("");
+    setSuiteThemes("");
+    setSuiteBookNumber(1);
+    setSuiteGenre("");
+    setSuiteTargetAudience("");
   };
 
   const selectSeries = async (seriesId: string) => {
@@ -551,6 +569,46 @@ export default function SeriesPage() {
         );
         setBookBlueprint((matching ?? blueprintsRes.value.data[0]) as Record<string, unknown>);
       }
+
+      // Populate overview suite fields from the series row (seriesList already has the expanded fields)
+      const currentSeries = seriesList.find(s => s.id === seriesId);
+      if (currentSeries) {
+        if (currentSeries.tone) setSuiteTone(String(currentSeries.tone));
+        if (currentSeries.genre) setSuiteGenre(String(currentSeries.genre));
+        if (currentSeries.target_audience) setSuiteTargetAudience(String(currentSeries.target_audience));
+        if (currentSeries.world_name || currentSeries.world_description) {
+          const setting = [currentSeries.world_name, currentSeries.world_description].filter(Boolean).join(" — ");
+          if (setting) setSuiteSetting(setting);
+        }
+        if (currentSeries.main_conflict) setSuiteCoreConflict(String(currentSeries.main_conflict));
+        if (currentSeries.themes) {
+          const themesVal = currentSeries.themes;
+          if (Array.isArray(themesVal)) {
+            setSuiteThemes(themesVal.join(", "));
+          } else if (typeof themesVal === "string") {
+            setSuiteThemes(themesVal);
+          }
+        }
+      }
+
+      // Populate suite characters from series_bibles character_files
+      if (bibleRes.status === "fulfilled" && bibleRes.value.data && bibleRes.value.data.length > 0) {
+        const bible = bibleRes.value.data[0] as Record<string, unknown>;
+        const characterFiles = bible.character_files as Record<string, unknown> | null;
+        if (characterFiles && typeof characterFiles === "object") {
+          const charNames = Object.keys(characterFiles);
+          if (charNames.length > 0) {
+            setSuiteCharacters(charNames.join(", "));
+          }
+        }
+        // Also populate themes from bible if not already set from series table
+        if ((!currentSeries?.themes) && bible.themes_symbols) {
+          const ts = bible.themes_symbols;
+          if (Array.isArray(ts)) {
+            setSuiteThemes(ts.map((t: unknown) => typeof t === "string" ? t : String((t as Record<string, unknown>)?.theme ?? t)).join(", "));
+          }
+        }
+      }
     } catch (err) {
       console.error("Failed to load series data:", err);
     }
@@ -559,7 +617,7 @@ export default function SeriesPage() {
   const loadSeries = async (userIdValue: string) => {
     const { data } = await supabase
       .from("series")
-      .select("id,title,description,num_books")
+      .select("id,title,description,num_books,premise,genre,tone,themes,target_audience,world_name,world_description,main_conflict,status")
       .eq("user_id", userIdValue)
       .order("created_at", { ascending: false });
 
@@ -814,9 +872,6 @@ export default function SeriesPage() {
                 <button
                   onClick={async () => {
                     clearSeriesData();
-                    setSuiteThemes("Coming of age, identity, relationships");
-                    setSuiteCoreConflict("");
-                    setSuiteBookNumber(1);
                     setUserId(null);
                     setAuthEmail(null);
                     setSeriesList([]);
@@ -1008,6 +1063,24 @@ export default function SeriesPage() {
           </p>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <label className="text-xs text-zinc-300">
+              Genre
+              <input
+                value={suiteGenre}
+                onChange={(event) => setSuiteGenre(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                placeholder="Young Adult Fiction, Fantasy, Thriller..."
+              />
+            </label>
+            <label className="text-xs text-zinc-300">
+              Target Audience
+              <input
+                value={suiteTargetAudience}
+                onChange={(event) => setSuiteTargetAudience(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                placeholder="13-18, Adult, Children..."
+              />
+            </label>
+            <label className="text-xs text-zinc-300">
               Tone / Vibe
               <input
                 value={suiteTone}
@@ -1078,8 +1151,8 @@ export default function SeriesPage() {
                     body: JSON.stringify({
                       seriesId: activeSeries.id,
                       title: activeSeries.title,
-                      genre: "Young Adult Fiction",
-                      targetAge: "13-18",
+                      genre: suiteGenre || "Fiction",
+                      targetAge: suiteTargetAudience || "Adult",
                       tone: suiteTone,
                       setting: suiteSetting || description || "Contemporary",
                       mainCharacters: suiteCharacters,
@@ -1093,6 +1166,16 @@ export default function SeriesPage() {
                   const data = await response.json();
                   setSeriesBible(data.bible ?? null);
                   if (activeSeries) {
+                    // Save suite fields back to the series row so they persist
+                    await supabase.from("series").update({
+                      tone: suiteTone || null,
+                      genre: suiteGenre || null,
+                      target_audience: suiteTargetAudience || null,
+                      themes: suiteThemes ? suiteThemes.split(",").map((t: string) => t.trim()).filter(Boolean) : null,
+                      main_conflict: suiteCoreConflict || null,
+                      world_name: suiteSetting ? suiteSetting.split(" — ")[0] : null,
+                      world_description: suiteSetting || null,
+                    }).eq("id", activeSeries.id);
                     await supabase.from("series_worlds").upsert({
                       series_id: activeSeries.id,
                       setting: suiteSetting,
