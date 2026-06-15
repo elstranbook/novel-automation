@@ -148,6 +148,7 @@ export default function SeriesPage() {
   const [editingTimelineDescription, setEditingTimelineDescription] = useState("");
   const [editingTimelineOrder, setEditingTimelineOrder] = useState(1);
   const [editingTimelineBook, setEditingTimelineBook] = useState(1);
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -415,6 +416,11 @@ export default function SeriesPage() {
         timelineRes,
         memoryRes,
         logsRes,
+        arcRes,
+        bibleRes,
+        mapsRes,
+        evolutionRes,
+        blueprintsRes,
       ] = await Promise.allSettled([
         supabase
           .from("series_books")
@@ -430,6 +436,37 @@ export default function SeriesPage() {
         fetch(`/api/series/timeline?seriesId=${seriesId}`).then(r => r.json()),
         fetch(`/api/series/memory?seriesId=${seriesId}`).then(r => r.json()),
         fetch(`/api/series/generation-log?seriesId=${seriesId}`).then(r => r.json()),
+        // Overview tab: series arc
+        supabase
+          .from("series_arcs")
+          .select("overall_arc,character_arcs,themes,continuity_notes")
+          .eq("series_id", seriesId)
+          .order("created_at", { ascending: false })
+          .limit(1),
+        // Overview tab: series bible
+        supabase
+          .from("series_bibles")
+          .select("world_overview,world_rules,history_lore,character_files,relationship_map,series_arc_summary,themes_symbols,story_rules,continuity_lockfile,unanswered_mysteries")
+          .eq("series_id", seriesId)
+          .limit(1),
+        // Overview tab: series book maps
+        supabase
+          .from("series_book_maps")
+          .select("book_number,map_data")
+          .eq("series_id", seriesId)
+          .order("book_number", { ascending: true }),
+        // Overview tab: character evolution
+        supabase
+          .from("series_character_evolution")
+          .select("evolution")
+          .eq("series_id", seriesId)
+          .limit(1),
+        // Overview tab: book blueprints
+        supabase
+          .from("series_book_blueprints")
+          .select("book_number,blueprint")
+          .eq("series_id", seriesId)
+          .order("book_number", { ascending: true }),
       ]);
 
       // Books (from supabase directly)
@@ -478,6 +515,34 @@ export default function SeriesPage() {
       // Generation logs
       if (logsRes.status === "fulfilled") {
         setSeriesLogs(logsRes.value.logs ?? []);
+      }
+
+      // Series arc (Overview tab)
+      if (arcRes.status === "fulfilled" && arcRes.value.data && arcRes.value.data.length > 0) {
+        setArc(arcRes.value.data[0] as Record<string, unknown>);
+      }
+
+      // Series bible (Overview tab)
+      if (bibleRes.status === "fulfilled" && bibleRes.value.data && bibleRes.value.data.length > 0) {
+        setSeriesBible(bibleRes.value.data[0] as Record<string, unknown>);
+      }
+
+      // Series book maps (Overview tab)
+      if (mapsRes.status === "fulfilled" && mapsRes.value.data && mapsRes.value.data.length > 0) {
+        setSeriesMap(mapsRes.value.data as unknown as Record<string, unknown>[]);
+      }
+
+      // Character evolution (Overview tab)
+      if (evolutionRes.status === "fulfilled" && evolutionRes.value.data && evolutionRes.value.data.length > 0) {
+        setCharacterEvolution(evolutionRes.value.data[0] as Record<string, unknown>);
+      }
+
+      // Book blueprints (Overview tab) — show the one matching suiteBookNumber or the first
+      if (blueprintsRes.status === "fulfilled" && blueprintsRes.value.data && blueprintsRes.value.data.length > 0) {
+        const matching = blueprintsRes.value.data.find(
+          (b: Record<string, unknown>) => Number(b.book_number) === suiteBookNumber
+        );
+        setBookBlueprint((matching ?? blueprintsRes.value.data[0]) as Record<string, unknown>);
       }
     } catch (err) {
       console.error("Failed to load series data:", err);
@@ -554,6 +619,7 @@ export default function SeriesPage() {
       setBookBlueprint(null);
       setTitle("");
       setDescription("");
+      setShowCreateForm(false);
       await loadSeries(user.id);
       // Auto-select the newly created series (it will be first after reload)
       const { data: freshList } = await supabase
@@ -818,7 +884,16 @@ export default function SeriesPage() {
         )}
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <h2 className="text-xl font-semibold">Create new series</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Create new series</h2>
+            <button
+              onClick={() => setShowCreateForm(!showCreateForm)}
+              className="flex items-center gap-1 rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-400 transition hover:text-zinc-200"
+            >
+              {showCreateForm ? "Hide" : "New Series"}
+            </button>
+          </div>
+          {showCreateForm && (
           <div className="mt-4 grid gap-4">
             <label className="flex flex-col gap-2 text-sm">
               Series title
@@ -872,10 +947,13 @@ export default function SeriesPage() {
             >
               {loading ? "Creating..." : "Create series & arc"}
             </button>
-            <p className="text-xs text-zinc-500">
-              Select a series from the sidebar, or create a new one below.
-            </p>
           </div>
+          )}
+          {!showCreateForm && activeSeries && (
+            <p className="mt-2 text-xs text-zinc-500">
+              Currently working on: <span className="text-zinc-300">{activeSeries.title}</span>. Click "New Series" to create another.
+            </p>
+          )}
         </section>
 
         {arc && (
