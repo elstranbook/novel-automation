@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
   const { data } = await supabaseAdmin
     .from("plot_thread")
-    .select("id,name,description,type,introduced_in_book,resolved_in_book,status")
+    .select("*")
     .eq("series_id", seriesId)
     .order("introduced_in_book", { ascending: true });
 
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
         introduced_in_book: introducedInBook ?? 1,
         resolved_in_book: resolvedInBook ?? null,
       })
-      .select("id,name,description,type,introduced_in_book,resolved_in_book,status")
+      .select("*")
       .single();
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

@@ -416,7 +416,8 @@ export default function SeriesPage() {
     setSuiteTargetAudience("");
   };
 
-  const selectSeries = async (seriesId: string) => {
+  const selectSeries = async (seriesId: string, seriesListRef?: SeriesSummary[]) => {
+    console.log(`[selectSeries] Loading data for series ${seriesId}`);
     setSelectedSeriesId(seriesId);
     clearSeriesData();
     setSidebarOpen(false);
@@ -442,7 +443,7 @@ export default function SeriesPage() {
       ] = await Promise.allSettled([
         supabase
           .from("series_books")
-          .select("id,series_id,book_number,title,status,summary,novel_id")
+          .select("*")
           .eq("series_id", seriesId)
           .order("book_number", { ascending: true }),
         fetch(`/api/series/characters?seriesId=${seriesId}`).then(r => r.json()),
@@ -457,32 +458,32 @@ export default function SeriesPage() {
         // Overview tab: series arc
         supabase
           .from("series_arcs")
-          .select("overall_arc,character_arcs,themes,continuity_notes")
+          .select("*")
           .eq("series_id", seriesId)
           .order("created_at", { ascending: false })
           .limit(1),
         // Overview tab: series bible
         supabase
           .from("series_bibles")
-          .select("world_overview,world_rules,history_lore,character_files,relationship_map,series_arc_summary,themes_symbols,story_rules,continuity_lockfile,unanswered_mysteries")
+          .select("*")
           .eq("series_id", seriesId)
           .limit(1),
         // Overview tab: series book maps
         supabase
           .from("series_book_maps")
-          .select("book_number,map_data")
+          .select("*")
           .eq("series_id", seriesId)
           .order("book_number", { ascending: true }),
         // Overview tab: character evolution
         supabase
           .from("series_character_evolution")
-          .select("evolution")
+          .select("*")
           .eq("series_id", seriesId)
           .limit(1),
         // Overview tab: book blueprints
         supabase
           .from("series_book_blueprints")
-          .select("book_number,blueprint")
+          .select("*")
           .eq("series_id", seriesId)
           .order("book_number", { ascending: true }),
       ]);
@@ -490,13 +491,13 @@ export default function SeriesPage() {
       // Books (from supabase directly)
       if (booksRes.status === "fulfilled") {
         if (booksRes.value.error) {
-          console.error("Error loading series_books:", booksRes.value.error);
+          console.error("[selectSeries] Error loading series_books:", booksRes.value.error.message, booksRes.value.error);
         }
         const booksData = booksRes.value.data ?? [];
-        console.log(`Loaded ${booksData.length} series_books for series ${seriesId}`);
+        console.log(`[selectSeries] Loaded ${booksData.length} series_books for series ${seriesId}`);
         setSeriesBooks(booksData);
       } else {
-        console.error("series_books query rejected:", booksRes.reason);
+        console.error("[selectSeries] series_books query rejected:", booksRes.reason);
       }
 
       // Characters
@@ -543,26 +544,73 @@ export default function SeriesPage() {
       }
 
       // Series arc (Overview tab)
-      if (arcRes.status === "fulfilled" && arcRes.value.data && arcRes.value.data.length > 0) {
-        setArc(arcRes.value.data[0] as Record<string, unknown>);
+      if (arcRes.status === "fulfilled") {
+        if (arcRes.value.error) {
+          console.error("Error loading series_arcs:", arcRes.value.error.message);
+        }
+        if (arcRes.value.data && arcRes.value.data.length > 0) {
+          setArc(arcRes.value.data[0] as Record<string, unknown>);
+        }
       }
 
       // Series bible (Overview tab)
-      if (bibleRes.status === "fulfilled" && bibleRes.value.data && bibleRes.value.data.length > 0) {
-        setSeriesBible(bibleRes.value.data[0] as Record<string, unknown>);
+      if (bibleRes.status === "fulfilled") {
+        if (bibleRes.value.error) {
+          console.error("Error loading series_bibles:", bibleRes.value.error.message);
+        }
+        if (bibleRes.value.data && bibleRes.value.data.length > 0) {
+          setSeriesBible(bibleRes.value.data[0] as Record<string, unknown>);
+        }
       }
 
       // Series book maps (Overview tab)
-      if (mapsRes.status === "fulfilled" && mapsRes.value.data && mapsRes.value.data.length > 0) {
-        setSeriesMap(mapsRes.value.data as unknown as Record<string, unknown>[]);
+      if (mapsRes.status === "fulfilled") {
+        if (mapsRes.value.error) {
+          console.error("[selectSeries] Error loading series_book_maps:", mapsRes.value.error.message, mapsRes.value.error);
+        }
+        if (mapsRes.value.data && mapsRes.value.data.length > 0) {
+          setSeriesMap(mapsRes.value.data as unknown as Record<string, unknown>[]);
+          console.log(`[selectSeries] Loaded ${mapsRes.value.data.length} series_book_maps for series ${seriesId}`);
+        } else {
+          // Fallback: reconstruct basic map data from series_books if series_book_maps is empty
+          // This ensures the map section shows even if series_book_maps insert failed
+          const books = booksRes.status === "fulfilled" ? (booksRes.value.data ?? []) : [];
+          if (books.length > 0) {
+            const reconstructedMap = books.map((book: Record<string, unknown>) => ({
+              book_number: book.book_number,
+              map_data: {
+                book_number: book.book_number,
+                title: book.title ?? `Book ${book.book_number}`,
+                central_conflict: book.summary ?? "",
+                status: book.status ?? "planned",
+              },
+            }));
+            setSeriesMap(reconstructedMap);
+            console.log(`[selectSeries] Reconstructed series map from ${books.length} series_books (series_book_maps was empty)`);
+          } else {
+            console.warn(`[selectSeries] No series_book_maps and no series_books found for series ${seriesId}`);
+          }
+        }
+      } else {
+        console.error("[selectSeries] series_book_maps query rejected:", mapsRes.reason);
       }
 
       // Character evolution (Overview tab)
-      if (evolutionRes.status === "fulfilled" && evolutionRes.value.data && evolutionRes.value.data.length > 0) {
-        setCharacterEvolution(evolutionRes.value.data[0] as Record<string, unknown>);
+      if (evolutionRes.status === "fulfilled") {
+        if (evolutionRes.value.error) {
+          console.error("Error loading series_character_evolution:", evolutionRes.value.error.message);
+        }
+        if (evolutionRes.value.data && evolutionRes.value.data.length > 0) {
+          setCharacterEvolution(evolutionRes.value.data[0] as Record<string, unknown>);
+        }
       }
 
       // Book blueprints (Overview tab) — show the one matching suiteBookNumber or the first
+      if (blueprintsRes.status === "fulfilled") {
+        if (blueprintsRes.value.error) {
+          console.error("Error loading series_book_blueprints:", blueprintsRes.value.error.message);
+        }
+      }
       if (blueprintsRes.status === "fulfilled" && blueprintsRes.value.data && blueprintsRes.value.data.length > 0) {
         const matching = blueprintsRes.value.data.find(
           (b: Record<string, unknown>) => Number(b.book_number) === suiteBookNumber
@@ -571,7 +619,9 @@ export default function SeriesPage() {
       }
 
       // Populate overview suite fields from the series row (seriesList already has the expanded fields)
-      const currentSeries = seriesList.find(s => s.id === seriesId);
+      // Use the passed seriesListRef if available (avoids stale closure when called from loadSeries)
+      const listToSearch = seriesListRef ?? seriesList;
+      const currentSeries = listToSearch.find(s => s.id === seriesId);
       if (currentSeries) {
         if (currentSeries.tone) setSuiteTone(String(currentSeries.tone));
         if (currentSeries.genre) setSuiteGenre(String(currentSeries.genre));
@@ -615,38 +665,46 @@ export default function SeriesPage() {
   };
 
   const loadSeries = async (userIdValue: string) => {
-    // Try expanded select first (includes genre, tone, themes, etc.)
-    // If columns don't exist yet (400 error), fall back to basic select
+    console.log(`[loadSeries] Loading series for user ${userIdValue}`);
+    // Use select("*") to avoid 400 errors from missing columns.
+    // PostgREST returns 400 if you explicitly name a column that doesn't exist,
+    // but select("*") always returns whatever columns are actually present.
     let data = null as SeriesSummary[] | null;
-    const expandedSelect = "id,title,description,num_books,premise,genre,tone,themes,target_audience,world_name,world_description,main_conflict,status";
 
-    const expandedResult = await supabase
+    const result = await supabase
       .from("series")
-      .select(expandedSelect)
+      .select("*")
       .eq("user_id", userIdValue)
       .order("created_at", { ascending: false });
 
-    if (expandedResult.error) {
-      console.warn("Expanded select failed, falling back to basic select:", expandedResult.error.message);
+    if (result.error) {
+      console.error("[loadSeries] Failed to load series list:", result.error.message, result.error);
+      // Final fallback: try minimal select
       const basicResult = await supabase
         .from("series")
         .select("id,title,description,num_books")
         .eq("user_id", userIdValue)
         .order("created_at", { ascending: false });
+      if (basicResult.error) {
+        console.error("Basic select also failed:", basicResult.error.message);
+      }
       data = (basicResult.data ?? null) as SeriesSummary[] | null;
     } else {
-      data = (expandedResult.data ?? null) as SeriesSummary[] | null;
+      data = (result.data ?? null) as SeriesSummary[] | null;
     }
 
     if (data) {
+      console.log(`[loadSeries] Found ${data.length} series, selecting target`);
       setSeriesList(data);
       const targetId = selectedSeriesId ?? (data[0]?.id ?? null);
       if (targetId && data.some((s: SeriesSummary) => s.id === targetId)) {
         // Use selectSeries to load all data for the target series
-        await selectSeries(targetId);
+        await selectSeries(targetId, data);
       } else if (data[0]) {
-        await selectSeries(data[0].id);
+        await selectSeries(data[0].id, data);
       }
+    } else {
+      console.warn("[loadSeries] No series data found for user");
     }
   };
 
@@ -935,6 +993,14 @@ export default function SeriesPage() {
                   </Link>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
+                  {activeSeries && (
+                    <Link
+                      href={`/studio?seriesId=${activeSeries.id}&bookNumber=1`}
+                      className="rounded-full border border-blue-500/60 px-3 py-1.5 text-xs font-medium text-blue-200 transition hover:bg-blue-500/10"
+                    >
+                      Open in Studio
+                    </Link>
+                  )}
                   <Link
                     href="/studio"
                     className="rounded-full border border-emerald-500/60 px-3 py-1 text-xs text-emerald-200"
@@ -1256,7 +1322,7 @@ export default function SeriesPage() {
                       const { data: inserted, error: insertError } = await supabase
                         .from("series_books")
                         .insert(rows)
-                        .select("id,series_id,book_number,title,status,summary");
+                        .select("*");
                       if (insertError) console.error("Failed to insert series_books:", insertError);
                       if (inserted) {
                         const insertedBooks = inserted as SeriesBookInsertedRow[];
@@ -1265,11 +1331,14 @@ export default function SeriesPage() {
                           title: bookRow.title ?? `Book ${bookRow.book_number}`,
                           series_id: bookRow.series_id,
                           book_number: bookRow.book_number,
+                          model: model || "gpt-4.1-mini",
+                          max_scene_length: 2000,
+                          min_scene_length: 500,
                         }));
                         const { data: novelsInserted, error: novelInsertError } = await supabase
                           .from("novels")
                           .insert(novelRows)
-                          .select("id,series_id,book_number");
+                          .select("*");
                         if (novelInsertError) console.error("Failed to insert novels:", novelInsertError);
                         const novels = (novelsInserted ?? []) as NovelInsertedRow[];
                         if (novels.length) {
@@ -1289,7 +1358,7 @@ export default function SeriesPage() {
                         // Reload books from database to ensure we have the full, correct data including novel_id
                         const { data: refreshedBooks, error: refreshError } = await supabase
                           .from("series_books")
-                          .select("id,series_id,book_number,title,status,summary,novel_id")
+                          .select("*")
                           .eq("series_id", activeSeries.id)
                           .order("book_number", { ascending: true });
                         if (refreshError) console.error("Failed to refresh series_books:", refreshError);
@@ -1477,7 +1546,7 @@ export default function SeriesPage() {
                         </div>
                         <Link
                           href={`/studio?seriesId=${book.series_id}&bookNumber=${book.book_number}`}
-                          className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                          className="rounded-full border border-blue-500/40 px-3 py-1 text-[10px] text-blue-200 transition hover:bg-blue-500/10"
                         >
                           Open in Studio
                         </Link>

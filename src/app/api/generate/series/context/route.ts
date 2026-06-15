@@ -31,7 +31,7 @@ export async function POST(request: Request) {
 
     const { data: priorBooks } = await supabaseAdmin
       .from("novel_synopsis")
-      .select("novel_id, synopsis")
+      .select("*")
       .in(
         "novel_id",
         (
@@ -61,31 +61,31 @@ export async function POST(request: Request) {
     ] = await Promise.all([
       supabaseAdmin
         .from("series_worlds")
-        .select("setting,rules,lore")
+        .select("*")
         .eq("series_id", seriesId)
         .maybeSingle(),
       supabaseAdmin
         .from("series_characters")
-        .select("name,role,description,arc")
+        .select("*")
         .eq("series_id", seriesId),
       supabaseAdmin
         .from("series_memory")
-        .select("category,content")
+        .select("*")
         .eq("series_id", seriesId)
         .order("created_at", { ascending: true }),
       supabaseAdmin
         .from("series_books")
-        .select("book_number,title,status,summary")
+        .select("*")
         .eq("series_id", seriesId)
         .order("book_number", { ascending: true }),
       supabaseAdmin
         .from("canon_log")
-        .select("id,world_facts,character_facts,event_facts,rules_facts")
+        .select("*")
         .eq("series_id", seriesId)
         .maybeSingle(),
       supabaseAdmin
         .from("canon_log_entry")
-        .select("category,fact,source")
+        .select("*")
         .in(
           "canon_log_id",
           (
@@ -97,17 +97,17 @@ export async function POST(request: Request) {
         ),
       supabaseAdmin
         .from("relationship_log")
-        .select("relationships")
+        .select("*")
         .eq("series_id", seriesId)
         .maybeSingle(),
       supabaseAdmin
         .from("mystery_log")
-        .select("id,active_mysteries,resolved_mysteries")
+        .select("*")
         .eq("series_id", seriesId)
         .maybeSingle(),
       supabaseAdmin
         .from("secret")
-        .select("title,description,status,revealed_in_book")
+        .select("*")
         .in(
           "mystery_log_id",
           (
@@ -119,7 +119,7 @@ export async function POST(request: Request) {
         ),
       supabaseAdmin
         .from("clue")
-        .select("description,secret_id,planted_in_book")
+        .select("*")
         .in(
           "mystery_log_id",
           (
@@ -131,19 +131,19 @@ export async function POST(request: Request) {
         ),
       supabaseAdmin
         .from("plot_thread")
-        .select("name,description,type,status,introduced_in_book,resolved_in_book")
+        .select("*")
         .eq("series_id", seriesId),
       supabaseAdmin
         .from("world_element")
-        .select("type,name,description,importance,introduced_in_book")
+        .select("*")
         .eq("series_id", seriesId),
       supabaseAdmin
         .from("foreshadowing")
-        .select("event_type,event_description,setup_book,payoff_book,status")
+        .select("*")
         .eq("series_id", seriesId),
       supabaseAdmin
         .from("callback")
-        .select("original_book,original_event,callback_book,callback_description")
+        .select("*")
         .eq("series_id", seriesId),
     ]);
 

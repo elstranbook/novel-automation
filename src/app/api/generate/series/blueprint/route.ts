@@ -34,14 +34,14 @@ export async function POST(request: Request) {
 
     const { data: bookMap } = await supabaseAdmin
       .from("series_book_maps")
-      .select("map_data")
+      .select("*")
       .eq("series_id", seriesId)
       .eq("book_number", bookNumber)
       .maybeSingle();
 
     const { data: evolution } = await supabaseAdmin
       .from("series_character_evolution")
-      .select("evolution")
+      .select("*")
       .eq("series_id", seriesId)
       .maybeSingle();
 

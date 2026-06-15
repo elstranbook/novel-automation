@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 
   const { data: entries } = await supabaseAdmin
     .from("canon_log_entry")
-    .select("id,category,fact,source,created_at")
+    .select("*")
     .eq("canon_log_id", log?.id ?? "")
     .order("created_at", { ascending: true });
 
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
         fact,
         source: source ?? "",
       })
-      .select("id,category,fact,source,created_at")
+      .select("*")
       .single();
 
     if (error) {

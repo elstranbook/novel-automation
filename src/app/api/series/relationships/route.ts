@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 
   const { data: log } = await supabaseAdmin
     .from("relationship_log")
-    .select("id,relationships")
+    .select("*")
     .eq("series_id", seriesId)
     .maybeSingle();
 
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
         series_id: seriesId,
         relationships: relationships ?? [],
       })
-      .select("id,relationships")
+      .select("*")
       .single();
 
     if (error) {

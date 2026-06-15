@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabaseAdmin
     .from("series_characters")
-    .select("id,name,role,description,arc")
+    .select("*")
     .eq("series_id", seriesId)
     .order("created_at", { ascending: true });
 
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
         description: description ?? "",
         arc: arc ?? null,
       })
-      .select("id,name,role,description,arc")
+      .select("*")
       .single();
 
     if (error) {

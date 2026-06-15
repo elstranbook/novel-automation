@@ -14,7 +14,7 @@ export async function POST(request: Request) {
 
     const { data: legacyMemory } = await supabaseAdmin
       .from("series_memory")
-      .select("category,content,created_at")
+      .select("*")
       .eq("series_id", seriesId);
 
     const canonFacts = legacyMemory?.filter((entry) => entry.category === "canon") ?? [];

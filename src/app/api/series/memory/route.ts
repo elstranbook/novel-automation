@@ -16,7 +16,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabaseAdmin
     .from("series_memory")
-    .select("id,category,content,created_at")
+    .select("*")
     .eq("series_id", seriesId)
     .order("created_at", { ascending: false });
 
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
         category: category ?? "canon",
         content,
       })
-      .select("id,category,content,created_at")
+      .select("*")
       .single();
 
     if (error) {
