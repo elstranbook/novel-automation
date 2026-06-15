@@ -419,7 +419,7 @@ export default function SeriesPage() {
     if (data) {
       setSeriesList(data as SeriesSummary[]);
       const targetId = selectedSeriesId ?? (data[0]?.id ?? null);
-      if (targetId && data.some(s => s.id === targetId)) {
+      if (targetId && data.some((s: SeriesSummary) => s.id === targetId)) {
         setSelectedSeriesId(targetId);
         const { data: bookRows } = await supabase
           .from("series_books")
