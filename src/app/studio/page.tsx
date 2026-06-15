@@ -3303,6 +3303,9 @@ function StudioContent() {
     </>
   );
 
+  // Pre-compute whether the series context provides a blueprint (avoids TS unknown issues in JSX)
+  const hasSeriesBlueprint = Boolean(seriesContext && "book_blueprint" in seriesContext && seriesContext.book_blueprint);
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 sm:px-6 py-8 sm:py-12 lg:flex-row">
@@ -3620,112 +3623,113 @@ function StudioContent() {
               </pre>
             </div>
           )}
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap gap-3">
-              <button
-              onClick={generateStoryDetails}
-              disabled={!title || !novelAbout || loadingStep === "story"}
-              className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loadingStep === "story"
-                ? "Generating..."
-                : "Generate Story Details"}
-            </button>
-            <button
-              onClick={resetPipeline}
-              className="rounded-full border border-zinc-700 px-6 py-3 text-sm"
-            >
-              Reset pipeline
-            </button>
-          </div>
-        </div>
-        </section>
-
-        {/* Blueprint — only shown for standalone books (no series context with blueprint) */}
-        {!seriesContext?.book_blueprint && (
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-          <SectionHeading title="0. Book Blueprint" step="Blueprint" />
-          <p className="mt-2 text-sm text-zinc-400">
-            Generate a structural blueprint for your book before writing. This defines the narrative arc — opening shift, midpoint shock, lowest point, climax, and ending change — so the AI writes with purpose and pacing.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button
-              onClick={generateBlueprint}
-              disabled={!title || loadingStep === "blueprint"}
-              className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loadingStep === "blueprint"
-                ? "Generating Blueprint..."
-                : bookBlueprint
-                  ? "Regenerate Blueprint"
-                  : "Generate Blueprint"}
-            </button>
-            {bookBlueprint && (
-              <button
-                onClick={() => setBookBlueprint(null)}
-                className="rounded-full border border-zinc-700 px-5 py-2 text-sm hover:bg-zinc-800 transition-all"
-              >
-                Clear Blueprint
-              </button>
-            )}
-          </div>
-          {bookBlueprint && (
-            <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs text-zinc-300">
-              <p className="font-semibold text-zinc-200 mb-2">Blueprint for &quot;{title}&quot;</p>
-              <div className="space-y-3">
-                {typeof bookBlueprint.opening_shift === "string" && bookBlueprint.opening_shift && (
-                  <div>
-                    <p className="font-medium text-amber-400">Opening Shift</p>
-                    <p className="whitespace-pre-wrap">{bookBlueprint.opening_shift}</p>
+          {/* Blueprint button — replaces the old "Generate Story Details" here.
+              For series books with a blueprint, this is hidden since the series provides one. */}
+          {!hasSeriesBlueprint && (
+            <div>
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    onClick={generateBlueprint}
+                    disabled={!title || loadingStep === "blueprint"}
+                    className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loadingStep === "blueprint"
+                      ? "Generating Blueprint..."
+                      : bookBlueprint
+                        ? "Regenerate Blueprint"
+                        : "Generate Blueprint"}
+                  </button>
+                  {bookBlueprint && (
+                    <button
+                      onClick={() => setBookBlueprint(null)}
+                      className="rounded-full border border-zinc-700 px-6 py-3 text-sm hover:bg-zinc-800 transition-all"
+                    >
+                      Clear Blueprint
+                    </button>
+                  )}
+                  <button
+                    onClick={resetPipeline}
+                    className="rounded-full border border-zinc-700 px-6 py-3 text-sm"
+                  >
+                    Reset pipeline
+                  </button>
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-zinc-500">
+                Generate a blueprint first — it defines the narrative arc so the AI writes with purpose and pacing.
+              </p>
+              {bookBlueprint && (
+                <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-xs text-zinc-300">
+                  <p className="font-semibold text-zinc-200 mb-2">Blueprint for &quot;{title}&quot;</p>
+                  <div className="space-y-3">
+                    {typeof bookBlueprint.opening_shift === "string" && bookBlueprint.opening_shift && (
+                      <div>
+                        <p className="font-medium text-amber-400">Opening Shift</p>
+                        <p className="whitespace-pre-wrap">{bookBlueprint.opening_shift}</p>
+                      </div>
+                    )}
+                    {typeof bookBlueprint.midpoint_shock === "string" && bookBlueprint.midpoint_shock && (
+                      <div>
+                        <p className="font-medium text-red-400">Midpoint Shock</p>
+                        <p className="whitespace-pre-wrap">{bookBlueprint.midpoint_shock}</p>
+                      </div>
+                    )}
+                    {typeof bookBlueprint.lowest_point === "string" && bookBlueprint.lowest_point && (
+                      <div>
+                        <p className="font-medium text-purple-400">Lowest Point</p>
+                        <p className="whitespace-pre-wrap">{bookBlueprint.lowest_point}</p>
+                      </div>
+                    )}
+                    {typeof bookBlueprint.climax === "string" && bookBlueprint.climax && (
+                      <div>
+                        <p className="font-medium text-orange-400">Climax</p>
+                        <p className="whitespace-pre-wrap">{bookBlueprint.climax}</p>
+                      </div>
+                    )}
+                    {typeof bookBlueprint.ending_change === "string" && bookBlueprint.ending_change && (
+                      <div>
+                        <p className="font-medium text-green-400">Ending Change</p>
+                        <p className="whitespace-pre-wrap">{bookBlueprint.ending_change}</p>
+                      </div>
+                    )}
+                    {typeof bookBlueprint.relationship_changes === "string" && bookBlueprint.relationship_changes && (
+                      <div>
+                        <p className="font-medium text-pink-400">Relationship Changes</p>
+                        <p className="whitespace-pre-wrap">{bookBlueprint.relationship_changes}</p>
+                      </div>
+                    )}
+                    {typeof bookBlueprint.theme_pressure === "string" && bookBlueprint.theme_pressure && (
+                      <div>
+                        <p className="font-medium text-cyan-400">Theme Pressure</p>
+                        <p className="whitespace-pre-wrap">{bookBlueprint.theme_pressure}</p>
+                      </div>
+                    )}
+                    {typeof bookBlueprint.full_outline === "string" && bookBlueprint.full_outline && (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer font-medium text-zinc-200">Full Chapter Outline</summary>
+                        <p className="mt-2 whitespace-pre-wrap">{bookBlueprint.full_outline}</p>
+                      </details>
+                    )}
                   </div>
-                )}
-                {typeof bookBlueprint.midpoint_shock === "string" && bookBlueprint.midpoint_shock && (
-                  <div>
-                    <p className="font-medium text-red-400">Midpoint Shock</p>
-                    <p className="whitespace-pre-wrap">{bookBlueprint.midpoint_shock}</p>
-                  </div>
-                )}
-                {typeof bookBlueprint.lowest_point === "string" && bookBlueprint.lowest_point && (
-                  <div>
-                    <p className="font-medium text-purple-400">Lowest Point</p>
-                    <p className="whitespace-pre-wrap">{bookBlueprint.lowest_point}</p>
-                  </div>
-                )}
-                {typeof bookBlueprint.climax === "string" && bookBlueprint.climax && (
-                  <div>
-                    <p className="font-medium text-orange-400">Climax</p>
-                    <p className="whitespace-pre-wrap">{bookBlueprint.climax}</p>
-                  </div>
-                )}
-                {typeof bookBlueprint.ending_change === "string" && bookBlueprint.ending_change && (
-                  <div>
-                    <p className="font-medium text-green-400">Ending Change</p>
-                    <p className="whitespace-pre-wrap">{bookBlueprint.ending_change}</p>
-                  </div>
-                )}
-                {typeof bookBlueprint.relationship_changes === "string" && bookBlueprint.relationship_changes && (
-                  <div>
-                    <p className="font-medium text-pink-400">Relationship Changes</p>
-                    <p className="whitespace-pre-wrap">{bookBlueprint.relationship_changes}</p>
-                  </div>
-                )}
-                {typeof bookBlueprint.theme_pressure === "string" && bookBlueprint.theme_pressure && (
-                  <div>
-                    <p className="font-medium text-cyan-400">Theme Pressure</p>
-                    <p className="whitespace-pre-wrap">{bookBlueprint.theme_pressure}</p>
-                  </div>
-                )}
-                {typeof bookBlueprint.full_outline === "string" && bookBlueprint.full_outline && (
-                  <details className="mt-2">
-                    <summary className="cursor-pointer font-medium text-zinc-200">Full Chapter Outline</summary>
-                    <p className="mt-2 whitespace-pre-wrap">{bookBlueprint.full_outline}</p>
-                  </details>
-                )}
+                </div>
+              )}
+            </div>
+          )}
+          {/* For series books, show Reset pipeline button here */}
+          {hasSeriesBlueprint && (
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={resetPipeline}
+                  className="rounded-full border border-zinc-700 px-6 py-3 text-sm"
+                >
+                  Reset pipeline
+                </button>
               </div>
             </div>
           )}
         </section>
-        )}
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <SectionHeading title="1. Story details" step="Story details" />
