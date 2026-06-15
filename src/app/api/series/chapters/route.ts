@@ -12,15 +12,55 @@ type ChapterPayload = {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const bookId = searchParams.get("bookId");
-  if (!bookId) {
-    return NextResponse.json({ error: "bookId required" }, { status: 400 });
+  const seriesId = searchParams.get("seriesId");
+
+  // Support both bookId (single book) and seriesId (all books in series)
+  if (seriesId) {
+    // Get all book IDs for this series first
+    const { data: books, error: booksError } = await supabaseAdmin
+      .from("series_books")
+      .select("id")
+      .eq("series_id", seriesId);
+
+    if (booksError) {
+      return NextResponse.json({ error: booksError.message }, { status: 500 });
+    }
+
+    const bookIds = (books ?? []).map((b: { id: string }) => b.id);
+
+    if (bookIds.length === 0) {
+      return NextResponse.json({ chapters: [] });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("chapter")
+      .select("*")
+      .in("book_id", bookIds)
+      .order("chapter_number", { ascending: true });
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ chapters: data ?? [] });
   }
 
-  const { data } = await supabaseAdmin
+  if (!bookId) {
+    return NextResponse.json(
+      { error: "bookId or seriesId required" },
+      { status: 400 }
+    );
+  }
+
+  const { data, error } = await supabaseAdmin
     .from("chapter")
     .select("*")
     .eq("book_id", bookId)
     .order("chapter_number", { ascending: true });
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
   return NextResponse.json({ chapters: data ?? [] });
 }

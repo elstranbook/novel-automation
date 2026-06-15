@@ -2456,11 +2456,12 @@ export default function SeriesPage() {
               <button
                 onClick={async () => {
                   if (!seriesList[0]) return;
-                  const response = await fetch(
-                    `/api/series/chapters?seriesId=${seriesList[0].id}`
-                  );
-                  const data = await response.json();
-                  setSeriesBooks(data.books ?? []);
+                  const { data } = await supabase
+                    .from("series_books")
+                    .select("*")
+                    .eq("series_id", seriesList[0].id)
+                    .order("book_number", { ascending: true });
+                  setSeriesBooks(data ?? []);
                 }}
                 className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >

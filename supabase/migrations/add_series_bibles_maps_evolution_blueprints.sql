@@ -1,5 +1,12 @@
 -- Migration: Add series_bibles, series_book_maps, series_character_evolution, series_book_blueprints
--- These tables are required by the /api/generate/series/* routes but were missing from schema.sql.
+-- Plus: add unique constraint on series_worlds.series_id so upsert works.
+
+-- =============================================
+-- Fix series_worlds: add unique constraint for upsert support
+-- =============================================
+-- The world route does upsert/insert-or-update which requires a unique key on series_id.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_series_worlds_series_id_unique
+  ON public.series_worlds (series_id);
 
 -- =============================================
 -- series_bibles

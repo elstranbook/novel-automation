@@ -291,7 +291,7 @@ create table if not exists public.series_characters (
 
 create table if not exists public.series_worlds (
   id uuid primary key default gen_random_uuid(),
-  series_id uuid references public.series(id) on delete cascade,
+  series_id uuid not null references public.series(id) on delete cascade unique,
   setting text,
   rules jsonb,
   lore jsonb,

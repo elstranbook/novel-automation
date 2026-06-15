@@ -40,16 +40,41 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data, error } = await supabaseAdmin
+    // Check if a world row already exists for this series
+    const { data: existing } = await supabaseAdmin
       .from("series_worlds")
-      .upsert({
-        series_id: seriesId,
-        setting: setting ?? "",
-        rules: rules ?? null,
-        lore: lore ?? null,
-      })
-      .select("id,setting,rules,lore")
-      .single();
+      .select("id")
+      .eq("series_id", seriesId)
+      .maybeSingle();
+
+    let result;
+    if (existing) {
+      // Update existing row
+      result = await supabaseAdmin
+        .from("series_worlds")
+        .update({
+          setting: setting ?? "",
+          rules: rules ?? null,
+          lore: lore ?? null,
+        })
+        .eq("id", existing.id)
+        .select("id,setting,rules,lore")
+        .single();
+    } else {
+      // Insert new row
+      result = await supabaseAdmin
+        .from("series_worlds")
+        .insert({
+          series_id: seriesId,
+          setting: setting ?? "",
+          rules: rules ?? null,
+          lore: lore ?? null,
+        })
+        .select("id,setting,rules,lore")
+        .single();
+    }
+
+    const { data, error } = result;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
