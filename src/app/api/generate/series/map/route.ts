@@ -26,6 +26,15 @@ export async function POST(request: Request) {
       );
     }
 
+    // Look up the series owner for server-side writes
+    const { data: seriesRow } = await supabaseAdmin
+      .from("series")
+      .select("user_id")
+      .eq("id", seriesId)
+      .maybeSingle();
+
+    const seriesOwnerUserId = seriesRow?.user_id ?? null;
+
     let bibleContext = "";
     const bible = seriesBible
       ? seriesBible
@@ -114,32 +123,119 @@ Return as JSON array with one object per book:
       maxTokens: 5000,
     });
 
-    const { error: deleteError } = await supabaseAdmin
+    // ── Persist series_book_maps (server-side, bypasses RLS) ──
+    const { error: deleteMapError } = await supabaseAdmin
       .from("series_book_maps")
       .delete()
       .eq("series_id", seriesId);
 
-    if (deleteError) {
-      console.error("Failed to delete old series_book_maps:", deleteError.message);
-      // Don't throw — the map generation itself succeeded, we just can't persist it
+    if (deleteMapError) {
+      console.error("[map-route] Failed to delete old series_book_maps:", deleteMapError.message);
     }
 
     if (Array.isArray(response)) {
-      const rows = response.map((bookMap) => ({
+      const mapRows = response.map((bookMap) => ({
         series_id: seriesId,
         book_number: bookMap.book_number ?? 1,
         map_data: bookMap,
       }));
-      if (rows.length) {
-        const { error: insertError } = await supabaseAdmin.from("series_book_maps").insert(rows);
-        if (insertError) {
-          console.error("Failed to insert series_book_maps:", insertError.message);
-          // Don't throw — the map generation itself succeeded, we just can't persist it
+      if (mapRows.length) {
+        const { error: insertMapError } = await supabaseAdmin.from("series_book_maps").insert(mapRows);
+        if (insertMapError) {
+          console.error("[map-route] Failed to insert series_book_maps:", insertMapError.message);
+        } else {
+          console.log(`[map-route] Inserted ${mapRows.length} series_book_maps rows`);
         }
       }
     }
 
-    return NextResponse.json({ maps: response });
+    // ── Persist series_books and novels (server-side, bypasses RLS) ──
+    let booksResult: Record<string, unknown>[] = [];
+
+    if (Array.isArray(response) && response.length > 0 && seriesOwnerUserId) {
+      // Delete old series_books
+      const { error: deleteBooksError } = await supabaseAdmin
+        .from("series_books")
+        .delete()
+        .eq("series_id", seriesId);
+
+      if (deleteBooksError) {
+        console.error("[map-route] Failed to delete old series_books:", deleteBooksError.message);
+      }
+
+      // Insert new series_books
+      const bookRows = response.map((book) => ({
+        series_id: seriesId,
+        book_number: Number(book.book_number ?? 1),
+        title: String(book.title ?? `Book ${book.book_number ?? 1}`),
+        status: "planned",
+        summary: String(book.central_conflict ?? ""),
+      }));
+
+      if (bookRows.length) {
+        const { data: insertedBooks, error: insertBooksError } = await supabaseAdmin
+          .from("series_books")
+          .insert(bookRows)
+          .select("*");
+
+        if (insertBooksError) {
+          console.error("[map-route] Failed to insert series_books:", insertBooksError.message);
+        } else if (insertedBooks && insertedBooks.length > 0) {
+          console.log(`[map-route] Inserted ${insertedBooks.length} series_books rows`);
+
+          // Insert novels for each book
+          const resolvedModel = model || "gpt-4.1-mini";
+          const novelRows = insertedBooks.map((bookRow: Record<string, unknown>) => ({
+            user_id: seriesOwnerUserId,
+            title: bookRow.title ?? `Book ${bookRow.book_number}`,
+            series_id: bookRow.series_id,
+            book_number: bookRow.book_number,
+            model: resolvedModel,
+            max_scene_length: 2000,
+            min_scene_length: 500,
+          }));
+
+          const { data: insertedNovels, error: insertNovelsError } = await supabaseAdmin
+            .from("novels")
+            .insert(novelRows)
+            .select("*");
+
+          if (insertNovelsError) {
+            console.error("[map-route] Failed to insert novels:", insertNovelsError.message);
+          } else if (insertedNovels && insertedNovels.length > 0) {
+            console.log(`[map-route] Inserted ${insertedNovels.length} novels`);
+
+            // Update series_books with novel_id
+            for (const novelRow of insertedNovels as Record<string, unknown>[]) {
+              const { error: updateError } = await supabaseAdmin
+                .from("series_books")
+                .update({ novel_id: novelRow.id })
+                .eq("series_id", novelRow.series_id)
+                .eq("book_number", novelRow.book_number);
+
+              if (updateError) {
+                console.error(`[map-route] Failed to update novel_id for book ${novelRow.book_number}:`, updateError.message);
+              }
+            }
+          }
+
+          // Reload series_books with novel_id populated
+          const { data: refreshedBooks, error: refreshError } = await supabaseAdmin
+            .from("series_books")
+            .select("*")
+            .eq("series_id", seriesId)
+            .order("book_number", { ascending: true });
+
+          if (refreshError) {
+            console.error("[map-route] Failed to refresh series_books:", refreshError.message);
+          } else {
+            booksResult = refreshedBooks ?? insertedBooks;
+          }
+        }
+      }
+    }
+
+    return NextResponse.json({ maps: response, books: booksResult });
   } catch (error) {
     console.error(error);
     return NextResponse.json(

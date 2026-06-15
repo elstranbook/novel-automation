@@ -423,6 +423,7 @@ export default function SeriesPage() {
     setSidebarOpen(false);
 
     // Load all series data in parallel for instant tab switching
+    // Uses server-side API routes (bypass RLS) instead of direct browser Supabase queries
     try {
       const [
         booksRes,
@@ -441,11 +442,7 @@ export default function SeriesPage() {
         evolutionRes,
         blueprintsRes,
       ] = await Promise.allSettled([
-        supabase
-          .from("series_books")
-          .select("*")
-          .eq("series_id", seriesId)
-          .order("book_number", { ascending: true }),
+        fetch(`/api/series/books?seriesId=${seriesId}`).then(r => r.json()),
         fetch(`/api/series/characters?seriesId=${seriesId}`).then(r => r.json()),
         fetch(`/api/series/world?seriesId=${seriesId}`).then(r => r.json()),
         fetch(`/api/series/canon?seriesId=${seriesId}`).then(r => r.json()),
@@ -456,44 +453,20 @@ export default function SeriesPage() {
         fetch(`/api/series/memory?seriesId=${seriesId}`).then(r => r.json()),
         fetch(`/api/series/generation-log?seriesId=${seriesId}`).then(r => r.json()),
         // Overview tab: series arc
-        supabase
-          .from("series_arcs")
-          .select("*")
-          .eq("series_id", seriesId)
-          .order("created_at", { ascending: false })
-          .limit(1),
+        fetch(`/api/series/arcs?seriesId=${seriesId}`).then(r => r.json()),
         // Overview tab: series bible
-        supabase
-          .from("series_bibles")
-          .select("*")
-          .eq("series_id", seriesId)
-          .limit(1),
+        fetch(`/api/series/bibles?seriesId=${seriesId}`).then(r => r.json()),
         // Overview tab: series book maps
-        supabase
-          .from("series_book_maps")
-          .select("*")
-          .eq("series_id", seriesId)
-          .order("book_number", { ascending: true }),
+        fetch(`/api/series/book-maps?seriesId=${seriesId}`).then(r => r.json()),
         // Overview tab: character evolution
-        supabase
-          .from("series_character_evolution")
-          .select("*")
-          .eq("series_id", seriesId)
-          .limit(1),
+        fetch(`/api/series/character-evolution?seriesId=${seriesId}`).then(r => r.json()),
         // Overview tab: book blueprints
-        supabase
-          .from("series_book_blueprints")
-          .select("*")
-          .eq("series_id", seriesId)
-          .order("book_number", { ascending: true }),
+        fetch(`/api/series/book-blueprints?seriesId=${seriesId}`).then(r => r.json()),
       ]);
 
-      // Books (from supabase directly)
+      // Books (from server-side API)
       if (booksRes.status === "fulfilled") {
-        if (booksRes.value.error) {
-          console.error("[selectSeries] Error loading series_books:", booksRes.value.error.message, booksRes.value.error);
-        }
-        const booksData = booksRes.value.data ?? [];
+        const booksData = booksRes.value.books ?? [];
         console.log(`[selectSeries] Loaded ${booksData.length} series_books for series ${seriesId}`);
         setSeriesBooks(booksData);
       } else {
@@ -546,35 +519,38 @@ export default function SeriesPage() {
       // Series arc (Overview tab)
       if (arcRes.status === "fulfilled") {
         if (arcRes.value.error) {
-          console.error("Error loading series_arcs:", arcRes.value.error.message);
+          console.error("[selectSeries] Error loading series_arcs:", arcRes.value.error);
         }
-        if (arcRes.value.data && arcRes.value.data.length > 0) {
-          setArc(arcRes.value.data[0] as Record<string, unknown>);
+        const arcsData = arcRes.value.arcs ?? [];
+        if (arcsData.length > 0) {
+          setArc(arcsData[0] as Record<string, unknown>);
         }
       }
 
       // Series bible (Overview tab)
       if (bibleRes.status === "fulfilled") {
         if (bibleRes.value.error) {
-          console.error("Error loading series_bibles:", bibleRes.value.error.message);
+          console.error("[selectSeries] Error loading series_bibles:", bibleRes.value.error);
         }
-        if (bibleRes.value.data && bibleRes.value.data.length > 0) {
-          setSeriesBible(bibleRes.value.data[0] as Record<string, unknown>);
+        const biblesData = bibleRes.value.bibles ?? [];
+        if (biblesData.length > 0) {
+          setSeriesBible(biblesData[0] as Record<string, unknown>);
         }
       }
 
       // Series book maps (Overview tab)
       if (mapsRes.status === "fulfilled") {
         if (mapsRes.value.error) {
-          console.error("[selectSeries] Error loading series_book_maps:", mapsRes.value.error.message, mapsRes.value.error);
+          console.error("[selectSeries] Error loading series_book_maps:", mapsRes.value.error);
         }
-        if (mapsRes.value.data && mapsRes.value.data.length > 0) {
-          setSeriesMap(mapsRes.value.data as unknown as Record<string, unknown>[]);
-          console.log(`[selectSeries] Loaded ${mapsRes.value.data.length} series_book_maps for series ${seriesId}`);
+        const mapsData = mapsRes.value.maps ?? [];
+        if (mapsData.length > 0) {
+          setSeriesMap(mapsData as unknown as Record<string, unknown>[]);
+          console.log(`[selectSeries] Loaded ${mapsData.length} series_book_maps for series ${seriesId}`);
         } else {
           // Fallback: reconstruct basic map data from series_books if series_book_maps is empty
           // This ensures the map section shows even if series_book_maps insert failed
-          const books = booksRes.status === "fulfilled" ? (booksRes.value.data ?? []) : [];
+          const books = booksRes.status === "fulfilled" ? (booksRes.value.books ?? []) : [];
           if (books.length > 0) {
             const reconstructedMap = books.map((book: Record<string, unknown>) => ({
               book_number: book.book_number,
@@ -598,24 +574,24 @@ export default function SeriesPage() {
       // Character evolution (Overview tab)
       if (evolutionRes.status === "fulfilled") {
         if (evolutionRes.value.error) {
-          console.error("Error loading series_character_evolution:", evolutionRes.value.error.message);
+          console.error("[selectSeries] Error loading series_character_evolution:", evolutionRes.value.error);
         }
-        if (evolutionRes.value.data && evolutionRes.value.data.length > 0) {
-          setCharacterEvolution(evolutionRes.value.data[0] as Record<string, unknown>);
+        const evoData = evolutionRes.value.evolution ?? [];
+        if (evoData.length > 0) {
+          setCharacterEvolution(evoData[0] as Record<string, unknown>);
         }
       }
 
       // Book blueprints (Overview tab) — show the one matching suiteBookNumber or the first
-      if (blueprintsRes.status === "fulfilled") {
-        if (blueprintsRes.value.error) {
-          console.error("Error loading series_book_blueprints:", blueprintsRes.value.error.message);
-        }
+      const blueprintsData = blueprintsRes.status === "fulfilled" ? (blueprintsRes.value.blueprints ?? []) : [];
+      if (blueprintsRes.status === "fulfilled" && blueprintsRes.value.error) {
+        console.error("[selectSeries] Error loading series_book_blueprints:", blueprintsRes.value.error);
       }
-      if (blueprintsRes.status === "fulfilled" && blueprintsRes.value.data && blueprintsRes.value.data.length > 0) {
-        const matching = blueprintsRes.value.data.find(
+      if (blueprintsData.length > 0) {
+        const matching = blueprintsData.find(
           (b: Record<string, unknown>) => Number(b.book_number) === suiteBookNumber
         );
-        setBookBlueprint((matching ?? blueprintsRes.value.data[0]) as Record<string, unknown>);
+        setBookBlueprint((matching ?? blueprintsData[0]) as Record<string, unknown>);
       }
 
       // Populate overview suite fields from the series row (seriesList already has the expanded fields)
@@ -1308,71 +1284,11 @@ export default function SeriesPage() {
                   if (!response.ok) throw new Error("Failed to generate series map");
                   const data = await response.json();
                   setSeriesMap(data.maps ?? null);
-                  if (activeSeries && Array.isArray(data.maps)) {
-                    const { error: deleteError } = await supabase.from("series_books").delete().eq("series_id", activeSeries.id);
-                    if (deleteError) console.error("Failed to delete old series_books:", deleteError);
-                    const rows = data.maps.map((book: Record<string, unknown>) => ({
-                      series_id: activeSeries.id,
-                      book_number: Number(book.book_number ?? 1),
-                      title: String(book.title ?? `Book ${book.book_number ?? 1}`),
-                      status: "planned",
-                      summary: String(book.central_conflict ?? ""),
-                    }));
-                    if (rows.length) {
-                      const { data: inserted, error: insertError } = await supabase
-                        .from("series_books")
-                        .insert(rows)
-                        .select("*");
-                      if (insertError) console.error("Failed to insert series_books:", insertError);
-                      if (inserted) {
-                        const insertedBooks = inserted as SeriesBookInsertedRow[];
-                        const novelRows = insertedBooks.map((bookRow) => ({
-                          user_id: userId,
-                          title: bookRow.title ?? `Book ${bookRow.book_number}`,
-                          series_id: bookRow.series_id,
-                          book_number: bookRow.book_number,
-                          model: model || "gpt-4.1-mini",
-                          max_scene_length: 2000,
-                          min_scene_length: 500,
-                        }));
-                        const { data: novelsInserted, error: novelInsertError } = await supabase
-                          .from("novels")
-                          .insert(novelRows)
-                          .select("*");
-                        if (novelInsertError) console.error("Failed to insert novels:", novelInsertError);
-                        const novels = (novelsInserted ?? []) as NovelInsertedRow[];
-                        if (novels.length) {
-                          const updateResults = await Promise.all(
-                            novels.map((novelRow) =>
-                              supabase
-                                .from("series_books")
-                                .update({ novel_id: novelRow.id })
-                                .eq("series_id", novelRow.series_id)
-                                .eq("book_number", novelRow.book_number)
-                            )
-                          );
-                          updateResults.forEach((r, i) => {
-                            if (r.error) console.error(`Failed to update novel_id for book ${i+1}:`, r.error);
-                          });
-                        }
-                        // Reload books from database to ensure we have the full, correct data including novel_id
-                        const { data: refreshedBooks, error: refreshError } = await supabase
-                          .from("series_books")
-                          .select("*")
-                          .eq("series_id", activeSeries.id)
-                          .order("book_number", { ascending: true });
-                        if (refreshError) console.error("Failed to refresh series_books:", refreshError);
-                        setSeriesBooks(refreshedBooks ?? insertedBooks.map((bookRow) => ({
-                          ...bookRow,
-                          novel_id:
-                            novels.find(
-                              (novelRow) =>
-                                novelRow.series_id === bookRow.series_id &&
-                                novelRow.book_number === bookRow.book_number
-                            )?.id ?? null,
-                        })));
-                      }
-                    }
+                  // Server-side route now handles all database writes (series_books, novels, novel_id)
+                  // Just use the returned books data to update state
+                  if (data.books && data.books.length > 0) {
+                    setSeriesBooks(data.books);
+                    console.log(`[map-gen] Updated series state with ${data.books.length} books from server`);
                   }
                 } catch (err) {
                   setError(err instanceof Error ? err.message : "Unknown error");
@@ -2958,12 +2874,9 @@ export default function SeriesPage() {
               <button
                 onClick={async () => {
                   if (!activeSeries) return;
-                  const { data } = await supabase
-                    .from("series_books")
-                    .select("*")
-                    .eq("series_id", activeSeries.id)
-                    .order("book_number", { ascending: true });
-                  setSeriesBooks(data ?? []);
+                  const res = await fetch(`/api/series/books?seriesId=${activeSeries.id}`);
+                  const data = await res.json();
+                  setSeriesBooks(data.books ?? []);
                 }}
                 className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
