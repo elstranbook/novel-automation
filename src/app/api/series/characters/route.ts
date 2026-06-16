@@ -50,6 +50,64 @@ export async function GET(request: Request) {
   return NextResponse.json({ characters: data ?? [] });
 }
 
+export async function PATCH(request: Request) {
+  try {
+    const body = (await request.json()) as {
+      characterId: string;
+      updates: Record<string, unknown>;
+    };
+    const { characterId, updates } = body;
+    if (!characterId || !updates || Object.keys(updates).length === 0) {
+      return NextResponse.json(
+        { error: "characterId and at least one update field are required" },
+        { status: 400 }
+      );
+    }
+
+    // Only allow known columns
+    const allowedColumns = new Set([
+      "name", "role", "description", "arc", "age", "gender", "appearance",
+      "personality", "backstory", "motivation", "conflict", "core_desire",
+      "big_fear", "hidden_secret", "growth_arc", "start_state", "end_state",
+      "knowledge_timeline", "relationships", "voice_profile", "emotional_memory",
+      "arc_stages", "introduced_in_book", "introduced_in_chapter", "is_fully_developed",
+    ]);
+
+    const sanitizedUpdates: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(updates)) {
+      if (allowedColumns.has(key)) {
+        sanitizedUpdates[key] = value;
+      }
+    }
+
+    if (Object.keys(sanitizedUpdates).length === 0) {
+      return NextResponse.json(
+        { error: "No valid fields to update" },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("series_characters")
+      .update(sanitizedUpdates)
+      .eq("id", characterId)
+      .select("*")
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ character: data });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json(
+      { error: "Failed to update character" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CharacterPayload;

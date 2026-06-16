@@ -1657,6 +1657,7 @@ export default function SeriesPage() {
               trust_level: typeof entry.trust_level === "number" ? entry.trust_level : undefined,
               tension_level: typeof entry.tension_level === "number" ? entry.tension_level : undefined,
             }))}
+            seriesId={activeSeries?.id ?? ""}
             onRefresh={async () => {
               if (!activeSeries) return;
               const response = await fetch(
@@ -1664,6 +1665,11 @@ export default function SeriesPage() {
               );
               const data = await response.json();
               setSeriesCharacters(data.characters ?? []);
+            }}
+            onCharacterUpdated={(updatedChar) => {
+              setSeriesCharacters((prev) =>
+                prev.map((c) => (String(c.id) === String(updatedChar.id) ? updatedChar as unknown as typeof c : c))
+              );
             }}
           />
         )}

@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
@@ -30,6 +32,12 @@ import {
   Lock,
   Sparkles,
   ChevronRight,
+  Pencil,
+  Save,
+  X,
+  Loader2,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -77,8 +85,29 @@ interface RelationshipEntry {
 interface CharactersTabProps {
   characters: Character[];
   relationships: RelationshipEntry[];
+  seriesId: string;
   onRefresh: () => void;
+  onCharacterUpdated?: (character: Character) => void;
 }
+
+// ─── Editable text field map (string fields the user can edit) ────────────────
+
+const EDITABLE_TEXT_FIELDS: { key: keyof Character; label: string; multiline?: boolean }[] = [
+  { key: 'name', label: 'Name' },
+  { key: 'role', label: 'Role' },
+  { key: 'age', label: 'Age' },
+  { key: 'gender', label: 'Gender' },
+  { key: 'description', label: 'Description', multiline: true },
+  { key: 'backstory', label: 'Backstory', multiline: true },
+  { key: 'core_desire', label: 'Core Desire', multiline: true },
+  { key: 'big_fear', label: 'Biggest Fear', multiline: true },
+  { key: 'hidden_secret', label: 'Hidden Secret', multiline: true },
+  { key: 'motivation', label: 'Motivation', multiline: true },
+  { key: 'conflict', label: 'Conflict', multiline: true },
+  { key: 'start_state', label: 'Start State', multiline: true },
+  { key: 'end_state', label: 'End State', multiline: true },
+  { key: 'introduced_in_book', label: 'Introduced in Book #' },
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -145,7 +174,7 @@ function getRoleLabel(key: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function CharactersTab({ characters, relationships, onRefresh }: CharactersTabProps) {
+export default function CharactersTab({ characters, relationships, seriesId, onRefresh, onCharacterUpdated }: CharactersTabProps) {
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
@@ -189,17 +218,6 @@ export default function CharactersTab({ characters, relationships, onRefresh }: 
     });
   }, [characters, searchQuery, roleFilter]);
 
-  // Filtered grouped characters for the list
-  const filteredGrouped = useMemo(() => {
-    const groups: Record<string, Character[]> = {};
-    filteredCharacters.forEach((char) => {
-      const key = getRoleKey(char.role || '');
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(char);
-    });
-    return groups;
-  }, [filteredCharacters]);
-
   // Relationships for the selected character
   const selectedRelationships = useMemo(() => {
     if (!selectedCharacter) return [];
@@ -216,6 +234,11 @@ export default function CharactersTab({ characters, relationships, onRefresh }: 
     setSelectedCharacter(char);
     setDetailOpen(true);
   };
+
+  const handleCharacterUpdated = useCallback((updated: Character) => {
+    setSelectedCharacter(updated);
+    onCharacterUpdated?.(updated);
+  }, [onCharacterUpdated]);
 
   return (
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
@@ -421,28 +444,44 @@ export default function CharactersTab({ characters, relationships, onRefresh }: 
         character={selectedCharacter}
         relationships={selectedRelationships}
         open={detailOpen}
+        seriesId={seriesId}
         onClose={() => {
           setDetailOpen(false);
           setSelectedCharacter(null);
         }}
+        onCharacterUpdated={handleCharacterUpdated}
       />
     </section>
   );
 }
 
-// ─── Detail Dialog ────────────────────────────────────────────────────────────
+// ─── Detail Dialog with Editing ──────────────────────────────────────────────
 
 function CharacterDetailDialog({
   character,
   relationships,
   open,
   onClose,
+  seriesId,
+  onCharacterUpdated,
 }: {
   character: Character | null;
   relationships: RelationshipEntry[];
   open: boolean;
   onClose: () => void;
+  seriesId: string;
+  onCharacterUpdated: (character: Character) => void;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editForm, setEditForm] = useState<Record<string, string>>({});
+  // Editable JSONB fields stored as stringified text for editing
+  const [editPersonality, setEditPersonality] = useState<{ traits: string; flaws: string; strengths: string }>({
+    traits: '',
+    flaws: '',
+    strengths: '',
+  });
+
   if (!character) return null;
 
   const personality = parseJson<{
@@ -482,7 +521,6 @@ function CharacterDetailDialog({
   // Merge arc stages from multiple possible sources
   const arcStages = useMemo(() => {
     const stages: Array<{ label: string; description: string }> = [];
-    // From arc_stages column
     if (Array.isArray(character.arc_stages)) {
       character.arc_stages.forEach((stage, i) => {
         if (typeof stage === 'string') {
@@ -496,7 +534,6 @@ function CharacterDetailDialog({
         }
       });
     }
-    // From growth_arc.stages
     if (stages.length === 0 && Array.isArray(growthArc.stages)) {
       growthArc.stages.forEach((stage, i) => {
         if (typeof stage === 'string') {
@@ -510,7 +547,6 @@ function CharacterDetailDialog({
         }
       });
     }
-    // From arc.stages
     if (stages.length === 0 && Array.isArray(arcData.stages)) {
       arcData.stages.forEach((stage, i) => {
         if (typeof stage === 'string') {
@@ -537,7 +573,6 @@ function CharacterDetailDialog({
     if (typeof appearance.features === 'string') parts.push(appearance.features);
     if (typeof appearance.style === 'string') parts.push(appearance.style);
     if (typeof appearance.distinguishing === 'string') parts.push(appearance.distinguishing);
-    // Fallback: stringify any remaining keys
     if (parts.length === 0) {
       Object.entries(appearance).forEach(([key, val]) => {
         if (typeof val === 'string') parts.push(`${key}: ${val}`);
@@ -547,350 +582,600 @@ function CharacterDetailDialog({
     return parts.join('\n');
   }, [appearance]);
 
+  // ─── Edit helpers ──────────────────────────────────────────────────────────
+
+  const enterEditMode = () => {
+    const form: Record<string, string> = {};
+    EDITABLE_TEXT_FIELDS.forEach(({ key }) => {
+      const val = character[key];
+      form[key] = val != null ? String(val) : '';
+    });
+    setEditForm(form);
+    setEditPersonality({
+      traits: (personality.traits || []).join(', '),
+      flaws: (personality.flaws || []).join(', '),
+      strengths: (personality.strengths || []).join(', '),
+    });
+    setIsEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setIsEditing(false);
+    setEditForm({});
+    setEditPersonality({ traits: '', flaws: '', strengths: '' });
+  };
+
+  const updateField = (key: string, value: string) => {
+    setEditForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const saveEdits = async () => {
+    setIsSaving(true);
+    try {
+      const updates: Record<string, unknown> = {};
+
+      // Collect text field changes
+      EDITABLE_TEXT_FIELDS.forEach(({ key }) => {
+        const newVal = editForm[key] ?? '';
+        const oldVal = character[key] != null ? String(character[key]) : '';
+        if (newVal !== oldVal) {
+          if (key === 'introduced_in_book') {
+            updates[key] = newVal ? parseInt(newVal, 10) || null : null;
+          } else {
+            updates[key] = newVal || null;
+          }
+        }
+      });
+
+      // Personality changes
+      const oldTraits = (personality.traits || []).join(', ');
+      const oldFlaws = (personality.flaws || []).join(', ');
+      const oldStrengths = (personality.strengths || []).join(', ');
+      if (
+        editPersonality.traits !== oldTraits ||
+        editPersonality.flaws !== oldFlaws ||
+        editPersonality.strengths !== oldStrengths
+      ) {
+        updates.personality = {
+          traits: editPersonality.traits ? editPersonality.traits.split(',').map((s) => s.trim()).filter(Boolean) : [],
+          flaws: editPersonality.flaws ? editPersonality.flaws.split(',').map((s) => s.trim()).filter(Boolean) : [],
+          strengths: editPersonality.strengths ? editPersonality.strengths.split(',').map((s) => s.trim()).filter(Boolean) : [],
+        };
+      }
+
+      if (Object.keys(updates).length === 0) {
+        setIsEditing(false);
+        setIsSaving(false);
+        return;
+      }
+
+      const res = await fetch('/api/series/characters', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId: character.id, updates }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        console.error('Failed to update character:', err);
+        return;
+      }
+
+      const data = await res.json();
+      onCharacterUpdated(data.character as Character);
+      setIsEditing(false);
+    } catch (err) {
+      console.error('Failed to save character edits:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ─── Editable Field Component ──────────────────────────────────────────────
+
+  const EditableField = ({ fieldKey, label, multiline = false }: { fieldKey: string; label: string; multiline?: boolean }) => {
+    if (!isEditing) return null;
+    const value = editForm[fieldKey] ?? '';
+    return (
+      <div className="space-y-1">
+        <Label className="text-xs text-zinc-400">{label}</Label>
+        {multiline ? (
+          <Textarea
+            value={value}
+            onChange={(e) => updateField(fieldKey, e.target.value)}
+            className="min-h-[80px] bg-zinc-800/60 border-zinc-700 text-sm text-zinc-200 resize-y"
+            placeholder={`Enter ${label.toLowerCase()}...`}
+          />
+        ) : (
+          <Input
+            value={value}
+            onChange={(e) => updateField(fieldKey, e.target.value)}
+            className="bg-zinc-800/60 border-zinc-700 text-sm text-zinc-200"
+            placeholder={`Enter ${label.toLowerCase()}...`}
+          />
+        )}
+      </div>
+    );
+  };
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="max-w-3xl max-h-[85vh] border-zinc-800 bg-zinc-950 text-zinc-100">
         <DialogHeader>
-          <div className="flex items-center gap-4">
-            <div
-              className={`flex h-14 w-14 items-center justify-center rounded-full ${
-                (roleColors[roleKey] || roleColors.minor).split(' ')[0]
-              }`}
-            >
-              {roleIcons[roleKey] || <User className="h-7 w-7" />}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div
+                className={`flex h-14 w-14 items-center justify-center rounded-full ${
+                  (roleColors[roleKey] || roleColors.minor).split(' ')[0]
+                }`}
+              >
+                {roleIcons[roleKey] || <User className="h-7 w-7" />}
+              </div>
+              <div>
+                <DialogTitle className="text-xl">{character.name || 'Unnamed'}</DialogTitle>
+                <DialogDescription className="flex items-center gap-2 mt-1">
+                  <Badge
+                    variant="outline"
+                    className={roleColors[roleKey] || roleColors.minor}
+                  >
+                    {character.role || 'Supporting'}
+                  </Badge>
+                  {character.age && <span className="text-zinc-400">Age {character.age}</span>}
+                  {character.gender && <span className="text-zinc-400">· {character.gender}</span>}
+                  {character.introduced_in_book && (
+                    <span className="text-zinc-400">· Book {character.introduced_in_book}</span>
+                  )}
+                </DialogDescription>
+              </div>
             </div>
-            <div>
-              <DialogTitle className="text-xl">{character.name || 'Unnamed'}</DialogTitle>
-              <DialogDescription className="flex items-center gap-2 mt-1">
-                <Badge
+            {/* Edit / Save / Cancel buttons */}
+            <div className="flex items-center gap-2">
+              {isEditing ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={cancelEdit}
+                    disabled={isSaving}
+                    className="text-zinc-400 hover:text-zinc-200"
+                  >
+                    <X className="mr-1 h-3.5 w-3.5" /> Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={saveEdits}
+                    disabled={isSaving}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white"
+                  >
+                    {isSaving ? (
+                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Save className="mr-1 h-3.5 w-3.5" />
+                    )}
+                    Save
+                  </Button>
+                </>
+              ) : (
+                <Button
                   variant="outline"
-                  className={roleColors[roleKey] || roleColors.minor}
+                  size="sm"
+                  onClick={enterEditMode}
+                  className="border-zinc-700 text-zinc-300 hover:text-zinc-100"
                 >
-                  {character.role || 'Supporting'}
-                </Badge>
-                {character.age && <span className="text-zinc-400">Age {character.age}</span>}
-                {character.gender && <span className="text-zinc-400">· {character.gender}</span>}
-                {character.introduced_in_book && (
-                  <span className="text-zinc-400">· Book {character.introduced_in_book}</span>
-                )}
-              </DialogDescription>
+                  <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
+                </Button>
+              )}
             </div>
           </div>
         </DialogHeader>
 
         <ScrollArea className="max-h-[65vh] pr-2">
           <div className="space-y-4 pb-4">
-            {/* Description */}
-            {(character.description != null || character.backstory != null) ? (
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-                <p className="text-xs font-semibold uppercase text-zinc-400 mb-2">Overview</p>
-                {character.description != null && (
-                  <p className="text-sm text-zinc-200 mb-2">{String(character.description)}</p>
-                )}
-                {character.backstory != null && (
-                  <div>
-                    <p className="text-xs font-semibold uppercase text-zinc-500 mt-3 mb-1 flex items-center gap-1">
-                      <Eye className="h-3 w-3 text-indigo-400" /> Backstory
-                    </p>
-                    <p className="text-sm text-zinc-300">{character.backstory}</p>
+            {/* ─── EDIT MODE ──────────────────────────────────────────────────── */}
+            {isEditing ? (
+              <>
+                {/* Basic Info Section */}
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
+                  <p className="text-xs font-semibold uppercase text-zinc-400 mb-2 flex items-center gap-1">
+                    <User className="h-3.5 w-3.5 text-blue-400" /> Basic Info
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <EditableField fieldKey="name" label="Name" />
+                    <EditableField fieldKey="role" label="Role" />
+                    <EditableField fieldKey="age" label="Age" />
+                    <EditableField fieldKey="gender" label="Gender" />
+                    <EditableField fieldKey="introduced_in_book" label="Introduced in Book #" />
                   </div>
-                )}
-              </div>
-            ) : null}
-
-            {/* Core Psychology */}
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-              <p className="text-xs font-semibold uppercase text-zinc-400 mb-3 flex items-center gap-1">
-                <Brain className="h-3.5 w-3.5 text-purple-400" /> Core Psychology
-              </p>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-lg bg-amber-500/10 p-3">
-                  <p className="text-[10px] text-amber-400 mb-1 flex items-center gap-1">
-                    <Heart className="h-3 w-3" /> Core Desire
-                  </p>
-                  <p className="text-xs text-amber-200">
-                    {String(character.core_desire ?? character.motivation ?? 'Not defined')}
-                  </p>
                 </div>
-                <div className="rounded-lg bg-rose-500/10 p-3">
-                  <p className="text-[10px] text-rose-400 mb-1 flex items-center gap-1">
-                    <Zap className="h-3 w-3" /> Biggest Fear
-                  </p>
-                  <p className="text-xs text-rose-200">
-                    {String(character.big_fear ?? character.conflict ?? 'Not defined')}
-                  </p>
-                </div>
-                <div className="rounded-lg bg-indigo-500/10 p-3">
-                  <p className="text-[10px] text-indigo-400 mb-1 flex items-center gap-1">
-                    <Lock className="h-3 w-3" /> Hidden Secret
-                  </p>
-                  <p className="text-xs text-indigo-200">
-                    {String(character.hidden_secret ?? 'Not defined')}
-                  </p>
-                </div>
-              </div>
-            </div>
 
-            {/* Personality */}
-            {((personality.traits?.length ?? 0) > 0 || (personality.flaws?.length ?? 0) > 0 || (personality.strengths?.length ?? 0) > 0) && (
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-                <p className="text-xs font-semibold uppercase text-zinc-400 mb-3">Personality</p>
-                <div className="space-y-2">
-                  {personality.traits && personality.traits.length > 0 && (
-                    <div>
-                      <p className="text-[10px] text-zinc-500 mb-1">Traits</p>
-                      <div className="flex flex-wrap gap-1">
-                        {personality.traits.map((trait, i) => (
-                          <Badge key={i} variant="secondary" className="text-[10px] bg-zinc-800 text-zinc-300">
-                            {trait}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {personality.flaws && personality.flaws.length > 0 && (
-                    <div>
-                      <p className="text-[10px] text-zinc-500 mb-1">Flaws</p>
-                      <div className="flex flex-wrap gap-1">
-                        {personality.flaws.map((flaw, i) => (
-                          <Badge key={i} variant="outline" className="text-[10px] border-rose-500/30 text-rose-300">
-                            {flaw}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {personality.strengths && personality.strengths.length > 0 && (
-                    <div>
-                      <p className="text-[10px] text-zinc-500 mb-1">Strengths</p>
-                      <div className="flex flex-wrap gap-1">
-                        {personality.strengths.map((strength, i) => (
-                          <Badge key={i} variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-300">
-                            {strength}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                {/* Overview Section */}
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
+                  <p className="text-xs font-semibold uppercase text-zinc-400 mb-2 flex items-center gap-1">
+                    <Eye className="h-3.5 w-3.5 text-indigo-400" /> Overview
+                  </p>
+                  <EditableField fieldKey="description" label="Description" multiline />
+                  <EditableField fieldKey="backstory" label="Backstory" multiline />
                 </div>
-              </div>
-            )}
 
-            {/* Fallback: raw personality string if no parsed traits */}
-            {!(personality.traits?.length) && !(personality.flaws?.length) && character.personality != null ? (
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-                <p className="text-xs font-semibold uppercase text-zinc-400 mb-2">Personality</p>
-                <p className="text-sm text-zinc-200">
-                  {typeof character.personality === 'string'
-                    ? character.personality
-                    : JSON.stringify(character.personality, null, 2)}
-                </p>
-              </div>
-            ) : null}
-
-            {/* Appearance */}
-            {appearanceText != null && appearanceText.length > 0 && (
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-                <p className="text-xs font-semibold uppercase text-zinc-400 mb-2 flex items-center gap-1">
-                  <Eye className="h-3.5 w-3.5 text-blue-400" /> Appearance
-                </p>
-                <p className="text-sm text-zinc-200 whitespace-pre-line">{appearanceText}</p>
-              </div>
-            )}
-
-            {/* Voice Profile */}
-            {Object.keys(voiceProfile).length > 0 ? (
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-                <p className="text-xs font-semibold uppercase text-zinc-400 mb-3 flex items-center gap-1">
-                  <MessageSquare className="h-3.5 w-3.5 text-blue-400" /> Voice Profile
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  {voiceProfile.speechStyle && (
-                    <div>
-                      <p className="text-[10px] text-zinc-500">Speech Style</p>
-                      <p className="text-sm text-zinc-200">{voiceProfile.speechStyle}</p>
-                    </div>
-                  )}
-                  {voiceProfile.vocabularyLevel && (
-                    <div>
-                      <p className="text-[10px] text-zinc-500">Vocabulary Level</p>
-                      <p className="text-sm text-zinc-200">{voiceProfile.vocabularyLevel}</p>
-                    </div>
-                  )}
-                  {voiceProfile.emotionalExpression && (
-                    <div>
-                      <p className="text-[10px] text-zinc-500">Emotional Expression</p>
-                      <p className="text-sm text-zinc-200">
-                        {typeof voiceProfile.emotionalExpression === 'object'
-                          ? (voiceProfile.emotionalExpression as { description?: string }).description || JSON.stringify(voiceProfile.emotionalExpression)
-                          : String(voiceProfile.emotionalExpression)}
-                      </p>
-                    </div>
-                  )}
-                  {voiceProfile.dialogueStyle && (
-                    <div>
-                      <p className="text-[10px] text-zinc-500">Dialogue Style</p>
-                      <p className="text-sm text-zinc-200">{voiceProfile.dialogueStyle}</p>
-                    </div>
-                  )}
-                </div>
-                {voiceProfile.sampleDialogues && voiceProfile.sampleDialogues.length > 0 && (
-                  <div className="mt-3 space-y-2">
-                    <p className="text-[10px] text-zinc-500">Sample Dialogue</p>
-                    {voiceProfile.sampleDialogues.slice(0, 2).map((sample, i) => (
-                      <div key={i} className="rounded-lg bg-zinc-800/60 p-2">
-                        <p className="text-[10px] text-zinc-500 mb-0.5">{sample.situation}:</p>
-                        <p className="text-xs text-zinc-200 italic">&ldquo;{sample.dialogue}&rdquo;</p>
-                      </div>
-                    ))}
+                {/* Core Psychology Section */}
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
+                  <p className="text-xs font-semibold uppercase text-zinc-400 mb-2 flex items-center gap-1">
+                    <Brain className="h-3.5 w-3.5 text-purple-400" /> Core Psychology
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <EditableField fieldKey="core_desire" label="Core Desire" multiline />
+                    <EditableField fieldKey="big_fear" label="Biggest Fear" multiline />
+                    <EditableField fieldKey="hidden_secret" label="Hidden Secret" multiline />
+                    <EditableField fieldKey="motivation" label="Motivation" multiline />
+                    <EditableField fieldKey="conflict" label="Conflict" multiline />
                   </div>
-                )}
-              </div>
-            ) : null}
+                </div>
 
-            {/* Character Arc */}
-            {(character.start_state != null || character.end_state != null || character.growth_arc != null || arcStages.length > 0) ? (
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-                <p className="text-xs font-semibold uppercase text-zinc-400 mb-3 flex items-center gap-1">
-                  <Clock className="h-3.5 w-3.5 text-green-400" /> Character Arc
-                </p>
-                <div className="grid grid-cols-3 gap-3">
-                  {character.start_state != null && (
-                    <div className="rounded-lg bg-blue-500/10 p-3">
-                      <p className="text-[10px] text-blue-400 mb-1">Start State</p>
-                      <p className="text-xs text-blue-200">{character.start_state}</p>
+                {/* Personality Section */}
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
+                  <p className="text-xs font-semibold uppercase text-zinc-400 mb-2">Personality</p>
+                  <p className="text-[10px] text-zinc-500">Separate items with commas</p>
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-zinc-400">Traits</Label>
+                      <Input
+                        value={editPersonality.traits}
+                        onChange={(e) => setEditPersonality((p) => ({ ...p, traits: e.target.value }))}
+                        className="bg-zinc-800/60 border-zinc-700 text-sm text-zinc-200"
+                        placeholder="e.g. Brave, Clever, Stubborn"
+                      />
                     </div>
-                  )}
-                  {character.growth_arc != null && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-zinc-400">Flaws</Label>
+                      <Input
+                        value={editPersonality.flaws}
+                        onChange={(e) => setEditPersonality((p) => ({ ...p, flaws: e.target.value }))}
+                        className="bg-zinc-800/60 border-zinc-700 text-sm text-zinc-200"
+                        placeholder="e.g. Impulsive, Proud"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-zinc-400">Strengths</Label>
+                      <Input
+                        value={editPersonality.strengths}
+                        onChange={(e) => setEditPersonality((p) => ({ ...p, strengths: e.target.value }))}
+                        className="bg-zinc-800/60 border-zinc-700 text-sm text-zinc-200"
+                        placeholder="e.g. Loyal, Resourceful"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Character Arc Section */}
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
+                  <p className="text-xs font-semibold uppercase text-zinc-400 mb-2 flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5 text-green-400" /> Character Arc
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <EditableField fieldKey="start_state" label="Start State" multiline />
+                    <EditableField fieldKey="end_state" label="End State" multiline />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* ─── VIEW MODE (original read-only) ────────────────────────────── */}
+
+                {/* Description */}
+                {(character.description != null || character.backstory != null) ? (
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+                    <p className="text-xs font-semibold uppercase text-zinc-400 mb-2">Overview</p>
+                    {character.description != null && (
+                      <p className="text-sm text-zinc-200 mb-2">{String(character.description)}</p>
+                    )}
+                    {character.backstory != null && (
+                      <div>
+                        <p className="text-xs font-semibold uppercase text-zinc-500 mt-3 mb-1 flex items-center gap-1">
+                          <Eye className="h-3 w-3 text-indigo-400" /> Backstory
+                        </p>
+                        <p className="text-sm text-zinc-300">{character.backstory}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {/* Core Psychology */}
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+                  <p className="text-xs font-semibold uppercase text-zinc-400 mb-3 flex items-center gap-1">
+                    <Brain className="h-3.5 w-3.5 text-purple-400" /> Core Psychology
+                  </p>
+                  <div className="grid grid-cols-3 gap-3">
                     <div className="rounded-lg bg-amber-500/10 p-3">
-                      <p className="text-[10px] text-amber-400 mb-1">Growth Arc</p>
+                      <p className="text-[10px] text-amber-400 mb-1 flex items-center gap-1">
+                        <Heart className="h-3 w-3" /> Core Desire
+                      </p>
                       <p className="text-xs text-amber-200">
-                        {typeof character.growth_arc === 'string'
-                          ? String(character.growth_arc)
-                          : (growthArc.description != null ? String(growthArc.description) : JSON.stringify(character.growth_arc, null, 1))}
+                        {String(character.core_desire ?? character.motivation ?? 'Not defined')}
                       </p>
                     </div>
-                  )}
-                  {character.end_state != null && (
-                    <div className="rounded-lg bg-emerald-500/10 p-3">
-                      <p className="text-[10px] text-emerald-400 mb-1">End State</p>
-                      <p className="text-xs text-emerald-200">{character.end_state}</p>
+                    <div className="rounded-lg bg-rose-500/10 p-3">
+                      <p className="text-[10px] text-rose-400 mb-1 flex items-center gap-1">
+                        <Zap className="h-3 w-3" /> Biggest Fear
+                      </p>
+                      <p className="text-xs text-rose-200">
+                        {String(character.big_fear ?? character.conflict ?? 'Not defined')}
+                      </p>
                     </div>
-                  )}
+                    <div className="rounded-lg bg-indigo-500/10 p-3">
+                      <p className="text-[10px] text-indigo-400 mb-1 flex items-center gap-1">
+                        <Lock className="h-3 w-3" /> Hidden Secret
+                      </p>
+                      <p className="text-xs text-indigo-200">
+                        {String(character.hidden_secret ?? 'Not defined')}
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Arc Stages Timeline */}
-                {arcStages.length > 0 && (
-                  <div className="mt-3 space-y-2">
-                    <p className="text-[10px] text-zinc-500">Arc Stages</p>
-                    <div className="relative pl-4 border-l border-zinc-700">
-                      {arcStages.map((stage, i) => (
-                        <div key={i} className="relative mb-3 last:mb-0">
-                          <div className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-zinc-600 border-2 border-zinc-800" />
-                          <p className="text-xs font-medium text-zinc-300">{stage.label}</p>
-                          <p className="text-[11px] text-zinc-400">{stage.description}</p>
+                {/* Personality */}
+                {((personality.traits?.length ?? 0) > 0 || (personality.flaws?.length ?? 0) > 0 || (personality.strengths?.length ?? 0) > 0) && (
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+                    <p className="text-xs font-semibold uppercase text-zinc-400 mb-3">Personality</p>
+                    <div className="space-y-2">
+                      {personality.traits && personality.traits.length > 0 && (
+                        <div>
+                          <p className="text-[10px] text-zinc-500 mb-1">Traits</p>
+                          <div className="flex flex-wrap gap-1">
+                            {personality.traits.map((trait, i) => (
+                              <Badge key={i} variant="secondary" className="text-[10px] bg-zinc-800 text-zinc-300">
+                                {trait}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {personality.flaws && personality.flaws.length > 0 && (
+                        <div>
+                          <p className="text-[10px] text-zinc-500 mb-1">Flaws</p>
+                          <div className="flex flex-wrap gap-1">
+                            {personality.flaws.map((flaw, i) => (
+                              <Badge key={i} variant="outline" className="text-[10px] border-rose-500/30 text-rose-300">
+                                {flaw}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {personality.strengths && personality.strengths.length > 0 && (
+                        <div>
+                          <p className="text-[10px] text-zinc-500 mb-1">Strengths</p>
+                          <div className="flex flex-wrap gap-1">
+                            {personality.strengths.map((strength, i) => (
+                              <Badge key={i} variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-300">
+                                {strength}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Fallback: raw personality string if no parsed traits */}
+                {!(personality.traits?.length) && !(personality.flaws?.length) && character.personality != null ? (
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+                    <p className="text-xs font-semibold uppercase text-zinc-400 mb-2">Personality</p>
+                    <p className="text-sm text-zinc-200">
+                      {typeof character.personality === 'string'
+                        ? character.personality
+                        : JSON.stringify(character.personality, null, 2)}
+                    </p>
+                  </div>
+                ) : null}
+
+                {/* Appearance */}
+                {appearanceText != null && appearanceText.length > 0 && (
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+                    <p className="text-xs font-semibold uppercase text-zinc-400 mb-2 flex items-center gap-1">
+                      <Eye className="h-3.5 w-3.5 text-blue-400" /> Appearance
+                    </p>
+                    <p className="text-sm text-zinc-200 whitespace-pre-line">{appearanceText}</p>
+                  </div>
+                )}
+
+                {/* Voice Profile */}
+                {Object.keys(voiceProfile).length > 0 ? (
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+                    <p className="text-xs font-semibold uppercase text-zinc-400 mb-3 flex items-center gap-1">
+                      <MessageSquare className="h-3.5 w-3.5 text-blue-400" /> Voice Profile
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {voiceProfile.speechStyle && (
+                        <div>
+                          <p className="text-[10px] text-zinc-500">Speech Style</p>
+                          <p className="text-sm text-zinc-200">{voiceProfile.speechStyle}</p>
+                        </div>
+                      )}
+                      {voiceProfile.vocabularyLevel && (
+                        <div>
+                          <p className="text-[10px] text-zinc-500">Vocabulary Level</p>
+                          <p className="text-sm text-zinc-200">{voiceProfile.vocabularyLevel}</p>
+                        </div>
+                      )}
+                      {voiceProfile.emotionalExpression && (
+                        <div>
+                          <p className="text-[10px] text-zinc-500">Emotional Expression</p>
+                          <p className="text-sm text-zinc-200">
+                            {typeof voiceProfile.emotionalExpression === 'object'
+                              ? (voiceProfile.emotionalExpression as { description?: string }).description || JSON.stringify(voiceProfile.emotionalExpression)
+                              : String(voiceProfile.emotionalExpression)}
+                          </p>
+                        </div>
+                      )}
+                      {voiceProfile.dialogueStyle && (
+                        <div>
+                          <p className="text-[10px] text-zinc-500">Dialogue Style</p>
+                          <p className="text-sm text-zinc-200">{voiceProfile.dialogueStyle}</p>
+                        </div>
+                      )}
+                    </div>
+                    {voiceProfile.sampleDialogues && voiceProfile.sampleDialogues.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-[10px] text-zinc-500">Sample Dialogue</p>
+                        {voiceProfile.sampleDialogues.slice(0, 2).map((sample, i) => (
+                          <div key={i} className="rounded-lg bg-zinc-800/60 p-2">
+                            <p className="text-[10px] text-zinc-500 mb-0.5">{sample.situation}:</p>
+                            <p className="text-xs text-zinc-200 italic">&ldquo;{sample.dialogue}&rdquo;</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {/* Character Arc */}
+                {(character.start_state != null || character.end_state != null || character.growth_arc != null || arcStages.length > 0) ? (
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+                    <p className="text-xs font-semibold uppercase text-zinc-400 mb-3 flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5 text-green-400" /> Character Arc
+                    </p>
+                    <div className="grid grid-cols-3 gap-3">
+                      {character.start_state != null && (
+                        <div className="rounded-lg bg-blue-500/10 p-3">
+                          <p className="text-[10px] text-blue-400 mb-1">Start State</p>
+                          <p className="text-xs text-blue-200">{character.start_state}</p>
+                        </div>
+                      )}
+                      {character.growth_arc != null && (
+                        <div className="rounded-lg bg-amber-500/10 p-3">
+                          <p className="text-[10px] text-amber-400 mb-1">Growth Arc</p>
+                          <p className="text-xs text-amber-200">
+                            {typeof character.growth_arc === 'string'
+                              ? String(character.growth_arc)
+                              : (growthArc.description != null ? String(growthArc.description) : JSON.stringify(character.growth_arc, null, 1))}
+                          </p>
+                        </div>
+                      )}
+                      {character.end_state != null && (
+                        <div className="rounded-lg bg-emerald-500/10 p-3">
+                          <p className="text-[10px] text-emerald-400 mb-1">End State</p>
+                          <p className="text-xs text-emerald-200">{character.end_state}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Arc Stages Timeline */}
+                    {arcStages.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-[10px] text-zinc-500">Arc Stages</p>
+                        <div className="relative pl-4 border-l border-zinc-700">
+                          {arcStages.map((stage, i) => (
+                            <div key={i} className="relative mb-3 last:mb-0">
+                              <div className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-zinc-600 border-2 border-zinc-800" />
+                              <p className="text-xs font-medium text-zinc-300">{stage.label}</p>
+                              <p className="text-[11px] text-zinc-400">{stage.description}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {/* Emotional Memory */}
+                {emotionalMemory.length > 0 && (
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+                    <p className="text-xs font-semibold uppercase text-zinc-400 mb-3 flex items-center gap-1">
+                      <Heart className="h-3.5 w-3.5 text-rose-400" /> Emotional Memory
+                    </p>
+                    <div className="space-y-2">
+                      {emotionalMemory.map((memory, i) => (
+                        <div key={i} className="flex items-start gap-3 rounded-lg bg-zinc-800/60 p-3">
+                          <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-400" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-zinc-200">{memory.event}</p>
+                            <p className="text-[11px] text-zinc-400">{memory.impact}</p>
+                          </div>
+                          {memory.intensity != null && (
+                            <Badge variant="outline" className="text-[10px] border-zinc-700 text-zinc-400">
+                              {memory.intensity}/10
+                            </Badge>
+                          )}
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
-              </div>
-            ) : null}
 
-            {/* Emotional Memory */}
-            {emotionalMemory.length > 0 && (
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-                <p className="text-xs font-semibold uppercase text-zinc-400 mb-3 flex items-center gap-1">
-                  <Heart className="h-3.5 w-3.5 text-rose-400" /> Emotional Memory
-                </p>
-                <div className="space-y-2">
-                  {emotionalMemory.map((memory, i) => (
-                    <div key={i} className="flex items-start gap-3 rounded-lg bg-zinc-800/60 p-3">
-                      <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-400" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-zinc-200">{memory.event}</p>
-                        <p className="text-[11px] text-zinc-400">{memory.impact}</p>
-                      </div>
-                      {memory.intensity != null && (
-                        <Badge variant="outline" className="text-[10px] border-zinc-700 text-zinc-400">
-                          {memory.intensity}/10
-                        </Badge>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                {/* Fallback: raw emotional memory if not an array */}
+                {emotionalMemory.length === 0 && character.emotional_memory != null && typeof character.emotional_memory === 'object' && (
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+                    <p className="text-xs font-semibold uppercase text-zinc-400 mb-2 flex items-center gap-1">
+                      <Heart className="h-3.5 w-3.5 text-rose-400" /> Emotional Memory
+                    </p>
+                    <pre className="whitespace-pre-wrap rounded-lg bg-zinc-800/60 p-3 text-[11px] text-zinc-300">
+                      {JSON.stringify(character.emotional_memory, null, 2)}
+                    </pre>
+                  </div>
+                )}
 
-            {/* Fallback: raw emotional memory if not an array */}
-            {emotionalMemory.length === 0 && character.emotional_memory != null && typeof character.emotional_memory === 'object' && (
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-                <p className="text-xs font-semibold uppercase text-zinc-400 mb-2 flex items-center gap-1">
-                  <Heart className="h-3.5 w-3.5 text-rose-400" /> Emotional Memory
-                </p>
-                <pre className="whitespace-pre-wrap rounded-lg bg-zinc-800/60 p-3 text-[11px] text-zinc-300">
-                  {JSON.stringify(character.emotional_memory, null, 2)}
-                </pre>
-              </div>
-            )}
-
-            {/* Relationships */}
-            {relationships.length > 0 && (
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-                <p className="text-xs font-semibold uppercase text-zinc-400 mb-3 flex items-center gap-1">
-                  <Users className="h-3.5 w-3.5 text-blue-400" /> Relationships
-                </p>
-                <div className="space-y-2">
-                  {relationships.slice(0, 6).map((rel) => {
-                    const isCharA = (rel.character_a_name || '').toLowerCase() === (character.name || '').toLowerCase();
-                    const otherName = isCharA ? rel.character_b_name : rel.character_a_name;
-                    return (
-                      <div key={String(rel.id)} className="flex items-center gap-3 rounded-lg bg-zinc-800/60 p-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-700">
-                          <User className="h-4 w-4 text-zinc-300" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-zinc-200">{otherName || '?'}</p>
-                          <p className="text-[11px] text-zinc-400">
-                            {rel.relationship_type || 'Unknown relationship'}
-                            {rel.status && ` · ${rel.status}`}
-                          </p>
-                        </div>
-                        {rel.trust_level != null && (
-                          <div className="text-right">
-                            <p className="text-[10px] text-zinc-500">Trust</p>
-                            <p className="text-xs text-zinc-300">{rel.trust_level}%</p>
+                {/* Relationships */}
+                {relationships.length > 0 && (
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+                    <p className="text-xs font-semibold uppercase text-zinc-400 mb-3 flex items-center gap-1">
+                      <Users className="h-3.5 w-3.5 text-blue-400" /> Relationships
+                    </p>
+                    <div className="space-y-2">
+                      {relationships.slice(0, 6).map((rel) => {
+                        const isCharA = (rel.character_a_name || '').toLowerCase() === (character.name || '').toLowerCase();
+                        const otherName = isCharA ? rel.character_b_name : rel.character_a_name;
+                        return (
+                          <div key={String(rel.id)} className="flex items-center gap-3 rounded-lg bg-zinc-800/60 p-3">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-700">
+                              <User className="h-4 w-4 text-zinc-300" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-zinc-200">{otherName || '?'}</p>
+                              <p className="text-[11px] text-zinc-400">
+                                {rel.relationship_type || 'Unknown relationship'}
+                                {rel.status && ` · ${rel.status}`}
+                              </p>
+                            </div>
+                            {rel.trust_level != null && (
+                              <div className="text-right">
+                                <p className="text-[10px] text-zinc-500">Trust</p>
+                                <p className="text-xs text-zinc-300">{rel.trust_level}%</p>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
-            {/* Character Relationships from JSONB column */}
-            {charRelationships != null && !relationships.length && (
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-                <p className="text-xs font-semibold uppercase text-zinc-400 mb-2 flex items-center gap-1">
-                  <Users className="h-3.5 w-3.5 text-blue-400" /> Relationships
-                </p>
-                <pre className="whitespace-pre-wrap rounded-lg bg-zinc-800/60 p-3 text-[11px] text-zinc-300">
-                  {JSON.stringify(charRelationships, null, 2)}
-                </pre>
-              </div>
-            )}
+                {/* Character Relationships from JSONB column */}
+                {charRelationships != null && !relationships.length && (
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+                    <p className="text-xs font-semibold uppercase text-zinc-400 mb-2 flex items-center gap-1">
+                      <Users className="h-3.5 w-3.5 text-blue-400" /> Relationships
+                    </p>
+                    <pre className="whitespace-pre-wrap rounded-lg bg-zinc-800/60 p-3 text-[11px] text-zinc-300">
+                      {JSON.stringify(charRelationships, null, 2)}
+                    </pre>
+                  </div>
+                )}
 
-            {/* Knowledge Timeline */}
-            {knowledgeTimeline != null && (
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
-                <p className="text-xs font-semibold uppercase text-zinc-400 mb-2 flex items-center gap-1">
-                  <MapPin className="h-3.5 w-3.5 text-emerald-400" /> Knowledge Timeline
-                </p>
-                <pre className="whitespace-pre-wrap rounded-lg bg-zinc-800/60 p-3 text-[11px] text-zinc-300">
-                  {JSON.stringify(knowledgeTimeline, null, 2)}
-                </pre>
-              </div>
+                {/* Knowledge Timeline */}
+                {knowledgeTimeline != null && (
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+                    <p className="text-xs font-semibold uppercase text-zinc-400 mb-2 flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5 text-emerald-400" /> Knowledge Timeline
+                    </p>
+                    <pre className="whitespace-pre-wrap rounded-lg bg-zinc-800/60 p-3 text-[11px] text-zinc-300">
+                      {JSON.stringify(knowledgeTimeline, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </ScrollArea>
