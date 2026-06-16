@@ -123,6 +123,8 @@ const generateScenesForChapter = async ({
         relationships?: unknown;
         plot_threads?: unknown;
         callbacks?: unknown;
+        world?: Record<string, unknown>;
+        world_elements?: unknown;
       }
     | undefined;
 
@@ -151,6 +153,7 @@ Write the complete scenes for Chapter ${chapterNumber}: "${chapterTitle}" in the
 STORY DETAILS:
 ${storyInfo}
 ${novelAbout ? `\nAUTHOR INTENT (What the novel is about):\n${novelAbout}\n` : ""}
+${seriesContext?.world?.setting ? `\nWORLD SETTING:\n${String(seriesContext.world.setting).slice(0, 600)}\n` : ""}${seriesContext?.world?.rules ? `\nWORLD RULES:\n${String(seriesContext.world.rules).slice(0, 600)}\n` : ""}${seriesContext?.world?.lore ? `\nWORLD LORE:\n${String(seriesContext.world.lore).slice(0, 600)}\n` : ""}${seriesContext?.world_elements ? `\nWORLD ELEMENTS:\n${JSON.stringify(seriesContext.world_elements).slice(0, 800)}\n` : ""}
 
 CHAPTER INFORMATION:
 ${chapterInfo}
@@ -299,6 +302,14 @@ Plot Threads:
 ${seriesContext?.plot_threads ? JSON.stringify(seriesContext.plot_threads).slice(0, 800) : ""}
 Callbacks:
 ${seriesContext?.callbacks ? JSON.stringify(seriesContext.callbacks).slice(0, 800) : ""}
+World Setting:
+${seriesContext?.world?.setting ? String((seriesContext.world as Record<string, unknown>).setting).slice(0, 600) : ""}
+World Rules:
+${seriesContext?.world?.rules ? String((seriesContext.world as Record<string, unknown>).rules).slice(0, 600) : ""}
+World Lore:
+${seriesContext?.world?.lore ? String((seriesContext.world as Record<string, unknown>).lore).slice(0, 600) : ""}
+World Elements:
+${seriesContext?.world_elements ? JSON.stringify(seriesContext.world_elements).slice(0, 800) : ""}
 
 Chapter Story Beats:
 ${beatsText}

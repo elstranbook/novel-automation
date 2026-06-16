@@ -38,6 +38,7 @@ export async function POST(request: Request) {
       emotionalState,
       keyConflict,
       voiceAnchor,
+      worldContext,
     } = await request.json();
 
     if (!scene) {
@@ -61,6 +62,15 @@ export async function POST(request: Request) {
           .join("\n")
       : "No chapter beats provided.";
 
+    const worldBlock = worldContext
+      ? `
+World Setting: ${String((worldContext as Record<string, unknown>).setting ?? "").slice(0, 600)}
+World Rules: ${String((worldContext as Record<string, unknown>).rules ?? "").slice(0, 600)}
+World Lore: ${String((worldContext as Record<string, unknown>).lore ?? "").slice(0, 600)}
+World Elements: ${Array.isArray((worldContext as Record<string, unknown>).elements) ? JSON.stringify((worldContext as Record<string, unknown>).elements).slice(0, 800) : ""}
+`
+      : "";
+
     const contextBlock = `
 Chapter Title: ${chapterTitle ?? "Untitled"}
 Chapter Summary: ${chapterSummary ?? "Not provided"}
@@ -69,7 +79,7 @@ Previous Scene (last lines): ${trimmedPrevious}
 Character Emotional State: ${emotionalState ?? "Not provided"}
 Key Conflict: ${keyConflict ?? "Not provided"}
 Voice Anchor: ${voiceAnchor ?? "raw, emotional, slightly messy, introspective"}
-Scene Summary:\n${scene}
+${worldBlock}Scene Summary:\n${scene}
 `;
 
     const longDirective = `
@@ -82,6 +92,7 @@ Writing Guidelines:
 – Emphasize "show, don't tell" storytelling. Let physical actions, choices, and setting carry emotional and thematic weight.
 – Use strong verbs, sensory-rich description, and a deep POV (if applicable) to fully immerse the reader.
 – Allow the scene to naturally lead toward its conclusion and, if appropriate, transition smoothly into the next.
+${worldBlock ? "– GROUND YOUR WRITING IN THE WORLD. Reference specific locations, rules, lore, and elements from the world context. Characters should interact with their environment authentically — mention place names, cultural details, magical rules, or artifacts where they naturally fit. The world should feel alive and specific, not generic.\n" : ""}
 
 Narrative Style:
 * Point of View: First-person for the main character

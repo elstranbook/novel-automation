@@ -2356,6 +2356,18 @@ function StudioContent() {
               emotionalState: chapterOutline?.[index]?.emotional_development ?? "",
               keyConflict: chapterOutline?.[index]?.theme_focus ?? "",
               voiceAnchor: storyDetails?.tone ?? "raw, emotional, slightly messy, introspective",
+              worldContext: seriesContext ? {
+                setting: (seriesContext as Record<string, unknown>).world
+                  ? String(((seriesContext as Record<string, unknown>).world as Record<string, unknown>)?.setting ?? "")
+                  : "",
+                rules: (seriesContext as Record<string, unknown>).world
+                  ? String(((seriesContext as Record<string, unknown>).world as Record<string, unknown>)?.rules ?? "")
+                  : "",
+                lore: (seriesContext as Record<string, unknown>).world
+                  ? String(((seriesContext as Record<string, unknown>).world as Record<string, unknown>)?.lore ?? "")
+                  : "",
+                elements: (seriesContext as Record<string, unknown>).world_elements ?? [],
+              } : null,
             }),
           });
 

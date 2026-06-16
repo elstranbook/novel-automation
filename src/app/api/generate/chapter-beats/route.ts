@@ -102,6 +102,10 @@ Additional Story Information:
 - Relationships: ${storyDetails?.series_context?.relationships ? JSON.stringify(storyDetails.series_context.relationships).slice(0, 800) : ""}
 - Plot Threads: ${storyDetails?.series_context?.plot_threads ? JSON.stringify(storyDetails.series_context.plot_threads).slice(0, 800) : ""}
 - Callbacks: ${storyDetails?.series_context?.callbacks ? JSON.stringify(storyDetails.series_context.callbacks).slice(0, 800) : ""}
+- World Setting: ${storyDetails?.series_context?.world?.setting ? String(storyDetails.series_context.world.setting).slice(0, 600) : ""}
+- World Rules: ${storyDetails?.series_context?.world?.rules ? String(storyDetails.series_context.world.rules).slice(0, 600) : ""}
+- World Lore: ${storyDetails?.series_context?.world?.lore ? String(storyDetails.series_context.world.lore).slice(0, 600) : ""}
+- World Elements: ${storyDetails?.series_context?.world_elements ? JSON.stringify(storyDetails.series_context.world_elements).slice(0, 800) : ""}
 - Chapter Guide: ${JSON.stringify(guideDetails, null, 2)}
 `;
 
