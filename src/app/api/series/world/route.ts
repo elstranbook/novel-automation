@@ -3,10 +3,25 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type WorldPayload = {
   seriesId: string;
+  summary?: string;
   setting?: string;
-  rules?: Record<string, unknown> | null;
-  lore?: Record<string, unknown> | null;
+  rules?: string | Record<string, unknown> | null;
+  lore?: string | Record<string, unknown> | null;
 };
+
+/** Convert a value that might be jsonb (object) or text into a plain string */
+function toText(value: unknown): string | null {
+  if (value == null) return null;
+  if (typeof value === "string") return value;
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -25,12 +40,19 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Normalize rules/lore to text (they may come back as jsonb objects)
+  if (data) {
+    data.rules = toText(data.rules);
+    data.lore = toText(data.lore);
+    data.summary = toText(data.summary) ?? "";
+  }
+
   return NextResponse.json({ world: data ?? null });
 }
 
 export async function POST(request: Request) {
   try {
-    const { seriesId, setting, rules, lore } =
+    const { seriesId, summary, setting, rules, lore } =
       (await request.json()) as WorldPayload;
 
     if (!seriesId) {
@@ -38,6 +60,17 @@ export async function POST(request: Request) {
         { error: "seriesId required" },
         { status: 400 }
       );
+    }
+
+    const payload: Record<string, unknown> = {
+      setting: setting ?? "",
+      rules: rules ?? null,
+      lore: lore ?? null,
+    };
+
+    // Only include summary if the column exists (graceful for pre-migration)
+    if (summary !== undefined) {
+      payload.summary = summary;
     }
 
     // Check if a world row already exists for this series
@@ -52,11 +85,7 @@ export async function POST(request: Request) {
       // Update existing row
       result = await supabaseAdmin
         .from("series_worlds")
-        .update({
-          setting: setting ?? "",
-          rules: rules ?? null,
-          lore: lore ?? null,
-        })
+        .update(payload)
         .eq("id", existing.id)
         .select("*")
         .single();
@@ -66,9 +95,7 @@ export async function POST(request: Request) {
         .from("series_worlds")
         .insert({
           series_id: seriesId,
-          setting: setting ?? "",
-          rules: rules ?? null,
-          lore: lore ?? null,
+          ...payload,
         })
         .select("*")
         .single();
@@ -78,6 +105,13 @@ export async function POST(request: Request) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // Normalize rules/lore to text in the response
+    if (data) {
+      data.rules = toText(data.rules);
+      data.lore = toText(data.lore);
+      data.summary = toText(data.summary) ?? "";
     }
 
     return NextResponse.json({ world: data });

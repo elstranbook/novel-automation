@@ -91,6 +91,7 @@ export default function SeriesPage() {
   >([]);
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
   const [seriesWorld, setSeriesWorld] = useState<Record<string, unknown> | null>(null);
+  const [worldSummaryDraft, setWorldSummaryDraft] = useState("");
   const [worldSettingDraft, setWorldSettingDraft] = useState("");
   const [worldRulesDraft, setWorldRulesDraft] = useState("");
   const [worldLoreDraft, setWorldLoreDraft] = useState("");
@@ -99,9 +100,13 @@ export default function SeriesPage() {
   const [newElementName, setNewElementName] = useState("");
   const [newElementDescription, setNewElementDescription] = useState("");
   const [newElementImportance, setNewElementImportance] = useState("moderate");
+  const [newElementIntroducedBook, setNewElementIntroducedBook] = useState(0);
   const [editingElementId, setEditingElementId] = useState<string | null>(null);
+  const [editingElementName, setEditingElementName] = useState("");
+  const [editingElementType, setEditingElementType] = useState("location");
   const [editingElementDescription, setEditingElementDescription] = useState("");
   const [editingElementImportance, setEditingElementImportance] = useState("moderate");
+  const [editingElementIntroducedBook, setEditingElementIntroducedBook] = useState(0);
   const [seriesMemory, setSeriesMemory] = useState<Array<Record<string, unknown>>>([]);
   const [seriesLogs, setSeriesLogs] = useState<Array<Record<string, unknown>>>([]);
   const [activeMemoryTab, setActiveMemoryTab] = useState("canon");
@@ -501,9 +506,21 @@ export default function SeriesPage() {
       if (worldRes.status === "fulfilled") {
         const w = worldRes.value.world;
         setSeriesWorld(w ?? null);
+        setWorldSummaryDraft(String(w?.summary ?? ""));
         setWorldSettingDraft(String(w?.setting ?? ""));
-        setWorldRulesDraft(String(w?.rules ?? ""));
-        setWorldLoreDraft(String(w?.lore ?? ""));
+        // rules/lore may come back as objects (jsonb) — normalize to string
+        const rulesVal = w?.rules;
+        const loreVal = w?.lore;
+        setWorldRulesDraft(
+          typeof rulesVal === "object" && rulesVal !== null
+            ? JSON.stringify(rulesVal, null, 2)
+            : String(rulesVal ?? "")
+        );
+        setWorldLoreDraft(
+          typeof loreVal === "object" && loreVal !== null
+            ? JSON.stringify(loreVal, null, 2)
+            : String(loreVal ?? "")
+        );
       }
 
       // Canon / Memory (combines canon, mystery, relationships into seriesMemory)
@@ -1865,10 +1882,23 @@ export default function SeriesPage() {
                     `/api/series/world?seriesId=${activeSeries.id}`
                   );
                   const data = await response.json();
-                  setSeriesWorld(data.world ?? null);
-                  setWorldSettingDraft(String(data.world?.setting ?? ""));
-                  setWorldRulesDraft(String(data.world?.rules ?? ""));
-                  setWorldLoreDraft(String(data.world?.lore ?? ""));
+                  const w = data.world;
+                  setSeriesWorld(w ?? null);
+                  setWorldSummaryDraft(String(w?.summary ?? ""));
+                  setWorldSettingDraft(String(w?.setting ?? ""));
+                  // rules/lore may come back as objects (jsonb) — normalize to string
+                  const rulesVal = w?.rules;
+                  const loreVal = w?.lore;
+                  setWorldRulesDraft(
+                    typeof rulesVal === "object" && rulesVal !== null
+                      ? JSON.stringify(rulesVal, null, 2)
+                      : String(rulesVal ?? "")
+                  );
+                  setWorldLoreDraft(
+                    typeof loreVal === "object" && loreVal !== null
+                      ? JSON.stringify(loreVal, null, 2)
+                      : String(loreVal ?? "")
+                  );
                 }}
                 className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
@@ -1879,10 +1909,13 @@ export default function SeriesPage() {
             <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
               <div className="space-y-3">
                 <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
-                  <p className="text-xs uppercase text-zinc-400">World Overview</p>
-                  <p className="mt-2 text-sm text-zinc-200">
-                    {String(seriesWorld?.summary ?? "Add a world summary to guide your series.")}
-                  </p>
+                  <p className="text-xs uppercase text-zinc-400">World Summary</p>
+                  <textarea
+                    value={worldSummaryDraft}
+                    onChange={(event) => setWorldSummaryDraft(event.target.value)}
+                    className="mt-2 min-h-[120px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm text-zinc-100"
+                    placeholder="A brief overview of your world — its core concept, tone, and what makes it unique."
+                  />
                 </div>
                 <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
                   <p className="text-xs uppercase text-zinc-400">Setting</p>
@@ -1919,6 +1952,7 @@ export default function SeriesPage() {
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
                         seriesId: activeSeries.id,
+                        summary: worldSummaryDraft,
                         setting: worldSettingDraft,
                         rules: worldRulesDraft,
                         lore: worldLoreDraft,
@@ -1928,7 +1962,22 @@ export default function SeriesPage() {
                       `/api/series/world?seriesId=${activeSeries.id}`
                     );
                     const data = await response.json();
-                    setSeriesWorld(data.world ?? null);
+                    const w = data.world;
+                    setSeriesWorld(w ?? null);
+                    setWorldSummaryDraft(String(w?.summary ?? ""));
+                    setWorldSettingDraft(String(w?.setting ?? ""));
+                    const rulesVal = w?.rules;
+                    const loreVal = w?.lore;
+                    setWorldRulesDraft(
+                      typeof rulesVal === "object" && rulesVal !== null
+                        ? JSON.stringify(rulesVal, null, 2)
+                        : String(rulesVal ?? "")
+                    );
+                    setWorldLoreDraft(
+                      typeof loreVal === "object" && loreVal !== null
+                        ? JSON.stringify(loreVal, null, 2)
+                        : String(loreVal ?? "")
+                    );
                   }}
                   className="rounded-full border border-emerald-500/60 px-4 py-2.5 text-sm text-emerald-200"
                 >
@@ -1996,6 +2045,21 @@ export default function SeriesPage() {
                         <option value="high">High</option>
                       </select>
                     </div>
+                    <div>
+                      <label className="text-[10px] uppercase text-zinc-500">Introduced in Book</label>
+                      <select
+                        value={newElementIntroducedBook}
+                        onChange={(e) => setNewElementIntroducedBook(Number(e.target.value))}
+                        className="mt-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                      >
+                        <option value={0}>Not set</option>
+                        {seriesBooks.map((book) => (
+                          <option key={String(book.id)} value={Number(book.book_number)}>
+                            Book {String(book.book_number)} — {String(book.title ?? "Untitled")}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <button
                       onClick={async () => {
                         if (!activeSeries || !newElementName.trim()) return;
@@ -2008,11 +2072,13 @@ export default function SeriesPage() {
                             name: newElementName.trim(),
                             description: newElementDescription.trim(),
                             importance: newElementImportance,
+                            introduced_in_book: newElementIntroducedBook > 0 ? newElementIntroducedBook : null,
                           }),
                         });
                         setNewElementName("");
                         setNewElementDescription("");
                         setNewElementImportance("moderate");
+                        setNewElementIntroducedBook(0);
                         const response = await fetch(
                           `/api/series/world-elements?seriesId=${activeSeries.id}`
                         );
@@ -2045,6 +2111,10 @@ export default function SeriesPage() {
                             ? "border-zinc-600 text-zinc-400"
                             : "border-amber-500/40 text-amber-200";
                       const typeLabel = String(element.type ?? "other").replace(/_/g, " ");
+                      const bookNum = Number(element.introduced_in_book ?? 0);
+                      const bookTitle = bookNum > 0
+                        ? seriesBooks.find((b) => Number(b.book_number) === bookNum)
+                        : null;
                       return (
                         <div
                           key={String(element.id)}
@@ -2062,9 +2132,9 @@ export default function SeriesPage() {
                                 <span className={`rounded-full border px-2 py-0.5 text-[10px] capitalize ${importanceColor}`}>
                                   {String(element.importance ?? "moderate")}
                                 </span>
-                                {element.introduced_in_book != null && Number(element.introduced_in_book) > 0 && (
+                                {bookNum > 0 && (
                                   <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-400">
-                                    Book {String(element.introduced_in_book)}
+                                    Book {bookNum}{bookTitle ? ` — ${String(bookTitle.title ?? "")}` : ""}
                                   </span>
                                 )}
                               </div>
@@ -2076,8 +2146,11 @@ export default function SeriesPage() {
                                     setEditingElementId(null);
                                   } else {
                                     setEditingElementId(String(element.id));
+                                    setEditingElementName(String(element.name ?? ""));
+                                    setEditingElementType(String(element.type ?? "other"));
                                     setEditingElementDescription(String(element.description ?? ""));
                                     setEditingElementImportance(String(element.importance ?? "moderate"));
+                                    setEditingElementIntroducedBook(Number(element.introduced_in_book ?? 0));
                                   }
                                 }}
                                 className="rounded border border-zinc-700 px-2 py-1 text-[10px] text-zinc-300 transition hover:border-zinc-500"
@@ -2107,21 +2180,72 @@ export default function SeriesPage() {
                           </div>
                           {isEditing ? (
                             <div className="mt-3 space-y-2">
-                              <textarea
-                                value={editingElementDescription}
-                                onChange={(e) => setEditingElementDescription(e.target.value)}
-                                className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-                              />
-                              <div className="flex items-center gap-3">
-                                <select
-                                  value={editingElementImportance}
-                                  onChange={(e) => setEditingElementImportance(e.target.value)}
-                                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
-                                >
-                                  <option value="low">Low</option>
-                                  <option value="moderate">Moderate</option>
-                                  <option value="high">High</option>
-                                </select>
+                              <div className="grid gap-2 md:grid-cols-2">
+                                <div>
+                                  <label className="text-[10px] uppercase text-zinc-500">Name</label>
+                                  <input
+                                    value={editingElementName}
+                                    onChange={(e) => setEditingElementName(e.target.value)}
+                                    className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] uppercase text-zinc-500">Type</label>
+                                  <select
+                                    value={editingElementType}
+                                    onChange={(e) => setEditingElementType(e.target.value)}
+                                    className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                                  >
+                                    <option value="location">Location</option>
+                                    <option value="magic_system">Magic System</option>
+                                    <option value="artifact">Artifact</option>
+                                    <option value="faction">Faction</option>
+                                    <option value="creature">Creature</option>
+                                    <option value="technology">Technology</option>
+                                    <option value="culture">Culture</option>
+                                    <option value="religion">Religion</option>
+                                    <option value="language">Language</option>
+                                    <option value="event">Historical Event</option>
+                                    <option value="other">Other</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-[10px] uppercase text-zinc-500">Description</label>
+                                <textarea
+                                  value={editingElementDescription}
+                                  onChange={(e) => setEditingElementDescription(e.target.value)}
+                                  className="mt-1 min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                                />
+                              </div>
+                              <div className="flex flex-wrap items-center gap-3">
+                                <div>
+                                  <label className="text-[10px] uppercase text-zinc-500">Importance</label>
+                                  <select
+                                    value={editingElementImportance}
+                                    onChange={(e) => setEditingElementImportance(e.target.value)}
+                                    className="mt-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                                  >
+                                    <option value="low">Low</option>
+                                    <option value="moderate">Moderate</option>
+                                    <option value="high">High</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="text-[10px] uppercase text-zinc-500">Introduced in Book</label>
+                                  <select
+                                    value={editingElementIntroducedBook}
+                                    onChange={(e) => setEditingElementIntroducedBook(Number(e.target.value))}
+                                    className="mt-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                                  >
+                                    <option value={0}>Not set</option>
+                                    {seriesBooks.map((book) => (
+                                      <option key={String(book.id)} value={Number(book.book_number)}>
+                                        Book {String(book.book_number)} — {String(book.title ?? "Untitled")}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
                                 <button
                                   onClick={async () => {
                                     if (!activeSeries) return;
@@ -2130,8 +2254,11 @@ export default function SeriesPage() {
                                       headers: { "Content-Type": "application/json" },
                                       body: JSON.stringify({
                                         id: editingElementId,
-                                        description: editingElementDescription,
+                                        name: editingElementName.trim(),
+                                        type: editingElementType,
+                                        description: editingElementDescription.trim(),
                                         importance: editingElementImportance,
+                                        introduced_in_book: editingElementIntroducedBook > 0 ? editingElementIntroducedBook : null,
                                       }),
                                     });
                                     setEditingElementId(null);

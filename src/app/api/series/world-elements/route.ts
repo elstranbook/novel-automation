@@ -7,6 +7,7 @@ type WorldElementPayload = {
   name: string;
   description: string;
   importance?: string;
+  introduced_in_book?: number | null;
 };
 
 export async function GET(request: Request) {
@@ -27,17 +28,25 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { seriesId, type, name, description, importance } =
+    const { seriesId, type, name, description, importance, introduced_in_book } =
       (await request.json()) as WorldElementPayload;
+
+    const insertPayload: Record<string, unknown> = {
+      series_id: seriesId,
+      type,
+      name,
+      description,
+      importance: importance ?? "moderate",
+    };
+
+    // Only include introduced_in_book if provided
+    if (introduced_in_book != null && introduced_in_book > 0) {
+      insertPayload.introduced_in_book = introduced_in_book;
+    }
+
     const { data, error } = await supabaseAdmin
       .from("world_element")
-      .insert({
-        series_id: seriesId,
-        type,
-        name,
-        description,
-        importance: importance ?? "moderate",
-      })
+      .insert(insertPayload)
       .select("*")
       .single();
     if (error) {

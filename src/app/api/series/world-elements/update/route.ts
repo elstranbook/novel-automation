@@ -3,20 +3,34 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type WorldElementUpdate = {
   id: string;
+  name?: string;
+  type?: string;
   description?: string;
   importance?: string;
+  introduced_in_book?: number | null;
 };
 
 export async function PUT(request: Request) {
   try {
-    const { id, description, importance } =
+    const { id, name, type, description, importance, introduced_in_book } =
       (await request.json()) as WorldElementUpdate;
+
+    const updatePayload: Record<string, unknown> = {};
+
+    if (name !== undefined) updatePayload.name = name;
+    if (type !== undefined) updatePayload.type = type;
+    if (description !== undefined) updatePayload.description = description;
+    if (importance !== undefined) updatePayload.importance = importance;
+    if (introduced_in_book !== undefined) {
+      updatePayload.introduced_in_book =
+        introduced_in_book != null && introduced_in_book > 0
+          ? introduced_in_book
+          : null;
+    }
+
     const { data, error } = await supabaseAdmin
       .from("world_element")
-      .update({
-        description,
-        importance,
-      })
+      .update(updatePayload)
       .eq("id", id)
       .select("*")
       .single();
