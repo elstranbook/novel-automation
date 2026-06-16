@@ -88,10 +88,10 @@ World Elements: ${Array.isArray((worldContext as Record<string, unknown>).elemen
           .eq("series_id", seriesId);
         if (characters && characters.length > 0) {
           // Full cast overview (compact)
-          characterBlock = formatCharactersForPrompt(characters, { maxLength: 2000 });
+          characterBlock = formatCharactersForPrompt(characters, { maxLength: 2500 });
           // POV character deep dive if we can identify them
           if (povCharacter) {
-            const povBlock = formatPOVCharacterContext(characters, povCharacter, { maxLength: 1200 });
+            const povBlock = formatPOVCharacterContext(characters, povCharacter, { maxLength: 2500 });
             if (povBlock) {
               characterBlock = `${povBlock}\n\nOTHER CHARACTERS IN THIS SCENE:\n${characterBlock}`;
             }
