@@ -712,7 +712,7 @@ function StudioContent() {
       },
       {
         step: "Novel plan",
-        requires: ["storyDetails", "novelSynopsis", "characterProfiles"],
+        requires: ["storyDetails", "novelSynopsis", "characterProfiles", "World data"],
         produces: ["novelPlan"],
         status: isFilled(novelPlan) ? "ready" : "missing",
       },
@@ -724,25 +724,25 @@ function StudioContent() {
       },
       {
         step: "Chapter guide",
-        requires: ["chapterOutline", "novelSynopsis", "characterProfiles", "novelPlan"],
+        requires: ["chapterOutline", "novelSynopsis", "characterProfiles", "novelPlan", "World data"],
         produces: ["chapterGuide"],
         status: isFilled(chapterGuide) ? "ready" : "missing",
       },
       {
         step: "Chapter beats",
-        requires: ["chapterGuide"],
+        requires: ["chapterGuide", "World data"],
         produces: ["chapterBeats"],
         status: isFilled(chapterBeats) ? "ready" : "missing",
       },
       {
         step: "Scenes",
-        requires: ["chapterBeats"],
+        requires: ["chapterBeats", "World data"],
         produces: ["allScenes"],
         status: isFilled(allScenes) ? "ready" : "missing",
       },
       {
         step: "Prose",
-        requires: ["allScenes"],
+        requires: ["allScenes", "World data"],
         produces: ["proseScenes"],
         status: isFilled(proseScenes) ? "ready" : "missing",
       },
