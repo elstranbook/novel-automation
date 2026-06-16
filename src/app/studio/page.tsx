@@ -661,128 +661,147 @@ function StudioContent() {
   };
 
   const pipelineSteps = useMemo(
-    () => [
-      {
-        step: "Story details",
-        requires: ["Title", "Novel about"],
-        produces: ["storyDetails"],
-        status: isFilled(storyDetails) ? "ready" : "missing",
-      },
-      {
-        step: "Premises & endings",
-        requires: ["storyDetails"],
-        produces: ["premisesAndEndings"],
-        status: isFilled(premisesAndEndings) ? "ready" : "missing",
-      },
-      {
-        step: "Synopsis",
-        requires: ["storyDetails", "premisesAndEndings"],
-        produces: ["novelSynopsis"],
-        status: isFilled(novelSynopsis) ? "ready" : "missing",
-      },
-      {
-        step: "Character profiles",
-        requires: ["storyDetails", "novelSynopsis"],
-        produces: ["characterProfiles"],
-        status: isFilled(characterProfiles) ? "ready" : "missing",
-      },
-      {
-        step: "Book descriptions",
-        requires: ["storyDetails", "novelSynopsis"],
-        produces: ["bookDescriptions"],
-        status: isFilled(bookDescriptions) ? "ready" : "missing",
-      },
-      {
-        step: "Keywords",
-        requires: ["storyDetails", "novelSynopsis"],
-        produces: ["novelKeywords"],
-        status: isFilled(novelKeywords) ? "ready" : "missing",
-      },
-      {
-        step: "BISAC",
-        requires: ["storyDetails", "novelSynopsis"],
-        produces: ["novelBisac"],
-        status: isFilled(novelBisac) ? "ready" : "missing",
-      },
-      {
-        step: "SEO Enrichment",
-        requires: ["storyDetails", "novelSynopsis"],
-        produces: ["seoEnriched"],
-        status: seoEnriched ? "ready" : "missing",
-      },
-      {
-        step: "Novel plan",
-        requires: ["storyDetails", "novelSynopsis", "characterProfiles", "World data"],
-        produces: ["novelPlan"],
-        status: isFilled(novelPlan) ? "ready" : "missing",
-      },
-      {
-        step: "Chapter outline",
-        requires: ["storyDetails", "novelPlan"],
-        produces: ["chapterOutline"],
-        status: isFilled(chapterOutline) ? "ready" : "missing",
-      },
-      {
-        step: "Chapter guide",
-        requires: ["chapterOutline", "novelSynopsis", "characterProfiles", "novelPlan", "World data"],
-        produces: ["chapterGuide"],
-        status: isFilled(chapterGuide) ? "ready" : "missing",
-      },
-      {
-        step: "Chapter beats",
-        requires: ["chapterGuide", "World data"],
-        produces: ["chapterBeats"],
-        status: isFilled(chapterBeats) ? "ready" : "missing",
-      },
-      {
-        step: "Scenes",
-        requires: ["chapterBeats", "World data"],
-        produces: ["allScenes"],
-        status: isFilled(allScenes) ? "ready" : "missing",
-      },
-      {
-        step: "Prose",
-        requires: ["allScenes", "World data"],
-        produces: ["proseScenes"],
-        status: isFilled(proseScenes) ? "ready" : "missing",
-      },
-      {
-        step: "Cover prompt",
-        requires: ["storyDetails"],
-        produces: ["coverPrompt"],
-        status: isFilled(coverPrompt) ? "ready" : "missing",
-      },
-      {
-        step: "Quotes",
-        requires: ["proseScenes"],
-        produces: ["novelQuotes"],
-        status: isFilled(novelQuotes) ? "ready" : "missing",
-      },
-      {
-        step: "Promotional articles",
-        requires: ["storyDetails"],
-        produces: ["promotionalArticles"],
-        status: isFilled(promotionalArticles) ? "ready" : "missing",
-      },
-      {
-        step: "Social snippets",
-        requires: ["promotionalArticles"],
-        produces: ["socialSnippets"],
-        status: isFilled(socialSnippets) ? "ready" : "missing",
-      },
-      {
-        step: "Dedication",
-        requires: ["storyDetails", "novelSynopsis"],
-        produces: ["novelDedication"],
-        status: isFilled(novelDedication) ? "ready" : "missing",
-      },
-      {
-        step: "Exports",
-        requires: ["proseScenes"],
-        produces: ["novelFormats"],
-        status: isFilled(novelFormats) ? "ready" : "missing",
-      },
-    ],
+    () => {
+      // Series character profiles from the Characters tab — fetched from DB
+      // and injected into the writing pipeline via characterPrompt.ts.
+      // When seriesId is set and characters are loaded into seriesContext,
+      // every writing step (novel-plan → prose) reads from them.
+      const seriesCharacters =
+        (seriesContext as Record<string, unknown> | null)?.characters as
+          | unknown[]
+          | undefined;
+      const hasSeriesCharacters =
+        !!seriesId && Array.isArray(seriesCharacters) && seriesCharacters.length > 0;
+      // Label that shows whether the Characters tab data is wired in.
+      const charactersLabel = hasSeriesCharacters
+        ? `Series characters (${seriesCharacters!.length})`
+        : seriesId
+          ? "Series characters (empty)"
+          : "Series characters (no series)";
+
+      return [
+        {
+          step: "Story details",
+          requires: ["Title", "Novel about"],
+          produces: ["storyDetails"],
+          status: isFilled(storyDetails) ? "ready" : "missing",
+        },
+        {
+          step: "Premises & endings",
+          requires: ["storyDetails"],
+          produces: ["premisesAndEndings"],
+          status: isFilled(premisesAndEndings) ? "ready" : "missing",
+        },
+        {
+          step: "Synopsis",
+          requires: ["storyDetails", "premisesAndEndings"],
+          produces: ["novelSynopsis"],
+          status: isFilled(novelSynopsis) ? "ready" : "missing",
+        },
+        {
+          step: "Character profiles",
+          requires: ["storyDetails", "novelSynopsis"],
+          produces: ["characterProfiles"],
+          status: isFilled(characterProfiles) ? "ready" : "missing",
+        },
+        {
+          step: "Book descriptions",
+          requires: ["storyDetails", "novelSynopsis"],
+          produces: ["bookDescriptions"],
+          status: isFilled(bookDescriptions) ? "ready" : "missing",
+        },
+        {
+          step: "Keywords",
+          requires: ["storyDetails", "novelSynopsis"],
+          produces: ["novelKeywords"],
+          status: isFilled(novelKeywords) ? "ready" : "missing",
+        },
+        {
+          step: "BISAC",
+          requires: ["storyDetails", "novelSynopsis"],
+          produces: ["novelBisac"],
+          status: isFilled(novelBisac) ? "ready" : "missing",
+        },
+        {
+          step: "SEO Enrichment",
+          requires: ["storyDetails", "novelSynopsis"],
+          produces: ["seoEnriched"],
+          status: seoEnriched ? "ready" : "missing",
+        },
+        {
+          step: "Novel plan",
+          requires: ["storyDetails", "novelSynopsis", "characterProfiles", "World data", charactersLabel],
+          produces: ["novelPlan"],
+          status: isFilled(novelPlan) ? "ready" : "missing",
+        },
+        {
+          step: "Chapter outline",
+          requires: ["storyDetails", "novelPlan"],
+          produces: ["chapterOutline"],
+          status: isFilled(chapterOutline) ? "ready" : "missing",
+        },
+        {
+          step: "Chapter guide",
+          requires: ["chapterOutline", "novelSynopsis", "characterProfiles", "novelPlan", "World data", charactersLabel],
+          produces: ["chapterGuide"],
+          status: isFilled(chapterGuide) ? "ready" : "missing",
+        },
+        {
+          step: "Chapter beats",
+          requires: ["chapterGuide", "World data", charactersLabel],
+          produces: ["chapterBeats"],
+          status: isFilled(chapterBeats) ? "ready" : "missing",
+        },
+        {
+          step: "Scenes",
+          requires: ["chapterBeats", "World data", charactersLabel],
+          produces: ["allScenes"],
+          status: isFilled(allScenes) ? "ready" : "missing",
+        },
+        {
+          step: "Prose",
+          requires: ["allScenes", "World data", charactersLabel, "POV character"],
+          produces: ["proseScenes"],
+          status: isFilled(proseScenes) ? "ready" : "missing",
+        },
+        {
+          step: "Cover prompt",
+          requires: ["storyDetails"],
+          produces: ["coverPrompt"],
+          status: isFilled(coverPrompt) ? "ready" : "missing",
+        },
+        {
+          step: "Quotes",
+          requires: ["proseScenes"],
+          produces: ["novelQuotes"],
+          status: isFilled(novelQuotes) ? "ready" : "missing",
+        },
+        {
+          step: "Promotional articles",
+          requires: ["storyDetails"],
+          produces: ["promotionalArticles"],
+          status: isFilled(promotionalArticles) ? "ready" : "missing",
+        },
+        {
+          step: "Social snippets",
+          requires: ["promotionalArticles"],
+          produces: ["socialSnippets"],
+          status: isFilled(socialSnippets) ? "ready" : "missing",
+        },
+        {
+          step: "Dedication",
+          requires: ["storyDetails", "novelSynopsis"],
+          produces: ["novelDedication"],
+          status: isFilled(novelDedication) ? "ready" : "missing",
+        },
+        {
+          step: "Exports",
+          requires: ["proseScenes"],
+          produces: ["novelFormats"],
+          status: isFilled(novelFormats) ? "ready" : "missing",
+        },
+      ];
+    },
     [
       storyDetails,
       premisesAndEndings,
@@ -804,6 +823,8 @@ function StudioContent() {
       socialSnippets,
       novelDedication,
       novelFormats,
+      seriesContext,
+      seriesId,
     ]
   );
 
@@ -3542,7 +3563,9 @@ function StudioContent() {
                   <h2 className="text-xl font-semibold">Pipeline prompt map</h2>
                   <p className="mt-2 text-sm text-zinc-300">
                     This map shows which outputs feed each step and what needs to exist
-                    before a step can run.
+                    before a step can run. Writing steps (Novel plan → Prose) also pull
+                    from the <span className="text-emerald-300">Characters tab</span>:
+                    green chip = data flowing, amber chip = no character data yet.
                   </p>
                 </div>
                 <button
@@ -3582,14 +3605,34 @@ function StudioContent() {
                       )}
                       <p className="mt-2 text-[11px] text-zinc-400">Requires</p>
                       <div className="mt-1 flex flex-wrap gap-2">
-                        {row.requires.map((item) => (
-                          <span
-                            key={`${row.step}-${item}`}
-                            className="rounded-full border border-zinc-700 px-2 py-0.5 text-xs"
-                          >
-                            {item}
-                          </span>
-                        ))}
+                        {row.requires.map((item) => {
+                          // Color-code the "Series characters (...)" chip
+                          // to show whether the Characters tab is actually feeding data.
+                          const isCharactersChip = item.startsWith("Series characters");
+                          let chipClass = "rounded-full border border-zinc-700 px-2 py-0.5 text-xs";
+                          if (isCharactersChip) {
+                            if (item.includes("empty") || item.includes("no series")) {
+                              chipClass =
+                                "rounded-full border border-amber-500/40 px-2 py-0.5 text-xs text-amber-200";
+                            } else {
+                              chipClass =
+                                "rounded-full border border-emerald-400/50 px-2 py-0.5 text-xs text-emerald-200";
+                            }
+                          }
+                          // Highlight the "POV character" chip too — it's a writing quality signal.
+                          if (item === "POV character") {
+                            chipClass =
+                              "rounded-full border border-sky-400/50 px-2 py-0.5 text-xs text-sky-200";
+                          }
+                          return (
+                            <span
+                              key={`${row.step}-${item}`}
+                              className={chipClass}
+                            >
+                              {item}
+                            </span>
+                          );
+                        })}
                       </div>
                       <p className="mt-3 text-[11px] text-zinc-400">Produces</p>
                       <div className="mt-1 flex flex-wrap gap-2">
