@@ -16,6 +16,13 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   User,
   Heart,
   Zap,
@@ -38,6 +45,7 @@ import {
   Loader2,
   Plus,
   Trash2,
+  UserPlus,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -88,13 +96,26 @@ interface CharactersTabProps {
   seriesId: string;
   onRefresh: () => void;
   onCharacterUpdated?: (character: Character) => void;
+  onCharacterAdded?: () => void;
 }
+
+// ─── Role options for selectors ──────────────────────────────────────────────
+
+const ROLE_OPTIONS = [
+  { value: 'Protagonist', label: 'Protagonist', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
+  { value: 'Antagonist', label: 'Antagonist', color: 'bg-rose-500/15 text-rose-400 border-rose-500/30' },
+  { value: 'Supporting', label: 'Supporting', color: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
+  { value: 'Mentor', label: 'Mentor', color: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  { value: 'Love Interest', label: 'Love Interest', color: 'bg-pink-500/15 text-pink-400 border-pink-500/30' },
+  { value: 'Minor', label: 'Minor', color: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30' },
+  { value: 'Other', label: 'Other', color: 'bg-zinc-500/15 text-zinc-400 border-zinc-500/30' },
+] as const;
 
 // ─── Editable text field map (string fields the user can edit) ────────────────
 
 const EDITABLE_TEXT_FIELDS: { key: keyof Character; label: string; multiline?: boolean }[] = [
   { key: 'name', label: 'Name' },
-  { key: 'role', label: 'Role' },
+  // role is handled separately as a Select dropdown
   { key: 'age', label: 'Age' },
   { key: 'gender', label: 'Gender' },
   { key: 'description', label: 'Description', multiline: true },
@@ -174,11 +195,12 @@ function getRoleLabel(key: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function CharactersTab({ characters, relationships, seriesId, onRefresh, onCharacterUpdated }: CharactersTabProps) {
+export default function CharactersTab({ characters, relationships, seriesId, onRefresh, onCharacterUpdated, onCharacterAdded }: CharactersTabProps) {
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [detailOpen, setDetailOpen] = useState(false);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   // Group characters by normalized role key
   const groupedCharacters = useMemo(() => {
@@ -250,15 +272,25 @@ export default function CharactersTab({ characters, relationships, seriesId, onR
             Manage the characters across your series.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onRefresh}
-          className="rounded-full border-zinc-700"
-        >
-          <RefreshCw className="mr-2 h-3.5 w-3.5" />
-          Refresh Characters
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRefresh}
+            className="rounded-full border-zinc-700"
+          >
+            <RefreshCw className="mr-2 h-3.5 w-3.5" />
+            Refresh
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setAddDialogOpen(true)}
+            className="rounded-full bg-emerald-600 hover:bg-emerald-500 text-white"
+          >
+            <UserPlus className="mr-2 h-3.5 w-3.5" />
+            Add Character
+          </Button>
+        </div>
       </div>
 
       {/* Role Summary Cards */}
@@ -451,6 +483,18 @@ export default function CharactersTab({ characters, relationships, seriesId, onR
         }}
         onCharacterUpdated={handleCharacterUpdated}
       />
+
+      {/* Add Character Dialog */}
+      <AddCharacterDialog
+        open={addDialogOpen}
+        onClose={() => setAddDialogOpen(false)}
+        seriesId={seriesId}
+        onCreated={() => {
+          setAddDialogOpen(false);
+          onCharacterAdded?.();
+          onRefresh();
+        }}
+      />
     </section>
   );
 }
@@ -594,6 +638,8 @@ function CharacterDetailDialog({
       const val = character[key];
       form[key] = val != null ? String(val) : '';
     });
+    // Add role separately (it uses a Select dropdown, not a text input)
+    form['role'] = character.role || 'Supporting';
     setEditForm(form);
     setEditPersonality({
       traits: (personality.traits || []).join(', '),
@@ -630,6 +676,13 @@ function CharacterDetailDialog({
           }
         }
       });
+
+      // Role change (handled via Select dropdown)
+      const newRole = editForm['role'] ?? '';
+      const oldRole = character.role || '';
+      if (newRole !== oldRole) {
+        updates.role = newRole || 'Supporting';
+      }
 
       // Personality changes
       const oldTraits = (personality.traits || []).join(', ');
@@ -787,7 +840,28 @@ function CharacterDetailDialog({
                   </p>
                   <div className="grid grid-cols-2 gap-3">
                     <EditableField fieldKey="name" label="Name" />
-                    <EditableField fieldKey="role" label="Role" />
+                    {/* Role selector dropdown */}
+                    <div className="space-y-1">
+                      <Label className="text-xs text-zinc-400">Role</Label>
+                      <Select
+                        value={editForm['role'] || 'Supporting'}
+                        onValueChange={(val) => updateField('role', val)}
+                      >
+                        <SelectTrigger className="bg-zinc-800/60 border-zinc-700 text-sm text-zinc-200">
+                          <SelectValue placeholder="Select role..." />
+                        </SelectTrigger>
+                        <SelectContent className="bg-zinc-900 border-zinc-700">
+                          {ROLE_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              <span className="flex items-center gap-2">
+                                <span className={`inline-block h-2 w-2 rounded-full ${opt.color.split(' ')[0]}`} />
+                                {opt.label}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <EditableField fieldKey="age" label="Age" />
                     <EditableField fieldKey="gender" label="Gender" />
                     <EditableField fieldKey="introduced_in_book" label="Introduced in Book #" />
@@ -1183,6 +1257,175 @@ function CharacterDetailDialog({
             )}
           </div>
         </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Add Character Dialog ────────────────────────────────────────────────────
+
+function AddCharacterDialog({
+  open,
+  onClose,
+  seriesId,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  seriesId: string;
+  onCreated: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [role, setRole] = useState('Supporting');
+  const [description, setDescription] = useState('');
+  const [age, setAge] = useState('');
+  const [gender, setGender] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const resetForm = () => {
+    setName('');
+    setRole('Supporting');
+    setDescription('');
+    setAge('');
+    setGender('');
+  };
+
+  const handleSave = async () => {
+    if (!name.trim()) return;
+    setIsSaving(true);
+    try {
+      const res = await fetch('/api/series/characters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          seriesId,
+          name: name.trim(),
+          role,
+          description: description.trim() || undefined,
+          age: age.trim() || undefined,
+          gender: gender.trim() || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        console.error('Failed to create character:', err);
+        return;
+      }
+
+      resetForm();
+      onCreated();
+    } catch (err) {
+      console.error('Failed to create character:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="max-w-md border-zinc-800 bg-zinc-950 text-zinc-100">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="h-5 w-5 text-emerald-400" />
+            Add New Character
+          </DialogTitle>
+          <DialogDescription className="text-zinc-400">
+            Create a new character for your series. You can add more details later.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 mt-2">
+          {/* Name */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-400">Name *</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="bg-zinc-800/60 border-zinc-700 text-sm text-zinc-200"
+              placeholder="Enter character name..."
+              autoFocus
+            />
+          </div>
+
+          {/* Role Selector */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-400">Role</Label>
+            <Select value={role} onValueChange={setRole}>
+              <SelectTrigger className="bg-zinc-800/60 border-zinc-700 text-sm text-zinc-200">
+                <SelectValue placeholder="Select role..." />
+              </SelectTrigger>
+              <SelectContent className="bg-zinc-900 border-zinc-700">
+                {ROLE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    <span className="flex items-center gap-2">
+                      <span className={`inline-block h-2 w-2 rounded-full ${opt.color.split(' ')[0]}`} />
+                      {opt.label}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Age & Gender row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs text-zinc-400">Age</Label>
+              <Input
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                className="bg-zinc-800/60 border-zinc-700 text-sm text-zinc-200"
+                placeholder="e.g. 17"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-zinc-400">Gender</Label>
+              <Input
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
+                className="bg-zinc-800/60 border-zinc-700 text-sm text-zinc-200"
+                placeholder="e.g. Female"
+              />
+            </div>
+          </div>
+
+          {/* Description */}
+          <div className="space-y-1">
+            <Label className="text-xs text-zinc-400">Description</Label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="min-h-[80px] bg-zinc-800/60 border-zinc-700 text-sm text-zinc-200 resize-y"
+              placeholder="Brief character description..."
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { resetForm(); onClose(); }}
+              className="text-zinc-400 hover:text-zinc-200"
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={!name.trim() || isSaving}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white"
+            >
+              {isSaving ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <UserPlus className="mr-1 h-3.5 w-3.5" />
+              )}
+              Add Character
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
