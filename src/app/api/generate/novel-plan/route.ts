@@ -3,6 +3,7 @@ import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 import { formatCharactersForPrompt } from "@/lib/characterPrompt";
 import { formatCanonForPrompt } from "@/lib/canonPrompt";
+import { formatMysteryForPrompt } from "@/lib/mysteryPrompt";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -121,8 +122,7 @@ ${novelAbout}
 Series Context:
 ${storyDetails.series_context ? JSON.stringify(storyDetails.series_context).slice(0, 1600) : ""}
 ${formatCanonForPrompt(storyDetails.series_context?.canon_entries, { maxLength: 800 })}
-Mystery Log:
-${storyDetails.series_context?.secrets ? JSON.stringify(storyDetails.series_context.secrets).slice(0, 800) : ""}
+${formatMysteryForPrompt(storyDetails.series_context?.secrets, storyDetails.series_context?.clues, { maxLength: 1500 })}
 Relationships:
 ${storyDetails.series_context?.relationships ? JSON.stringify(storyDetails.series_context.relationships).slice(0, 800) : ""}
 Plot Threads:

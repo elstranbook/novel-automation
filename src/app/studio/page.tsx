@@ -679,6 +679,26 @@ function StudioContent() {
           ? "Series characters (empty)"
           : "Series characters (no series)";
 
+      // Mystery context from the Mystery tab — secrets + clues fetched from DB
+      // and injected into the writing pipeline via mysteryPrompt.ts.
+      const seriesSecrets =
+        (seriesContext as Record<string, unknown> | null)?.secrets as
+          | unknown[]
+          | undefined;
+      const seriesClues =
+        (seriesContext as Record<string, unknown> | null)?.clues as
+          | unknown[]
+          | undefined;
+      const secretCount = Array.isArray(seriesSecrets) ? seriesSecrets.length : 0;
+      const clueCount = Array.isArray(seriesClues) ? seriesClues.length : 0;
+      const hasMystery = !!seriesId && (secretCount > 0 || clueCount > 0);
+      // Label that shows whether mystery data is wired in.
+      const mysteryLabel = hasMystery
+        ? `Mystery (${secretCount} secret${secretCount === 1 ? "" : "s"}, ${clueCount} clue${clueCount === 1 ? "" : "s"})`
+        : seriesId
+          ? "Mystery (empty)"
+          : "Mystery (no series)";
+
       return [
         {
           step: "Story details",
@@ -730,7 +750,7 @@ function StudioContent() {
         },
         {
           step: "Novel plan",
-          requires: ["storyDetails", "novelSynopsis", "characterProfiles", "World data", charactersLabel],
+          requires: ["storyDetails", "novelSynopsis", "characterProfiles", "World data", charactersLabel, mysteryLabel],
           produces: ["novelPlan"],
           status: isFilled(novelPlan) ? "ready" : "missing",
         },
@@ -742,25 +762,25 @@ function StudioContent() {
         },
         {
           step: "Chapter guide",
-          requires: ["chapterOutline", "novelSynopsis", "characterProfiles", "novelPlan", "World data", charactersLabel],
+          requires: ["chapterOutline", "novelSynopsis", "characterProfiles", "novelPlan", "World data", charactersLabel, mysteryLabel],
           produces: ["chapterGuide"],
           status: isFilled(chapterGuide) ? "ready" : "missing",
         },
         {
           step: "Chapter beats",
-          requires: ["chapterGuide", "World data", charactersLabel],
+          requires: ["chapterGuide", "World data", charactersLabel, mysteryLabel],
           produces: ["chapterBeats"],
           status: isFilled(chapterBeats) ? "ready" : "missing",
         },
         {
           step: "Scenes",
-          requires: ["chapterBeats", "World data", charactersLabel],
+          requires: ["chapterBeats", "World data", charactersLabel, mysteryLabel],
           produces: ["allScenes"],
           status: isFilled(allScenes) ? "ready" : "missing",
         },
         {
           step: "Prose",
-          requires: ["allScenes", "World data", charactersLabel, "POV character"],
+          requires: ["allScenes", "World data", charactersLabel, mysteryLabel, "POV character"],
           produces: ["proseScenes"],
           status: isFilled(proseScenes) ? "ready" : "missing",
         },
@@ -3609,6 +3629,9 @@ function StudioContent() {
                           // Color-code the "Series characters (...)" chip
                           // to show whether the Characters tab is actually feeding data.
                           const isCharactersChip = item.startsWith("Series characters");
+                          // Same treatment for the "Mystery (...)" chip —
+                          // shows whether the Mystery tab is feeding secrets + clues.
+                          const isMysteryChip = item.startsWith("Mystery");
                           let chipClass = "rounded-full border border-zinc-700 px-2 py-0.5 text-xs";
                           if (isCharactersChip) {
                             if (item.includes("empty") || item.includes("no series")) {
@@ -3617,6 +3640,16 @@ function StudioContent() {
                             } else {
                               chipClass =
                                 "rounded-full border border-emerald-400/50 px-2 py-0.5 text-xs text-emerald-200";
+                            }
+                          }
+                          if (isMysteryChip) {
+                            if (item.includes("empty") || item.includes("no series")) {
+                              chipClass =
+                                "rounded-full border border-amber-500/40 px-2 py-0.5 text-xs text-amber-200";
+                            } else {
+                              // Purple accent — distinguishes Mystery from Characters (green)
+                              chipClass =
+                                "rounded-full border border-purple-400/50 px-2 py-0.5 text-xs text-purple-200";
                             }
                           }
                           // Highlight the "POV character" chip too — it's a writing quality signal.

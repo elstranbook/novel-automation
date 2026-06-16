@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 import { formatCanonForPrompt } from "@/lib/canonPrompt";
+import { formatMysteryForPrompt } from "@/lib/mysteryPrompt";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
       total_books: context.total_books,
       canon_entries: (context.canon_entries as unknown[] | undefined)?.slice(0, 5),
       secrets: (context.secrets as unknown[] | undefined)?.slice(0, 5),
+      clues: (context.clues as unknown[] | undefined)?.slice(0, 5),
       relationships: (context.relationships as unknown[] | undefined)?.slice(0, 5),
       plot_threads: (context.plot_threads as unknown[] | undefined)?.slice(0, 5),
       callbacks: (context.callbacks as unknown[] | undefined)?.slice(0, 5),
@@ -49,9 +51,7 @@ export async function POST(request: Request) {
       storyDetails.series_context
         ? trimContext(summarizeContext(storyDetails.series_context as Record<string, unknown>), 1200)
         : ""
-    }\n${formatCanonForPrompt(storyDetails.series_context?.canon_entries, { maxLength: 800 })}\nMystery Log: ${
-      storyDetails.series_context?.secrets ? trimContext(storyDetails.series_context.secrets, 800) : ""
-    }\nRelationships: ${
+    }\n${formatCanonForPrompt(storyDetails.series_context?.canon_entries, { maxLength: 800 })}\n${formatMysteryForPrompt(storyDetails.series_context?.secrets, storyDetails.series_context?.clues, { maxLength: 1200 })}\nRelationships: ${
       storyDetails.series_context?.relationships ? trimContext(storyDetails.series_context.relationships, 800) : ""
     }`;
 

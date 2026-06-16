@@ -3,6 +3,7 @@ import { runChatCompletion } from "@/lib/openaiClient";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 import { formatCanonForPrompt } from "@/lib/canonPrompt";
+import { formatMysteryForPrompt } from "@/lib/mysteryPrompt";
 
 type SceneSummary = {
   scene_number?: number;
@@ -121,6 +122,7 @@ const generateScenesForChapter = async ({
     | {
         canon_entries?: unknown;
         secrets?: unknown;
+        clues?: unknown;
         relationships?: unknown;
         plot_threads?: unknown;
         callbacks?: unknown;
@@ -294,8 +296,7 @@ ${novelAbout}
 Series Context:
 ${seriesContext ? JSON.stringify(seriesContext).slice(0, 1600) : ""}
 ${formatCanonForPrompt(seriesContext?.canon_entries as Parameters<typeof formatCanonForPrompt>[0], { maxLength: 800 })}
-Mysteries:
-${seriesContext?.secrets ? JSON.stringify(seriesContext.secrets).slice(0, 800) : ""}
+${formatMysteryForPrompt(seriesContext?.secrets as Parameters<typeof formatMysteryForPrompt>[0], seriesContext?.clues as Parameters<typeof formatMysteryForPrompt>[1], { maxLength: 1500 })}
 Relationships:
 ${seriesContext?.relationships ? JSON.stringify(seriesContext.relationships).slice(0, 800) : ""}
 Plot Threads:

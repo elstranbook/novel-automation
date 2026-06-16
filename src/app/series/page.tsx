@@ -165,6 +165,43 @@ export default function SeriesPage() {
   const [editingClueId, setEditingClueId] = useState<string | null>(null);
   const [editingClueDescription, setEditingClueDescription] = useState("");
   const [editingClueBook, setEditingClueBook] = useState(1);
+  // ── Mystery tab: dedicated state for secrets + clues ─────────────────────────
+  // Previously these were merged into seriesMemory, which caused the bug where
+  // the API returns { secrets, clues } but the loader read `entries` (always []).
+  // Now they live in their own arrays so canon/relationship data is never clobbered.
+  const [mysterySecrets, setMysterySecrets] = useState<Array<Record<string, unknown>>>([]);
+  const [mysteryClues, setMysteryClues] = useState<Array<Record<string, unknown>>>([]);
+  // Secret form: extended fields (who_knows, who_doesnt_know, reveal planning, status)
+  const [mysteryWhoKnows, setMysteryWhoKnows] = useState("");
+  const [mysteryWhoDoesntKnow, setMysteryWhoDoesntKnow] = useState("");
+  const [mysteryRevealedInBook, setMysteryRevealedInBook] = useState<number | null>(null);
+  const [mysteryRevealedInChapter, setMysteryRevealedInChapter] = useState<number | null>(null);
+  const [mysteryRevealMethod, setMysteryRevealMethod] = useState("");
+  const [mysterySecretStatus, setMysterySecretStatus] = useState("hidden");
+  // Clue form: extended fields (secret link, clue_type, planted_in_chapter, is_obvious, was_noticed)
+  const [clueSecretId, setClueSecretId] = useState<string>("");
+  const [clueType, setClueType] = useState("dialogue");
+  const [clueChapter, setClueChapter] = useState<number | null>(null);
+  const [clueIsObvious, setClueIsObvious] = useState(false);
+  const [clueWasNoticed, setClueWasNoticed] = useState(false);
+  // Filters
+  const [secretStatusFilter, setSecretStatusFilter] = useState("all");
+  const [clueTypeFilter, setClueTypeFilter] = useState("all");
+  // Edit-mode extended fields
+  const [editingSecretStatus, setEditingSecretStatus] = useState("hidden");
+  const [editingSecretWhoKnows, setEditingSecretWhoKnows] = useState("");
+  const [editingSecretWhoDoesntKnow, setEditingSecretWhoDoesntKnow] = useState("");
+  const [editingSecretRevealedInBook, setEditingSecretRevealedInBook] = useState<number | null>(null);
+  const [editingSecretRevealedInChapter, setEditingSecretRevealedInChapter] = useState<number | null>(null);
+  const [editingSecretRevealMethod, setEditingSecretRevealMethod] = useState("");
+  const [editingClueSecretId, setEditingClueSecretId] = useState<string>("");
+  const [editingClueType, setEditingClueType] = useState("dialogue");
+  const [editingClueChapter, setEditingClueChapter] = useState<number | null>(null);
+  const [editingClueIsObvious, setEditingClueIsObvious] = useState(false);
+  const [editingClueWasNoticed, setEditingClueWasNoticed] = useState(false);
+  // Bulk actions
+  const [selectedSecretIds, setSelectedSecretIds] = useState<Set<string>>(new Set());
+  const [selectedClueIds, setSelectedClueIds] = useState<Set<string>>(new Set());
   const [seriesTimeline, setSeriesTimeline] = useState<Array<Record<string, unknown>>>([]);
   const [timelineTitle, setTimelineTitle] = useState("");
   const [timelineDescription, setTimelineDescription] = useState("");
@@ -222,19 +259,51 @@ export default function SeriesPage() {
     ]);
   }, [activeSeries]);
 
-  const filteredMystery = useMemo(() => {
+  // Refresh ONLY mystery entries (secrets + clues) from the API.
+  // Mysteries now live in their own dedicated state arrays, so this no longer
+  // risks clobbering canon/relationship data from sibling tabs.
+  const refreshMysteryOnly = useCallback(async () => {
+    if (!activeSeries) return;
+    const response = await fetch(
+      `/api/series/mystery?seriesId=${activeSeries.id}`
+    );
+    const data = await response.json();
+    setMysterySecrets((data.secrets ?? []) as Array<Record<string, unknown>>);
+    setMysteryClues((data.clues ?? []) as Array<Record<string, unknown>>);
+  }, [activeSeries]);
+
+  // Secrets are filtered separately from clues — they have different fields
+  // (status, who_knows, revealed_in_book) and different filters (status filter).
+  const filteredSecrets = useMemo(() => {
     const query = mysterySearch.trim().toLowerCase();
-    return seriesMemory.filter((entry) => {
+    return mysterySecrets.filter((entry) => {
       const matchesQuery =
         !query || JSON.stringify(entry).toLowerCase().includes(query);
-      const bookValue = Number(
-        entry.revealed_in_book ?? entry.planted_in_book ?? 0
-      );
+      const bookValue = Number(entry.revealed_in_book ?? 0);
       const matchesBook =
         !mysteryBookFilter || bookValue === mysteryBookFilter;
-      return matchesQuery && matchesBook;
+      const status = String(entry.status ?? "hidden").toLowerCase();
+      const matchesStatus =
+        secretStatusFilter === "all" || status === secretStatusFilter;
+      return matchesQuery && matchesBook && matchesStatus;
     });
-  }, [seriesMemory, mysterySearch, mysteryBookFilter]);
+  }, [mysterySecrets, mysterySearch, mysteryBookFilter, secretStatusFilter]);
+
+  // Clues have their own filter set: clue_type + planted_in_book.
+  const filteredClues = useMemo(() => {
+    const query = mysterySearch.trim().toLowerCase();
+    return mysteryClues.filter((entry) => {
+      const matchesQuery =
+        !query || JSON.stringify(entry).toLowerCase().includes(query);
+      const bookValue = Number(entry.planted_in_book ?? 0);
+      const matchesBook =
+        !mysteryBookFilter || bookValue === mysteryBookFilter;
+      const type = String(entry.clue_type ?? "").toLowerCase();
+      const matchesType =
+        clueTypeFilter === "all" || type === clueTypeFilter;
+      return matchesQuery && matchesBook && matchesType;
+    });
+  }, [mysteryClues, mysterySearch, mysteryBookFilter, clueTypeFilter]);
 
   const filteredRelationships = useMemo(() => {
     const query = relationshipsSearch.trim().toLowerCase();
@@ -519,11 +588,23 @@ export default function SeriesPage() {
         );
       }
 
-      // Canon / Memory (combines canon, mystery, relationships into seriesMemory)
+      // Canon / Memory: canon + relationships go into seriesMemory;
+      // mysteries now live in their own dedicated state (mysterySecrets + mysteryClues).
+      // Previously we tried to merge `mysteryRes.value.entries` into seriesMemory, but
+      // the mystery API returns `{ secrets, clues }` (no `entries` key) — so the
+      // mysteries tab appeared empty until manual refresh.
       const canonEntries = canonRes.status === "fulfilled" ? (canonRes.value.entries ?? []) : [];
-      const mysteryEntries = mysteryRes.status === "fulfilled" ? (mysteryRes.value.entries ?? []) : [];
       const relationshipEntries = relationshipsRes.status === "fulfilled" ? (relationshipsRes.value.entries ?? []) : [];
-      setSeriesMemory([...canonEntries, ...mysteryEntries, ...relationshipEntries]);
+      setSeriesMemory([...canonEntries, ...relationshipEntries]);
+
+      // Mystery: dedicated state for secrets and clues
+      if (mysteryRes.status === "fulfilled") {
+        setMysterySecrets(mysteryRes.value.secrets ?? []);
+        setMysteryClues(mysteryRes.value.clues ?? []);
+      } else {
+        setMysterySecrets([]);
+        setMysteryClues([]);
+      }
 
       // Plot threads
       if (plotsRes.status === "fulfilled") {
@@ -2567,46 +2648,245 @@ export default function SeriesPage() {
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
             <h2 className="text-xl font-semibold">Mystery Log</h2>
             <p className="text-sm text-zinc-400">
-              Secrets and clues across the series.
+              Secrets and clues across the series. Secrets hold the truth; clues are the breadcrumbs readers follow toward reveal.
             </p>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <label className="text-xs text-zinc-300">
-                Secret title
-                <input
-                  value={mysteryTitle}
-                  onChange={(event) => setMysteryTitle(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
-                />
-              </label>
-              <label className="text-xs text-zinc-300">
-                Clue book #
-                <input
-                  type="number"
-                  value={clueBook}
-                  onChange={(event) => setClueBook(Number(event.target.value) || 1)}
-                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
-                />
-              </label>
-              <label className="text-xs text-zinc-300 md:col-span-2">
-                Secret description
-                <textarea
-                  value={mysteryDescription}
-                  onChange={(event) => setMysteryDescription(event.target.value)}
-                  className="min-h-[90px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
-                />
-              </label>
-              <label className="text-xs text-zinc-300 md:col-span-2">
-                Clue description
-                <textarea
-                  value={clueDescription}
-                  onChange={(event) => setClueDescription(event.target.value)}
-                  className="min-h-[90px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
-                />
-              </label>
-            </div>
-            <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-xs text-zinc-300">
-              Tip: Use consistent titles to connect clues with secrets (ex: "The Key" clue for "The Key" secret).
-            </div>
+
+            {/* ─── Secret form (full schema) ─────────────────────────────────── */}
+            <details className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+              <summary className="cursor-pointer text-sm font-medium text-zinc-200">
+                + Add Secret
+              </summary>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <label className="text-xs text-zinc-300">
+                  Title <span className="text-rose-400">*</span>
+                  <input
+                    value={mysteryTitle}
+                    onChange={(event) => setMysteryTitle(event.target.value)}
+                    placeholder="e.g. The Veil opens only on full moons"
+                    className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                  />
+                </label>
+                <label className="text-xs text-zinc-300">
+                  Status
+                  <select
+                    value={mysterySecretStatus}
+                    onChange={(event) => setMysterySecretStatus(event.target.value)}
+                    className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                  >
+                    <option value="hidden">Hidden</option>
+                    <option value="partial">Partial (some hints dropped)</option>
+                    <option value="revealed">Revealed</option>
+                  </select>
+                </label>
+                <label className="text-xs text-zinc-300 md:col-span-2">
+                  Description <span className="text-rose-400">*</span>
+                  <textarea
+                    value={mysteryDescription}
+                    onChange={(event) => setMysteryDescription(event.target.value)}
+                    placeholder="What is the secret truth?"
+                    className="min-h-[80px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                  />
+                </label>
+                <label className="text-xs text-zinc-300">
+                  Who knows (comma-separated)
+                  <input
+                    value={mysteryWhoKnows}
+                    onChange={(event) => setMysteryWhoKnows(event.target.value)}
+                    placeholder="e.g. Mara, the Council"
+                    className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                  />
+                </label>
+                <label className="text-xs text-zinc-300">
+                  Who doesn&apos;t know (comma-separated)
+                  <input
+                    value={mysteryWhoDoesntKnow}
+                    onChange={(event) => setMysteryWhoDoesntKnow(event.target.value)}
+                    placeholder="e.g. the general public"
+                    className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                  />
+                </label>
+                <label className="text-xs text-zinc-300">
+                  Reveal in book #
+                  <input
+                    type="number"
+                    value={mysteryRevealedInBook ?? ""}
+                    onChange={(event) => setMysteryRevealedInBook(event.target.value ? Number(event.target.value) : null)}
+                    className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                  />
+                </label>
+                <label className="text-xs text-zinc-300">
+                  Reveal in chapter #
+                  <input
+                    type="number"
+                    value={mysteryRevealedInChapter ?? ""}
+                    onChange={(event) => setMysteryRevealedInChapter(event.target.value ? Number(event.target.value) : null)}
+                    className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                  />
+                </label>
+                <label className="text-xs text-zinc-300 md:col-span-2">
+                  Reveal method
+                  <input
+                    value={mysteryRevealMethod}
+                    onChange={(event) => setMysteryRevealMethod(event.target.value)}
+                    placeholder="e.g. Council confession during confrontation"
+                    className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                  />
+                </label>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  onClick={async () => {
+                    if (!activeSeries || !mysteryTitle || !mysteryDescription) return;
+                    await fetch("/api/series/mystery", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        type: "secret",
+                        seriesId: activeSeries.id,
+                        title: mysteryTitle,
+                        description: mysteryDescription,
+                        status: mysterySecretStatus,
+                        whoKnows: mysteryWhoKnows || null,
+                        whoDoesntKnow: mysteryWhoDoesntKnow || null,
+                        revealedInBook: mysteryRevealedInBook,
+                        revealedInChapter: mysteryRevealedInChapter,
+                        revealMethod: mysteryRevealMethod || null,
+                      }),
+                    });
+                    setMysteryTitle("");
+                    setMysteryDescription("");
+                    setMysteryWhoKnows("");
+                    setMysteryWhoDoesntKnow("");
+                    setMysteryRevealedInBook(null);
+                    setMysteryRevealedInChapter(null);
+                    setMysteryRevealMethod("");
+                    setMysterySecretStatus("hidden");
+                    await refreshMysteryOnly();
+                  }}
+                  className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200"
+                >
+                  Save Secret
+                </button>
+              </div>
+            </details>
+
+            {/* ─── Clue form (full schema, with secret linking) ───────────────── */}
+            <details className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4">
+              <summary className="cursor-pointer text-sm font-medium text-zinc-200">
+                + Add Clue
+              </summary>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <label className="text-xs text-zinc-300">
+                  Description <span className="text-rose-400">*</span>
+                  <textarea
+                    value={clueDescription}
+                    onChange={(event) => setClueDescription(event.target.value)}
+                    placeholder="What hint is planted in the story?"
+                    className="min-h-[80px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                  />
+                </label>
+                <div className="grid gap-3">
+                  <label className="text-xs text-zinc-300">
+                    Clue type
+                    <select
+                      value={clueType}
+                      onChange={(event) => setClueType(event.target.value)}
+                      className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                    >
+                      <option value="dialogue">Dialogue</option>
+                      <option value="object">Object</option>
+                      <option value="event">Event</option>
+                      <option value="description">Description</option>
+                    </select>
+                  </label>
+                  <label className="text-xs text-zinc-300">
+                    Links to secret
+                    <select
+                      value={clueSecretId}
+                      onChange={(event) => setClueSecretId(event.target.value)}
+                      className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                    >
+                      <option value="">— (unlinked) —</option>
+                      {mysterySecrets.map((s) => (
+                        <option key={String(s.id)} value={String(s.id)}>
+                          {String(s.title ?? "Untitled secret")}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <label className="text-xs text-zinc-300">
+                  Planted in book # <span className="text-rose-400">*</span>
+                  <input
+                    type="number"
+                    value={clueBook}
+                    onChange={(event) => setClueBook(Number(event.target.value) || 1)}
+                    className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                  />
+                </label>
+                <label className="text-xs text-zinc-300">
+                  Planted in chapter #
+                  <input
+                    type="number"
+                    value={clueChapter ?? ""}
+                    onChange={(event) => setClueChapter(event.target.value ? Number(event.target.value) : null)}
+                    className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-xs text-zinc-300">
+                  <input
+                    type="checkbox"
+                    checked={clueIsObvious}
+                    onChange={(event) => setClueIsObvious(event.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Obvious (reader can spot it)
+                </label>
+                <label className="flex items-center gap-2 text-xs text-zinc-300">
+                  <input
+                    type="checkbox"
+                    checked={clueWasNoticed}
+                    onChange={(event) => setClueWasNoticed(event.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Was noticed (a character reacted)
+                </label>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  onClick={async () => {
+                    if (!activeSeries || !clueDescription) return;
+                    await fetch("/api/series/mystery", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        type: "clue",
+                        seriesId: activeSeries.id,
+                        description: clueDescription,
+                        secretId: clueSecretId || null,
+                        plantedInBook: clueBook,
+                        plantedInChapter: clueChapter,
+                        clueType,
+                        isObvious: clueIsObvious,
+                        wasNoticed: clueWasNoticed,
+                      }),
+                    });
+                    setClueDescription("");
+                    setClueSecretId("");
+                    setClueChapter(null);
+                    setClueType("dialogue");
+                    setClueIsObvious(false);
+                    setClueWasNoticed(false);
+                    await refreshMysteryOnly();
+                  }}
+                  className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200"
+                >
+                  Save Clue
+                </button>
+              </div>
+            </details>
+
+            {/* ─── Filters ───────────────────────────────────────────────────── */}
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <label className="text-xs text-zinc-300">
                 Search
@@ -2625,250 +2905,675 @@ export default function SeriesPage() {
                   className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
+              <label className="text-xs text-zinc-300">
+                Secret status
+                <select
+                  value={secretStatusFilter}
+                  onChange={(event) => setSecretStatusFilter(event.target.value)}
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                >
+                  <option value="all">All statuses</option>
+                  <option value="hidden">Hidden</option>
+                  <option value="partial">Partial</option>
+                  <option value="revealed">Revealed</option>
+                </select>
+              </label>
+              <label className="text-xs text-zinc-300">
+                Clue type
+                <select
+                  value={clueTypeFilter}
+                  onChange={(event) => setClueTypeFilter(event.target.value)}
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                >
+                  <option value="all">All types</option>
+                  <option value="dialogue">Dialogue</option>
+                  <option value="object">Object</option>
+                  <option value="event">Event</option>
+                  <option value="description">Description</option>
+                </select>
+              </label>
               <button
                 onClick={() => {
                   setMysterySearch("");
                   setMysteryBookFilter(0);
+                  setSecretStatusFilter("all");
+                  setClueTypeFilter("all");
                 }}
                 className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Clear Filters
               </button>
               <button
-                onClick={async () => {
-                  if (!activeSeries || !mysteryTitle || !mysteryDescription) return;
-                  await fetch("/api/series/mystery", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      type: "secret",
-                      seriesId: activeSeries.id,
-                      title: mysteryTitle,
-                      description: mysteryDescription,
-                    }),
-                  });
-                  setMysteryTitle("");
-                  setMysteryDescription("");
-                  const response = await fetch(
-                    `/api/series/mystery?seriesId=${activeSeries.id}`
-                  );
-                  const data = await response.json();
-                  setSeriesMemory(data.secrets ?? []);
-                }}
-                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
-              >
-                Add Secret
-              </button>
-              <button
-                onClick={async () => {
-                  if (!activeSeries || !clueDescription) return;
-                  await fetch("/api/series/mystery", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      type: "clue",
-                      seriesId: activeSeries.id,
-                      description: clueDescription,
-                      plantedInBook: clueBook,
-                    }),
-                  });
-                  setClueDescription("");
-                  const response = await fetch(
-                    `/api/series/mystery?seriesId=${activeSeries.id}`
-                  );
-                  const data = await response.json();
-                  setSeriesMemory(data.secrets ?? []);
-                }}
-                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
-              >
-                Add Clue
-              </button>
-              <button
-                onClick={async () => {
-                  if (!activeSeries) return;
-                  const response = await fetch(
-                    `/api/series/mystery?seriesId=${activeSeries.id}`
-                  );
-                  const data = await response.json();
-                  setSeriesMemory(data.secrets ?? []);
-                }}
+                onClick={refreshMysteryOnly}
                 className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Refresh Mysteries
               </button>
             </div>
-            <div className="mt-4 space-y-3">
-              {filteredMystery.map((secret) => (
-                <div
-                  key={String(secret.id)}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
-                >
-                  {editingSecretId === String(secret.id ?? "") ? (
-                    <div className="space-y-2">
-                      <input
-                        value={editingSecretTitle}
-                        onChange={(event) => setEditingSecretTitle(event.target.value)}
-                        className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
-                      />
-                      <textarea
-                        value={editingSecretDescription}
-                        onChange={(event) => setEditingSecretDescription(event.target.value)}
-                        className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
-                      />
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-sm font-semibold text-zinc-100">
-                        {String(secret.title ?? "Secret")}
-                      </p>
-                      <p className="mt-2 text-xs">{String(secret.description ?? "")}</p>
-                      <p className="mt-2 text-[10px] text-zinc-500">
-                        Status: {String(secret.status ?? "open")}
-                      </p>
-                    </>
-                  )}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {editingSecretId === String(secret.id ?? "") ? (
-                      <button
-                        onClick={async () => {
-                          await fetch("/api/series/mystery/secret", {
-                            method: "PUT",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              id: String(secret.id ?? ""),
-                              title: editingSecretTitle,
-                              description: editingSecretDescription,
-                            }),
-                          });
-                          setEditingSecretId(null);
-                          const refreshed = await fetch(
-                            `/api/series/mystery?seriesId=${activeSeries.id}`
-                          );
-                          const data = await refreshed.json();
-                          setSeriesMemory(data.secrets ?? []);
-                        }}
-                        className="rounded-full border border-emerald-500/60 px-3 py-1 text-[10px] text-emerald-200"
-                      >
-                        Save
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setEditingSecretId(String(secret.id ?? ""));
-                          setEditingSecretTitle(String(secret.title ?? ""));
-                          setEditingSecretDescription(String(secret.description ?? ""));
-                        }}
-                        className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
-                      >
-                        Edit
-                      </button>
-                    )}
-                    <button
-                      onClick={() =>
-                        setPendingDelete({
-                          id: String(secret.id ?? ""),
-                          endpoint: "/api/series/mystery/secret/delete",
-                          refresh: async () => {
-                            const refreshed = await fetch(
-                              `/api/series/mystery?seriesId=${activeSeries.id}`
-                            );
-                            const data = await refreshed.json();
-                            setSeriesMemory(data.secrets ?? []);
-                          },
+
+            {/* ─── Bulk actions ──────────────────────────────────────────────── */}
+            {(selectedSecretIds.size > 0 || selectedClueIds.size > 0) && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-700/40 bg-amber-950/20 p-3 text-xs text-amber-200">
+                <span>
+                  {selectedSecretIds.size} secret(s) + {selectedClueIds.size} clue(s) selected
+                </span>
+                <button
+                  onClick={async () => {
+                    if (!activeSeries) return;
+                    await Promise.all(
+                      Array.from(selectedSecretIds).map((id) =>
+                        fetch("/api/series/mystery/secret/delete", {
+                          method: "DELETE",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ id }),
                         })
-                      }
-                      className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {filteredMystery.map((clue) => (
-                <div
-                  key={`clue-${String(clue.id)}`}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
-                >
-                  {editingClueId === String(clue.id ?? "") ? (
-                    <div className="space-y-2">
-                      <textarea
-                        value={editingClueDescription}
-                        onChange={(event) => setEditingClueDescription(event.target.value)}
-                        className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
-                      />
-                      <input
-                        type="number"
-                        value={editingClueBook}
-                        onChange={(event) => setEditingClueBook(Number(event.target.value) || 1)}
-                        className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
-                      />
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-xs text-zinc-400">Clue</p>
-                      <p className="mt-2 text-xs">{String(clue.description ?? "")}</p>
-                      <p className="mt-2 text-[10px] text-zinc-500">
-                        Planted in book {String(clue.planted_in_book ?? "?")}
-                      </p>
-                    </>
-                  )}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {editingClueId === String(clue.id ?? "") ? (
-                      <button
-                        onClick={async () => {
-                          await fetch("/api/series/mystery/clue", {
-                            method: "PUT",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              id: String(clue.id ?? ""),
-                              description: editingClueDescription,
-                              plantedInBook: editingClueBook,
-                            }),
-                          });
-                          setEditingClueId(null);
-                          const refreshed = await fetch(
-                            `/api/series/mystery?seriesId=${activeSeries.id}`
-                          );
-                          const data = await refreshed.json();
-                          setSeriesMemory(data.secrets ?? []);
-                        }}
-                        className="rounded-full border border-emerald-500/60 px-3 py-1 text-[10px] text-emerald-200"
-                      >
-                        Save
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setEditingClueId(String(clue.id ?? ""));
-                          setEditingClueDescription(String(clue.description ?? ""));
-                          setEditingClueBook(Number(clue.planted_in_book ?? 1));
-                        }}
-                        className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
-                      >
-                        Edit
-                      </button>
-                    )}
-                    <button
-                      onClick={() =>
-                        setPendingDelete({
-                          id: String(clue.id ?? ""),
-                          endpoint: "/api/series/mystery/clue/delete",
-                          refresh: async () => {
-                            const refreshed = await fetch(
-                              `/api/series/mystery?seriesId=${activeSeries.id}`
-                            );
-                            const data = await refreshed.json();
-                            setSeriesMemory(data.secrets ?? []);
-                          },
+                      )
+                    );
+                    await Promise.all(
+                      Array.from(selectedClueIds).map((id) =>
+                        fetch("/api/series/mystery/clue/delete", {
+                          method: "DELETE",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ id }),
                         })
-                      }
-                      className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
-                    >
-                      Delete
-                    </button>
+                      )
+                    );
+                    setSelectedSecretIds(new Set());
+                    setSelectedClueIds(new Set());
+                    await refreshMysteryOnly();
+                  }}
+                  className="rounded-full border border-rose-500/60 px-3 py-1 text-rose-200"
+                >
+                  Bulk Delete
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!activeSeries) return;
+                    await Promise.all(
+                      Array.from(selectedSecretIds).map((id) =>
+                        fetch("/api/series/mystery/secret", {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ id, status: "revealed" }),
+                        })
+                      )
+                    );
+                    await Promise.all(
+                      Array.from(selectedClueIds).map((id) =>
+                        fetch("/api/series/mystery/clue", {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ id, wasNoticed: true }),
+                        })
+                      )
+                    );
+                    setSelectedSecretIds(new Set());
+                    setSelectedClueIds(new Set());
+                    await refreshMysteryOnly();
+                  }}
+                  className="rounded-full border border-emerald-500/60 px-3 py-1 text-emerald-200"
+                >
+                  Mark Selected as Revealed/Noticed
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedSecretIds(new Set());
+                    setSelectedClueIds(new Set());
+                  }}
+                  className="rounded-full border border-zinc-700 px-3 py-1 text-zinc-300"
+                >
+                  Clear Selection
+                </button>
+              </div>
+            )}
+
+            {/* ─── Secrets list ─────────────────────────────────────────────── */}
+            <div className="mt-4">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-zinc-200">
+                  Secrets ({filteredSecrets.length}
+                  {filteredSecrets.length !== mysterySecrets.length ? ` of ${mysterySecrets.length}` : ""})
+                </h3>
+                {filteredSecrets.length > 0 && (
+                  <button
+                    onClick={() => {
+                      const visibleIds = new Set(filteredSecrets.map((s) => String(s.id ?? "")));
+                      const allSelected = Array.from(visibleIds).every((id) => selectedSecretIds.has(id));
+                      setSelectedSecretIds((prev) => {
+                        const next = new Set(prev);
+                        if (allSelected) {
+                          visibleIds.forEach((id) => next.delete(id));
+                        } else {
+                          visibleIds.forEach((id) => next.add(id));
+                        }
+                        return next;
+                      });
+                    }}
+                    className="text-[10px] text-zinc-400 hover:text-zinc-200"
+                  >
+                    {filteredSecrets.every((s) => selectedSecretIds.has(String(s.id ?? "")))
+                      ? "Deselect all visible"
+                      : "Select all visible"}
+                  </button>
+                )}
+              </div>
+              <div className="space-y-3">
+                {filteredSecrets.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-zinc-700 bg-zinc-950/40 p-6 text-center text-xs text-zinc-500">
+                    {mysterySecrets.length === 0
+                      ? "No secrets yet. Add one above to start tracking mysteries in your series."
+                      : "No secrets match the current filters."}
                   </div>
-                </div>
-              ))}
+                ) : (
+                  filteredSecrets.map((secret) => {
+                    const secretId = String(secret.id ?? "");
+                    const isSelected = selectedSecretIds.has(secretId);
+                    const status = String(secret.status ?? "hidden").toLowerCase();
+                    const statusColor =
+                      status === "revealed"
+                        ? "border-emerald-500/60 bg-emerald-950/20 text-emerald-200"
+                        : status === "partial"
+                        ? "border-amber-500/60 bg-amber-950/20 text-amber-200"
+                        : "border-purple-500/60 bg-purple-950/20 text-purple-200";
+                    return (
+                      <div
+                        key={secretId}
+                        className={`rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200 ${isSelected ? "ring-1 ring-amber-500/50" : ""}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(event) => {
+                              setSelectedSecretIds((prev) => {
+                                const next = new Set(prev);
+                                if (event.target.checked) next.add(secretId);
+                                else next.delete(secretId);
+                                return next;
+                              });
+                            }}
+                            className="mt-1 h-4 w-4"
+                          />
+                          <div className="flex-1">
+                            {editingSecretId === secretId ? (
+                              <div className="space-y-2">
+                                <input
+                                  value={editingSecretTitle}
+                                  onChange={(event) => setEditingSecretTitle(event.target.value)}
+                                  className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                                />
+                                <textarea
+                                  value={editingSecretDescription}
+                                  onChange={(event) => setEditingSecretDescription(event.target.value)}
+                                  className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                                />
+                                <div className="grid gap-2 md:grid-cols-2">
+                                  <select
+                                    value={editingSecretStatus}
+                                    onChange={(event) => setEditingSecretStatus(event.target.value)}
+                                    className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm"
+                                  >
+                                    <option value="hidden">Hidden</option>
+                                    <option value="partial">Partial</option>
+                                    <option value="revealed">Revealed</option>
+                                  </select>
+                                  <input
+                                    value={editingSecretWhoKnows}
+                                    onChange={(event) => setEditingSecretWhoKnows(event.target.value)}
+                                    placeholder="Who knows (comma-separated)"
+                                    className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm"
+                                  />
+                                  <input
+                                    value={editingSecretWhoDoesntKnow}
+                                    onChange={(event) => setEditingSecretWhoDoesntKnow(event.target.value)}
+                                    placeholder="Who doesn't know"
+                                    className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm"
+                                  />
+                                  <input
+                                    type="number"
+                                    value={editingSecretRevealedInBook ?? ""}
+                                    onChange={(event) => setEditingSecretRevealedInBook(event.target.value ? Number(event.target.value) : null)}
+                                    placeholder="Reveal book #"
+                                    className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm"
+                                  />
+                                  <input
+                                    type="number"
+                                    value={editingSecretRevealedInChapter ?? ""}
+                                    onChange={(event) => setEditingSecretRevealedInChapter(event.target.value ? Number(event.target.value) : null)}
+                                    placeholder="Reveal chapter #"
+                                    className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm"
+                                  />
+                                  <input
+                                    value={editingSecretRevealMethod}
+                                    onChange={(event) => setEditingSecretRevealMethod(event.target.value)}
+                                    placeholder="Reveal method"
+                                    className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm md:col-span-2"
+                                  />
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-semibold text-zinc-100">
+                                    {String(secret.title ?? "Secret")}
+                                  </p>
+                                  <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase ${statusColor}`}>
+                                    {status}
+                                  </span>
+                                </div>
+                                <p className="mt-2 text-xs">{String(secret.description ?? "")}</p>
+                                <div className="mt-2 grid gap-1 text-[10px] text-zinc-400 md:grid-cols-2">
+                                  {secret.who_knows ? (
+                                    <div>
+                                      <span className="text-zinc-500">Knows:</span>{" "}
+                                      {Array.isArray(secret.who_knows)
+                                        ? secret.who_knows.join(", ")
+                                        : String(secret.who_knows)}
+                                    </div>
+                                  ) : null}
+                                  {secret.who_doesnt_know ? (
+                                    <div>
+                                      <span className="text-zinc-500">Doesn&apos;t know:</span>{" "}
+                                      {Array.isArray(secret.who_doesnt_know)
+                                        ? secret.who_doesnt_know.join(", ")
+                                        : String(secret.who_doesnt_know)}
+                                    </div>
+                                  ) : null}
+                                  {secret.revealed_in_book != null && (
+                                    <div>
+                                      <span className="text-zinc-500">Reveal:</span> Book {String(secret.revealed_in_book)}
+                                      {secret.revealed_in_chapter != null ? `, Ch ${String(secret.revealed_in_chapter)}` : ""}
+                                    </div>
+                                  )}
+                                  {secret.reveal_method ? (
+                                    <div>
+                                      <span className="text-zinc-500">Method:</span> {String(secret.reveal_method)}
+                                    </div>
+                                  ) : null}
+                                  {secret.created_at ? (
+                                    <div>
+                                      <span className="text-zinc-500">Added:</span>{" "}
+                                      {String(secret.created_at).slice(0, 10)}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </>
+                            )}
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {editingSecretId === secretId ? (
+                                <>
+                                  <button
+                                    onClick={async () => {
+                                      await fetch("/api/series/mystery/secret", {
+                                        method: "PUT",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({
+                                          id: secretId,
+                                          title: editingSecretTitle,
+                                          description: editingSecretDescription,
+                                          status: editingSecretStatus,
+                                          whoKnows: editingSecretWhoKnows || null,
+                                          whoDoesntKnow: editingSecretWhoDoesntKnow || null,
+                                          revealedInBook: editingSecretRevealedInBook,
+                                          revealedInChapter: editingSecretRevealedInChapter,
+                                          revealMethod: editingSecretRevealMethod || null,
+                                        }),
+                                      });
+                                      setEditingSecretId(null);
+                                      await refreshMysteryOnly();
+                                    }}
+                                    className="rounded-full border border-emerald-500/60 px-3 py-1 text-[10px] text-emerald-200"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingSecretId(null)}
+                                    className="rounded-full border border-zinc-700 px-3 py-1 text-[10px] text-zinc-300"
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setEditingSecretId(secretId);
+                                      setEditingSecretTitle(String(secret.title ?? ""));
+                                      setEditingSecretDescription(String(secret.description ?? ""));
+                                      setEditingSecretStatus(String(secret.status ?? "hidden"));
+                                      const wk = secret.who_knows;
+                                      setEditingSecretWhoKnows(
+                                        Array.isArray(wk) ? wk.join(", ") : String(wk ?? "")
+                                      );
+                                      const wdk = secret.who_doesnt_know;
+                                      setEditingSecretWhoDoesntKnow(
+                                        Array.isArray(wdk) ? wdk.join(", ") : String(wdk ?? "")
+                                      );
+                                      setEditingSecretRevealedInBook(
+                                        secret.revealed_in_book != null ? Number(secret.revealed_in_book) : null
+                                      );
+                                      setEditingSecretRevealedInChapter(
+                                        secret.revealed_in_chapter != null ? Number(secret.revealed_in_chapter) : null
+                                      );
+                                      setEditingSecretRevealMethod(String(secret.reveal_method ?? ""));
+                                    }}
+                                    className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                                  >
+                                    Edit
+                                  </button>
+                                  {/* Quick status toggle (no edit mode needed) */}
+                                  {status !== "revealed" && (
+                                    <button
+                                      onClick={async () => {
+                                        await fetch("/api/series/mystery/secret", {
+                                          method: "PUT",
+                                          headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify({
+                                            id: secretId,
+                                            status: status === "hidden" ? "partial" : "revealed",
+                                          }),
+                                        });
+                                        await refreshMysteryOnly();
+                                      }}
+                                      className="rounded-full border border-amber-500/60 px-3 py-1 text-[10px] text-amber-200"
+                                    >
+                                      Mark as {status === "hidden" ? "Partial" : "Revealed"}
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                              <button
+                                onClick={() =>
+                                  setPendingDelete({
+                                    id: secretId,
+                                    endpoint: "/api/series/mystery/secret/delete",
+                                    refresh: refreshMysteryOnly,
+                                  })
+                                }
+                                className="rounded-full border border-rose-500/40 px-3 py-1 text-[10px] text-rose-300"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* ─── Clues list ───────────────────────────────────────────────── */}
+            <div className="mt-6">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-zinc-200">
+                  Clues ({filteredClues.length}
+                  {filteredClues.length !== mysteryClues.length ? ` of ${mysteryClues.length}` : ""})
+                </h3>
+                {filteredClues.length > 0 && (
+                  <button
+                    onClick={() => {
+                      const visibleIds = new Set(filteredClues.map((c) => String(c.id ?? "")));
+                      const allSelected = Array.from(visibleIds).every((id) => selectedClueIds.has(id));
+                      setSelectedClueIds((prev) => {
+                        const next = new Set(prev);
+                        if (allSelected) {
+                          visibleIds.forEach((id) => next.delete(id));
+                        } else {
+                          visibleIds.forEach((id) => next.add(id));
+                        }
+                        return next;
+                      });
+                    }}
+                    className="text-[10px] text-zinc-400 hover:text-zinc-200"
+                  >
+                    {filteredClues.every((c) => selectedClueIds.has(String(c.id ?? "")))
+                      ? "Deselect all visible"
+                      : "Select all visible"}
+                  </button>
+                )}
+              </div>
+              <div className="space-y-3">
+                {filteredClues.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-zinc-700 bg-zinc-950/40 p-6 text-center text-xs text-zinc-500">
+                    {mysteryClues.length === 0
+                      ? "No clues yet. Plant a clue above to start building toward a reveal."
+                      : "No clues match the current filters."}
+                  </div>
+                ) : (
+                  filteredClues.map((clue) => {
+                    const clueId = String(clue.id ?? "");
+                    const isSelected = selectedClueIds.has(clueId);
+                    const type = String(clue.clue_type ?? "clue").toLowerCase();
+                    const typeColor =
+                      type === "dialogue"
+                        ? "border-sky-500/60 bg-sky-950/20 text-sky-200"
+                        : type === "object"
+                        ? "border-indigo-500/60 bg-indigo-950/20 text-indigo-200"
+                        : type === "event"
+                        ? "border-rose-500/60 bg-rose-950/20 text-rose-200"
+                        : "border-zinc-500/60 bg-zinc-900/40 text-zinc-300";
+                    // Look up parent secret title for display
+                    const parentSecret = mysterySecrets.find(
+                      (s) => String(s.id) === String(clue.secret_id ?? "")
+                    );
+                    return (
+                      <div
+                        key={`clue-${clueId}`}
+                        className={`rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200 ${isSelected ? "ring-1 ring-amber-500/50" : ""}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(event) => {
+                              setSelectedClueIds((prev) => {
+                                const next = new Set(prev);
+                                if (event.target.checked) next.add(clueId);
+                                else next.delete(clueId);
+                                return next;
+                              });
+                            }}
+                            className="mt-1 h-4 w-4"
+                          />
+                          <div className="flex-1">
+                            {editingClueId === clueId ? (
+                              <div className="space-y-2">
+                                <textarea
+                                  value={editingClueDescription}
+                                  onChange={(event) => setEditingClueDescription(event.target.value)}
+                                  className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                                />
+                                <div className="grid gap-2 md:grid-cols-2">
+                                  <select
+                                    value={editingClueType}
+                                    onChange={(event) => setEditingClueType(event.target.value)}
+                                    className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm"
+                                  >
+                                    <option value="dialogue">Dialogue</option>
+                                    <option value="object">Object</option>
+                                    <option value="event">Event</option>
+                                    <option value="description">Description</option>
+                                  </select>
+                                  <select
+                                    value={editingClueSecretId}
+                                    onChange={(event) => setEditingClueSecretId(event.target.value)}
+                                    className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm"
+                                  >
+                                    <option value="">— (unlinked) —</option>
+                                    {mysterySecrets.map((s) => (
+                                      <option key={String(s.id)} value={String(s.id)}>
+                                        {String(s.title ?? "Untitled secret")}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <input
+                                    type="number"
+                                    value={editingClueBook}
+                                    onChange={(event) => setEditingClueBook(Number(event.target.value) || 1)}
+                                    placeholder="Planted in book"
+                                    className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm"
+                                  />
+                                  <input
+                                    type="number"
+                                    value={editingClueChapter ?? ""}
+                                    onChange={(event) => setEditingClueChapter(event.target.value ? Number(event.target.value) : null)}
+                                    placeholder="Planted in chapter"
+                                    className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm"
+                                  />
+                                  <label className="flex items-center gap-2 text-xs text-zinc-300">
+                                    <input
+                                      type="checkbox"
+                                      checked={editingClueIsObvious}
+                                      onChange={(event) => setEditingClueIsObvious(event.target.checked)}
+                                      className="h-4 w-4"
+                                    />
+                                    Obvious
+                                  </label>
+                                  <label className="flex items-center gap-2 text-xs text-zinc-300">
+                                    <input
+                                      type="checkbox"
+                                      checked={editingClueWasNoticed}
+                                      onChange={(event) => setEditingClueWasNoticed(event.target.checked)}
+                                      className="h-4 w-4"
+                                    />
+                                    Was noticed
+                                  </label>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase ${typeColor}`}>
+                                    {type}
+                                  </span>
+                                  {clue.was_noticed === true && (
+                                    <span className="rounded-full border border-emerald-500/60 bg-emerald-950/20 px-2 py-0.5 text-[10px] uppercase text-emerald-200">
+                                      Noticed
+                                    </span>
+                                  )}
+                                  {clue.is_obvious === true && clue.was_noticed !== true && (
+                                    <span className="rounded-full border border-amber-500/60 bg-amber-950/20 px-2 py-0.5 text-[10px] uppercase text-amber-200">
+                                      Obvious
+                                    </span>
+                                  )}
+                                  {clue.was_noticed !== true && clue.is_obvious !== true && (
+                                    <span className="rounded-full border border-zinc-600 bg-zinc-900/40 px-2 py-0.5 text-[10px] uppercase text-zinc-400">
+                                      Subtle
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="mt-2 text-xs">{String(clue.description ?? "")}</p>
+                                <div className="mt-2 grid gap-1 text-[10px] text-zinc-400 md:grid-cols-2">
+                                  <div>
+                                    <span className="text-zinc-500">Planted:</span> Book {String(clue.planted_in_book ?? "?")}
+                                    {clue.planted_in_chapter != null ? `, Ch ${String(clue.planted_in_chapter)}` : ""}
+                                  </div>
+                                  {parentSecret ? (
+                                    <div>
+                                      <span className="text-zinc-500">Points to:</span>{" "}
+                                      <span className="text-purple-300">{String(parentSecret.title ?? "")}</span>
+                                    </div>
+                                  ) : null}
+                                  {clue.created_at ? (
+                                    <div>
+                                      <span className="text-zinc-500">Added:</span>{" "}
+                                      {String(clue.created_at).slice(0, 10)}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </>
+                            )}
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {editingClueId === clueId ? (
+                                <>
+                                  <button
+                                    onClick={async () => {
+                                      await fetch("/api/series/mystery/clue", {
+                                        method: "PUT",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({
+                                          id: clueId,
+                                          description: editingClueDescription,
+                                          plantedInBook: editingClueBook,
+                                          plantedInChapter: editingClueChapter,
+                                          secretId: editingClueSecretId || null,
+                                          clueType: editingClueType,
+                                          isObvious: editingClueIsObvious,
+                                          wasNoticed: editingClueWasNoticed,
+                                        }),
+                                      });
+                                      setEditingClueId(null);
+                                      await refreshMysteryOnly();
+                                    }}
+                                    className="rounded-full border border-emerald-500/60 px-3 py-1 text-[10px] text-emerald-200"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingClueId(null)}
+                                    className="rounded-full border border-zinc-700 px-3 py-1 text-[10px] text-zinc-300"
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setEditingClueId(clueId);
+                                      setEditingClueDescription(String(clue.description ?? ""));
+                                      setEditingClueBook(Number(clue.planted_in_book ?? 1));
+                                      setEditingClueChapter(
+                                        clue.planted_in_chapter != null ? Number(clue.planted_in_chapter) : null
+                                      );
+                                      setEditingClueSecretId(String(clue.secret_id ?? ""));
+                                      setEditingClueType(String(clue.clue_type ?? "dialogue"));
+                                      setEditingClueIsObvious(Boolean(clue.is_obvious));
+                                      setEditingClueWasNoticed(Boolean(clue.was_noticed));
+                                    }}
+                                    className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                                  >
+                                    Edit
+                                  </button>
+                                  {clue.was_noticed !== true && (
+                                    <button
+                                      onClick={async () => {
+                                        await fetch("/api/series/mystery/clue", {
+                                          method: "PUT",
+                                          headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify({ id: clueId, wasNoticed: true }),
+                                        });
+                                        await refreshMysteryOnly();
+                                      }}
+                                      className="rounded-full border border-emerald-500/60 px-3 py-1 text-[10px] text-emerald-200"
+                                    >
+                                      Mark as Noticed
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                              <button
+                                onClick={() =>
+                                  setPendingDelete({
+                                    id: clueId,
+                                    endpoint: "/api/series/mystery/clue/delete",
+                                    refresh: refreshMysteryOnly,
+                                  })
+                                }
+                                className="rounded-full border border-rose-500/40 px-3 py-1 text-[10px] text-rose-300"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </section>
         )}

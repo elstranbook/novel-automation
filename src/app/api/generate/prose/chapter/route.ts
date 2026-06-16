@@ -3,6 +3,8 @@ import { runChatCompletion } from "@/lib/openaiClient";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 import { formatCharactersForPrompt, formatPOVCharacterContext } from "@/lib/characterPrompt";
+import { formatCanonForPrompt } from "@/lib/canonPrompt";
+import { formatMysteryForPrompt } from "@/lib/mysteryPrompt";
 
 const logGeneration = async (payload: {
   step: string;
@@ -102,6 +104,66 @@ World Elements: ${Array.isArray((worldContext as Record<string, unknown>).elemen
       }
     }
 
+    // ─── Build canon + mystery context block ────────────────────────────────────
+    // The prose route previously had ZERO mystery context — the LLM was writing
+    // chapters with no idea what secrets were in play, what clues were available,
+    // or what had been revealed. Now we fetch canon + mystery_log + secrets + clues
+    // and format them through the same utilities other routes use.
+    let canonBlock = "";
+    let mysteryBlock = "";
+    if (seriesId) {
+      try {
+        // Step 1: fetch the parent log rows (canon_log + mystery_log) in parallel.
+        const [
+          { data: canonLog },
+          { data: mysteryLog },
+        ] = await Promise.all([
+          supabaseAdmin
+            .from("canon_log")
+            .select("id")
+            .eq("series_id", seriesId)
+            .maybeSingle(),
+          supabaseAdmin
+            .from("mystery_log")
+            .select("id")
+            .eq("series_id", seriesId)
+            .maybeSingle(),
+        ]);
+
+        // Step 2: fetch the child rows (entries + secrets + clues) in parallel,
+        // now that we have the parent log ids.
+        const canonLogId = canonLog?.id ?? "";
+        const mysteryLogId = mysteryLog?.id ?? "";
+        const [
+          { data: canonEntries },
+          { data: secrets },
+          { data: clues },
+        ] = await Promise.all([
+          supabaseAdmin
+            .from("canon_log_entry")
+            .select("*")
+            .eq("canon_log_id", canonLogId),
+          supabaseAdmin
+            .from("secret")
+            .select("*")
+            .eq("mystery_log_id", mysteryLogId),
+          supabaseAdmin
+            .from("clue")
+            .select("*")
+            .eq("mystery_log_id", mysteryLogId),
+        ]);
+
+        if (canonEntries && canonEntries.length > 0) {
+          canonBlock = formatCanonForPrompt(canonEntries, { maxLength: 1500 });
+        }
+        if ((secrets && secrets.length > 0) || (clues && clues.length > 0)) {
+          mysteryBlock = formatMysteryForPrompt(secrets, clues, { maxLength: 1800 });
+        }
+      } catch (err) {
+        console.warn("[prose] Failed to load canon/mystery context:", err);
+      }
+    }
+
     const contextBlock = `
 Chapter Title: ${chapterTitle ?? "Untitled"}
 Chapter Summary: ${chapterSummary ?? "Not provided"}
@@ -110,7 +172,7 @@ Previous Scene (last lines): ${trimmedPrevious}
 Character Emotional State: ${emotionalState ?? "Not provided"}
 Key Conflict: ${keyConflict ?? "Not provided"}
 Voice Anchor: ${voiceAnchor ?? "raw, emotional, slightly messy, introspective"}
-${worldBlock}${characterBlock ? `\n${characterBlock}\n` : ""}Scene Summary:\n${scene}
+${worldBlock}${characterBlock ? `\n${characterBlock}\n` : ""}${canonBlock ? `\n${canonBlock}\n` : ""}${mysteryBlock ? `\n${mysteryBlock}\n` : ""}Scene Summary:\n${scene}
 `;
 
     const longDirective = `
@@ -123,7 +185,7 @@ Writing Guidelines:
 – Emphasize "show, don't tell" storytelling. Let physical actions, choices, and setting carry emotional and thematic weight.
 – Use strong verbs, sensory-rich description, and a deep POV (if applicable) to fully immerse the reader.
 – Allow the scene to naturally lead toward its conclusion and, if appropriate, transition smoothly into the next.
-${worldBlock ? "– GROUND YOUR WRITING IN THE WORLD. Reference specific locations, rules, lore, and elements from the world context. Characters should interact with their environment authentically — mention place names, cultural details, magical rules, or artifacts where they naturally fit. The world should feel alive and specific, not generic.\n" : ""}${characterBlock ? "– WRITE IN CHARACTER. Use the character profiles above to inform dialogue style, vocabulary, personality, and emotional responses. Each character should speak and act consistently with their defined voice, desires, fears, and personality traits. The POV character's voice profile is especially important — match their speech patterns and vocabulary level.\n" : ""}
+${worldBlock ? "– GROUND YOUR WRITING IN THE WORLD. Reference specific locations, rules, lore, and elements from the world context. Characters should interact with their environment authentically — mention place names, cultural details, magical rules, or artifacts where they naturally fit. The world should feel alive and specific, not generic.\n" : ""}${characterBlock ? "– WRITE IN CHARACTER. Use the character profiles above to inform dialogue style, vocabulary, personality, and emotional responses. Each character should speak and act consistently with their defined voice, desires, fears, and personality traits. The POV character's voice profile is especially important — match their speech patterns and vocabulary level.\n" : ""}${canonBlock ? "– RESPECT CANON FACTS. Do not contradict any locked canon facts listed above. They are series continuity anchors.\n" : ""}${mysteryBlock ? "– HONOR THE MYSTERY ARC. If a secret is still HIDDEN, do not reveal it in this scene. If clues have been planted, you may reference them subtly (do not call attention to them unless the clue is marked OBVIOUS). If a secret is PARTIAL, you may deepen the hint. If REVEALED, characters may discuss it openly. Match the reveal discipline described in the Mystery Log.\n" : ""}
 
 Narrative Style:
 * Point of View: First-person for the main character

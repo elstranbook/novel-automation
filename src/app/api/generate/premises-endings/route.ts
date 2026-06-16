@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 import { formatCanonForPrompt } from "@/lib/canonPrompt";
+import { formatMysteryForPrompt } from "@/lib/mysteryPrompt";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -37,7 +38,7 @@ Series Title: ${seriesContext.series_title ?? "Untitled Series"}
 Series Arc: ${seriesContext.series_arc ?? "No series arc provided"}
 ${formatCanonForPrompt(seriesContext.canon_entries, { maxLength: 1200 })}
 Relationships: ${trimContext(seriesContext.relationships, 800)}
-Mysteries: ${trimContext(seriesContext.secrets, 800)}
+${formatMysteryForPrompt(seriesContext.secrets, seriesContext.clues, { maxLength: 1200 })}
 World Elements: ${trimContext(seriesContext.world_elements, 800)}
 Foreshadowing: ${trimContext(seriesContext.foreshadowing, 800)}
 
