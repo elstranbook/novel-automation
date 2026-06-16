@@ -13,17 +13,15 @@ BEGIN
 END $$;
 
 -- 2. Convert rules column from jsonb to text (preserving data)
--- First, convert existing jsonb data to formatted text strings
+-- ALTER TABLE ... TYPE ... USING handles the cast in a single step —
+-- no need for a separate UPDATE that would fail assigning text → jsonb.
 DO $$
 BEGIN
-  -- Only convert if the column is still jsonb type
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'series_worlds' AND column_name = 'rules'
       AND data_type = 'jsonb'
   ) THEN
-    -- Convert jsonb values to text
-    UPDATE public.series_worlds SET rules = rules::text WHERE rules IS NOT NULL AND rules::text NOT LIKE '%[object%';
     ALTER TABLE public.series_worlds ALTER COLUMN rules TYPE text USING rules::text;
   END IF;
 END $$;
@@ -36,7 +34,6 @@ BEGIN
     WHERE table_name = 'series_worlds' AND column_name = 'lore'
       AND data_type = 'jsonb'
   ) THEN
-    UPDATE public.series_worlds SET lore = lore::text WHERE lore IS NOT NULL AND lore::text NOT LIKE '%[object%';
     ALTER TABLE public.series_worlds ALTER COLUMN lore TYPE text USING lore::text;
   END IF;
 END $$;
