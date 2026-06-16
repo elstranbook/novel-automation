@@ -94,6 +94,14 @@ export default function SeriesPage() {
   const [worldSettingDraft, setWorldSettingDraft] = useState("");
   const [worldRulesDraft, setWorldRulesDraft] = useState("");
   const [worldLoreDraft, setWorldLoreDraft] = useState("");
+  const [worldElements, setWorldElements] = useState<Array<Record<string, unknown>>>([]);
+  const [newElementType, setNewElementType] = useState("location");
+  const [newElementName, setNewElementName] = useState("");
+  const [newElementDescription, setNewElementDescription] = useState("");
+  const [newElementImportance, setNewElementImportance] = useState("moderate");
+  const [editingElementId, setEditingElementId] = useState<string | null>(null);
+  const [editingElementDescription, setEditingElementDescription] = useState("");
+  const [editingElementImportance, setEditingElementImportance] = useState("moderate");
   const [seriesMemory, setSeriesMemory] = useState<Array<Record<string, unknown>>>([]);
   const [seriesLogs, setSeriesLogs] = useState<Array<Record<string, unknown>>>([]);
   const [activeMemoryTab, setActiveMemoryTab] = useState("canon");
@@ -398,6 +406,11 @@ export default function SeriesPage() {
     setWorldSettingDraft("");
     setWorldRulesDraft("");
     setWorldLoreDraft("");
+    setWorldElements([]);
+    setNewElementName("");
+    setNewElementDescription("");
+    setNewElementImportance("moderate");
+    setEditingElementId(null);
     setSeriesMemory([]);
     setSeriesTimeline([]);
     setPlotThreads([]);
@@ -444,6 +457,7 @@ export default function SeriesPage() {
         mapsRes,
         evolutionRes,
         blueprintsRes,
+        worldElementsRes,
       ] = await Promise.allSettled([
         fetch(`/api/series/books?seriesId=${seriesId}`).then(r => r.json()),
         fetch(`/api/series/characters?seriesId=${seriesId}`).then(r => r.json()),
@@ -465,6 +479,8 @@ export default function SeriesPage() {
         fetch(`/api/series/character-evolution?seriesId=${seriesId}`).then(r => r.json()),
         // Overview tab: book blueprints
         fetch(`/api/series/book-blueprints?seriesId=${seriesId}`).then(r => r.json()),
+        // World tab: world elements
+        fetch(`/api/series/world-elements?seriesId=${seriesId}`).then(r => r.json()),
       ]);
 
       // Books (from server-side API)
@@ -596,6 +612,11 @@ export default function SeriesPage() {
           (b: Record<string, unknown>) => Number(b.book_number) === suiteBookNumber
         );
         setBookBlueprint((matching ?? blueprintsData[0]) as Record<string, unknown>);
+      }
+
+      // World elements (World tab)
+      if (worldElementsRes.status === "fulfilled") {
+        setWorldElements(worldElementsRes.value.elements ?? []);
       }
 
       // Populate overview suite fields from the series row (seriesList already has the expanded fields)
@@ -1916,19 +1937,228 @@ export default function SeriesPage() {
               </div>
 
               <div className="space-y-3">
-                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
-                  <p className="text-xs uppercase text-zinc-400">World Elements</p>
-                  <p className="mt-2 text-xs text-zinc-400">
-                    {Array.isArray(seriesWorld?.elements) && seriesWorld?.elements.length
-                      ? "Elements linked to this series."
-                      : "No world elements yet. Add them from the Studio workflow or API."}
+                {/* Add Element Form */}
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+                  <p className="text-xs uppercase text-emerald-300 font-semibold">Add World Element</p>
+                  <p className="mt-1 text-xs text-zinc-400">
+                    Track locations, magic systems, artifacts, factions, and other world details.
                   </p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <div>
+                      <label className="text-[10px] uppercase text-zinc-500">Type</label>
+                      <select
+                        value={newElementType}
+                        onChange={(e) => setNewElementType(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                      >
+                        <option value="location">Location</option>
+                        <option value="magic_system">Magic System</option>
+                        <option value="artifact">Artifact</option>
+                        <option value="faction">Faction</option>
+                        <option value="creature">Creature</option>
+                        <option value="technology">Technology</option>
+                        <option value="culture">Culture</option>
+                        <option value="religion">Religion</option>
+                        <option value="language">Language</option>
+                        <option value="event">Historical Event</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase text-zinc-500">Name</label>
+                      <input
+                        value={newElementName}
+                        onChange={(e) => setNewElementName(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                        placeholder="e.g. The Crystal Caverns"
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <label className="text-[10px] uppercase text-zinc-500">Description</label>
+                    <textarea
+                      value={newElementDescription}
+                      onChange={(e) => setNewElementDescription(e.target.value)}
+                      className="mt-1 min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                      placeholder="Describe this world element — its purpose, history, rules..."
+                    />
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-end gap-3">
+                    <div>
+                      <label className="text-[10px] uppercase text-zinc-500">Importance</label>
+                      <select
+                        value={newElementImportance}
+                        onChange={(e) => setNewElementImportance(e.target.value)}
+                        className="mt-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                      >
+                        <option value="low">Low</option>
+                        <option value="moderate">Moderate</option>
+                        <option value="high">High</option>
+                      </select>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (!activeSeries || !newElementName.trim()) return;
+                        await fetch("/api/series/world-elements", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            seriesId: activeSeries.id,
+                            type: newElementType,
+                            name: newElementName.trim(),
+                            description: newElementDescription.trim(),
+                            importance: newElementImportance,
+                          }),
+                        });
+                        setNewElementName("");
+                        setNewElementDescription("");
+                        setNewElementImportance("moderate");
+                        const response = await fetch(
+                          `/api/series/world-elements?seriesId=${activeSeries.id}`
+                        );
+                        const data = await response.json();
+                        setWorldElements(data.elements ?? []);
+                      }}
+                      disabled={!newElementName.trim()}
+                      className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200 transition hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Add Element
+                    </button>
+                  </div>
                 </div>
-                <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200">
-                  <pre className="whitespace-pre-wrap">
-                    {JSON.stringify(seriesWorld?.elements ?? [], null, 2)}
-                  </pre>
-                </div>
+
+                {/* Element Cards */}
+                {worldElements.length === 0 && (
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-6 text-center">
+                    <p className="text-sm text-zinc-400">No world elements yet.</p>
+                    <p className="mt-1 text-xs text-zinc-500">Add locations, magic systems, artifacts, and more above.</p>
+                  </div>
+                )}
+                {worldElements.length > 0 && (
+                  <div className="grid gap-3 md:grid-cols-1">
+                    {worldElements.map((element) => {
+                      const isEditing: boolean = editingElementId === String(element.id);
+                      const importanceColor =
+                        String(element.importance) === "high"
+                          ? "border-red-500/40 text-red-200"
+                          : String(element.importance) === "low"
+                            ? "border-zinc-600 text-zinc-400"
+                            : "border-amber-500/40 text-amber-200";
+                      const typeLabel = String(element.type ?? "other").replace(/_/g, " ");
+                      return (
+                        <div
+                          key={String(element.id)}
+                          className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-zinc-100">
+                                {String(element.name ?? "Unnamed")}
+                              </p>
+                              <div className="mt-1 flex flex-wrap gap-1.5">
+                                <span className="rounded-full border border-blue-500/40 px-2 py-0.5 text-[10px] text-blue-200 capitalize">
+                                  {typeLabel}
+                                </span>
+                                <span className={`rounded-full border px-2 py-0.5 text-[10px] capitalize ${importanceColor}`}>
+                                  {String(element.importance ?? "moderate")}
+                                </span>
+                                {element.introduced_in_book != null && Number(element.introduced_in_book) > 0 && (
+                                  <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-400">
+                                    Book {String(element.introduced_in_book)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex gap-1 shrink-0">
+                              <button
+                                onClick={() => {
+                                  if (isEditing) {
+                                    setEditingElementId(null);
+                                  } else {
+                                    setEditingElementId(String(element.id));
+                                    setEditingElementDescription(String(element.description ?? ""));
+                                    setEditingElementImportance(String(element.importance ?? "moderate"));
+                                  }
+                                }}
+                                className="rounded border border-zinc-700 px-2 py-1 text-[10px] text-zinc-300 transition hover:border-zinc-500"
+                              >
+                                {isEditing ? "Cancel" : "Edit"}
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (!activeSeries) return;
+                                  setPendingDelete({
+                                    id: String(element.id),
+                                    endpoint: "/api/series/world-elements/delete",
+                                    refresh: async () => {
+                                      const response = await fetch(
+                                        `/api/series/world-elements?seriesId=${activeSeries.id}`
+                                      );
+                                      const data = await response.json();
+                                      setWorldElements(data.elements ?? []);
+                                    },
+                                  });
+                                }}
+                                className="rounded border border-red-500/30 px-2 py-1 text-[10px] text-red-300 transition hover:bg-red-500/10"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                          {isEditing ? (
+                            <div className="mt-3 space-y-2">
+                              <textarea
+                                value={editingElementDescription}
+                                onChange={(e) => setEditingElementDescription(e.target.value)}
+                                className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                              />
+                              <div className="flex items-center gap-3">
+                                <select
+                                  value={editingElementImportance}
+                                  onChange={(e) => setEditingElementImportance(e.target.value)}
+                                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+                                >
+                                  <option value="low">Low</option>
+                                  <option value="moderate">Moderate</option>
+                                  <option value="high">High</option>
+                                </select>
+                                <button
+                                  onClick={async () => {
+                                    if (!activeSeries) return;
+                                    await fetch("/api/series/world-elements/update", {
+                                      method: "PUT",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({
+                                        id: editingElementId,
+                                        description: editingElementDescription,
+                                        importance: editingElementImportance,
+                                      }),
+                                    });
+                                    setEditingElementId(null);
+                                    const response = await fetch(
+                                      `/api/series/world-elements?seriesId=${activeSeries.id}`
+                                    );
+                                    const data = await response.json();
+                                    setWorldElements(data.elements ?? []);
+                                  }}
+                                  className="rounded-full border border-emerald-500/60 px-4 py-2 text-sm text-emerald-200 transition hover:bg-emerald-500/10"
+                                >
+                                  Save
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            String(element.description ?? "").trim().length > 0 ? (
+                              <p className="mt-2 text-xs text-zinc-300 leading-relaxed">
+                                {String(element.description)}
+                              </p>
+                            ) : null
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </section>
