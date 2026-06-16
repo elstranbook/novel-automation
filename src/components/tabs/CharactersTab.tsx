@@ -482,20 +482,21 @@ function CharacterDetailDialog({
     strengths: '',
   });
 
-  if (!character) return null;
+  // Use a stable fallback so hooks are always called in the same order
+  const char = character ?? { id: '', name: '', role: '' };
 
   const personality = parseJson<{
     traits?: string[];
     flaws?: string[];
     strengths?: string[];
-  }>(character.personality, { traits: [], flaws: [], strengths: [] });
+  }>(char.personality, { traits: [], flaws: [], strengths: [] });
   const appearance = parseJson<{
     physical?: string;
     features?: string;
     style?: string;
     distinguishing?: string;
     [key: string]: unknown;
-  }>(character.appearance, {});
+  }>(char.appearance, {});
   const voiceProfile = parseJson<{
     speechStyle?: string;
     vocabularyLevel?: string;
@@ -503,26 +504,26 @@ function CharacterDetailDialog({
     dialogueStyle?: string;
     sampleDialogues?: Array<{ situation: string; dialogue: string }>;
     [key: string]: unknown;
-  }>(character.voice_profile, {});
+  }>(char.voice_profile, {});
   const growthArc = parseJson<{
     stages?: Array<{ stage: string; description: string }>;
     [key: string]: unknown;
-  }>(character.growth_arc, {});
+  }>(char.growth_arc, {});
   const emotionalMemory = parseJson<
     Array<{ event: string; impact: string; intensity?: number }>
-  >(character.emotional_memory, []);
+  >(char.emotional_memory, []);
   const arcData = parseJson<{
     stages?: Array<{ stage: string; description: string }>;
     [key: string]: unknown;
-  }>(character.arc, {});
-  const knowledgeTimeline = parseJson<unknown>(character.knowledge_timeline, null);
-  const charRelationships = parseJson<unknown>(character.relationships, null);
+  }>(char.arc, {});
+  const knowledgeTimeline = parseJson<unknown>(char.knowledge_timeline, null);
+  const charRelationships = parseJson<unknown>(char.relationships, null);
 
   // Merge arc stages from multiple possible sources
   const arcStages = useMemo(() => {
     const stages: Array<{ label: string; description: string }> = [];
-    if (Array.isArray(character.arc_stages)) {
-      character.arc_stages.forEach((stage, i) => {
+    if (Array.isArray(char.arc_stages)) {
+      char.arc_stages.forEach((stage, i) => {
         if (typeof stage === 'string') {
           stages.push({ label: `Stage ${i + 1}`, description: stage });
         } else if (typeof stage === 'object' && stage !== null) {
@@ -561,9 +562,9 @@ function CharacterDetailDialog({
       });
     }
     return stages;
-  }, [character.arc_stages, growthArc, arcData]);
+  }, [char.arc_stages, growthArc, arcData]);
 
-  const roleKey = getRoleKey(character.role || '');
+  const roleKey = getRoleKey(char.role || '');
 
   // Appearance as readable text
   const appearanceText = useMemo(() => {
@@ -581,6 +582,9 @@ function CharacterDetailDialog({
     }
     return parts.join('\n');
   }, [appearance]);
+
+  // Guard: if no character, don't render the dialog content
+  if (!character) return null;
 
   // ─── Edit helpers ──────────────────────────────────────────────────────────
 
