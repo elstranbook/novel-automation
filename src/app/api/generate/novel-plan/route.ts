@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
+import { formatCharactersForPrompt } from "@/lib/characterPrompt";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -79,6 +80,12 @@ As a MIDDLE book (${position} in the series):
     const profilesValue = characterProfiles ?? "";
     const novelAbout = storyDetails.novel_about ?? "";
 
+    // Build formatted character section from series_characters if available
+    const seriesCharacters = storyDetails?.series_context?.characters;
+    const formattedCharacters = (Array.isArray(seriesCharacters) && seriesCharacters.length > 0)
+      ? formatCharactersForPrompt(seriesCharacters, { maxLength: 4000 })
+      : (typeof profilesValue === 'string' ? profilesValue : "");
+
     const prompt = `
 Following the synopsis below, create a structured plan to guide me in building a compelling, emotionally rich narrative that keeps readers engaged throughout my 120000-word novel. Break the novel down into 3 parts, providing an approximate word count for each section along with key milestones and plot points to hit.
 
@@ -132,7 +139,7 @@ World Elements (locations, magic systems, artifacts, factions, etc.):
 ${storyDetails.series_context?.world_elements ? JSON.stringify(storyDetails.series_context.world_elements).slice(0, 800) : ""}
 
 Character Profiles:
-${profilesValue}
+${formattedCharacters || profilesValue}
 `;
 
     const system = `You are a professional novel structure expert and writing coach.

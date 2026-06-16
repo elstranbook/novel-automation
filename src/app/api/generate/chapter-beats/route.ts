@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
+import { formatCharactersForPrompt } from "@/lib/characterPrompt";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -54,6 +55,12 @@ export async function POST(request: Request) {
     const { chapterOutline, chapterGuide, synopsis, characterProfiles, novelPlan, storyDetails, model } =
       await request.json();
 
+    // Build formatted character section from series_characters if available
+    const seriesCharacters = storyDetails?.series_context?.characters;
+    const formattedCharacters = (Array.isArray(seriesCharacters) && seriesCharacters.length > 0)
+      ? formatCharactersForPrompt(seriesCharacters, { maxLength: 3000 })
+      : (typeof characterProfiles === 'string' ? characterProfiles.slice(0, 3000) : "");
+
     if (!chapterOutline || !chapterGuide) {
       return NextResponse.json(
         { error: "Chapter outline and guide are required" },
@@ -93,7 +100,7 @@ Chapter Outline: ${JSON.stringify(chapterRecord, null, 2)}
 Chapter Summary: ${chapterSummary}
 Additional Story Information:
 - Synopsis: ${synopsis ?? ""}
-- Character Profiles: ${characterProfiles ?? ""}
+- Character Profiles: ${formattedCharacters || characterProfiles || ""}
 - Novel Plan: ${novelPlan ?? ""}
 - Author Intent: ${storyDetails?.novel_about ?? ""}
 - Series Context: ${storyDetails?.series_context ? JSON.stringify(storyDetails.series_context).slice(0, 1600) : ""}${blueprintSection}

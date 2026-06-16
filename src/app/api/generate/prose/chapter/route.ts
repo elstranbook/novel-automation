@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
+import { formatCharactersForPrompt, formatPOVCharacterContext } from "@/lib/characterPrompt";
 
 const logGeneration = async (payload: {
   step: string;
@@ -39,6 +40,9 @@ export async function POST(request: Request) {
       keyConflict,
       voiceAnchor,
       worldContext,
+      seriesId,
+      povCharacter,
+      characterContext,
     } = await request.json();
 
     if (!scene) {
@@ -71,6 +75,33 @@ World Elements: ${Array.isArray((worldContext as Record<string, unknown>).elemen
 `
       : "";
 
+    // ─── Build character context block ──────────────────────────────────────────
+    // Priority: 1) Pre-formatted string passed from client  2) Fetch from DB using seriesId
+    let characterBlock = "";
+    if (characterContext && typeof characterContext === "string" && characterContext.trim()) {
+      characterBlock = characterContext;
+    } else if (seriesId) {
+      try {
+        const { data: characters } = await supabaseAdmin
+          .from("series_characters")
+          .select("*")
+          .eq("series_id", seriesId);
+        if (characters && characters.length > 0) {
+          // Full cast overview (compact)
+          characterBlock = formatCharactersForPrompt(characters, { maxLength: 2000 });
+          // POV character deep dive if we can identify them
+          if (povCharacter) {
+            const povBlock = formatPOVCharacterContext(characters, povCharacter, { maxLength: 1200 });
+            if (povBlock) {
+              characterBlock = `${povBlock}\n\nOTHER CHARACTERS IN THIS SCENE:\n${characterBlock}`;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[prose] Failed to load character context:", err);
+      }
+    }
+
     const contextBlock = `
 Chapter Title: ${chapterTitle ?? "Untitled"}
 Chapter Summary: ${chapterSummary ?? "Not provided"}
@@ -79,7 +110,7 @@ Previous Scene (last lines): ${trimmedPrevious}
 Character Emotional State: ${emotionalState ?? "Not provided"}
 Key Conflict: ${keyConflict ?? "Not provided"}
 Voice Anchor: ${voiceAnchor ?? "raw, emotional, slightly messy, introspective"}
-${worldBlock}Scene Summary:\n${scene}
+${worldBlock}${characterBlock ? `\n${characterBlock}\n` : ""}Scene Summary:\n${scene}
 `;
 
     const longDirective = `
@@ -92,7 +123,7 @@ Writing Guidelines:
 – Emphasize "show, don't tell" storytelling. Let physical actions, choices, and setting carry emotional and thematic weight.
 – Use strong verbs, sensory-rich description, and a deep POV (if applicable) to fully immerse the reader.
 – Allow the scene to naturally lead toward its conclusion and, if appropriate, transition smoothly into the next.
-${worldBlock ? "– GROUND YOUR WRITING IN THE WORLD. Reference specific locations, rules, lore, and elements from the world context. Characters should interact with their environment authentically — mention place names, cultural details, magical rules, or artifacts where they naturally fit. The world should feel alive and specific, not generic.\n" : ""}
+${worldBlock ? "– GROUND YOUR WRITING IN THE WORLD. Reference specific locations, rules, lore, and elements from the world context. Characters should interact with their environment authentically — mention place names, cultural details, magical rules, or artifacts where they naturally fit. The world should feel alive and specific, not generic.\n" : ""}${characterBlock ? "– WRITE IN CHARACTER. Use the character profiles above to inform dialogue style, vocabulary, personality, and emotional responses. Each character should speak and act consistently with their defined voice, desires, fears, and personality traits. The POV character's voice profile is especially important — match their speech patterns and vocabulary level.\n" : ""}
 
 Narrative Style:
 * Point of View: First-person for the main character

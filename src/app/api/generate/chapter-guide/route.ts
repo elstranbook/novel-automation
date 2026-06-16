@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
+import { formatCharactersForPrompt } from "@/lib/characterPrompt";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -145,6 +146,12 @@ export async function POST(request: Request) {
     const { chapterOutline, novelSynopsis, characterProfiles, novelPlan, storyDetails, model } =
       await request.json();
 
+    // Build formatted character section from series_characters if available
+    const seriesCharacters = storyDetails?.series_context?.characters;
+    const formattedCharacters = (Array.isArray(seriesCharacters) && seriesCharacters.length > 0)
+      ? formatCharactersForPrompt(seriesCharacters, { maxLength: 3000 })
+      : (typeof characterProfiles === 'string' ? characterProfiles.slice(0, 3000) : "Not provided");
+
     if (!chapterOutline) {
       return NextResponse.json(
         { error: "Chapter outline is required" },
@@ -179,7 +186,7 @@ Create a detailed chapter guide for the young adult novel (approximately 120000 
 
 Novel Context:
 - Synopsis: ${(novelSynopsis ?? "").slice(0, 1000) || "Not provided"}
-- Main Characters: ${(characterProfiles ?? "").slice(0, 1000) || "Not provided"}
+- Main Characters: ${formattedCharacters.slice(0, 3000) || "Not provided"}
 - Novel Plan: ${(novelPlan ?? "").slice(0, 1000) || "Not provided"}
 - Author Intent: ${(storyDetails?.novel_about ?? "").slice(0, 500) || "Not provided"}
 - Series Context: ${storyDetails?.series_context ? JSON.stringify(storyDetails.series_context).slice(0, 1600) : "Not provided"}${blueprintSection}

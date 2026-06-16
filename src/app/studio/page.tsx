@@ -2368,6 +2368,10 @@ function StudioContent() {
                   : "",
                 elements: (seriesContext as Record<string, unknown>).world_elements ?? [],
               } : null,
+              // Pass seriesId so the prose route can fetch character profiles from DB
+              seriesId: storyDetails?.series_id ?? null,
+              // Pass the POV character name from the chapter outline
+              povCharacter: chapterOutline?.[index]?.pov ?? chapterOutline?.[index]?.pov_character ?? null,
             }),
           });
 

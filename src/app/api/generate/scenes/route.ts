@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
+import { formatCharactersForPrompt } from "@/lib/characterPrompt";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -14,6 +15,7 @@ const generateScenesForChapter = async ({
   minSceneLength,
   premisesAndEndings,
   characterProfiles,
+  formattedCharacters,
 }: {
   chapter: Record<string, unknown>;
   storyDetails: Record<string, unknown>;
@@ -23,6 +25,7 @@ const generateScenesForChapter = async ({
   minSceneLength: number;
   premisesAndEndings?: Record<string, unknown>;
   characterProfiles?: string;
+  formattedCharacters?: string;
 }) => {
   const chapterInfoRecord: Record<string, unknown> =
     typeof chapter === "object" && chapter ? (chapter as Record<string, unknown>) : {};
@@ -72,6 +75,8 @@ ${storyInfo}
 
 CHAPTER INFORMATION:
 ${chapterInfo}
+
+${formattedCharacters ? `CHARACTER PROFILES:\n${formattedCharacters}\n` : characterProfiles ? `CHARACTER PROFILES:\n${characterProfiles}\n` : ""}
 
 ${premisesEndingInfo}
 
@@ -140,7 +145,7 @@ Chapter Story Beats:
 ${beatsText}
 
 Character Information:
-${characterProfiles ?? "No character profiles available"}
+${formattedCharacters ?? characterProfiles ?? "No character profiles available"}
 
 ${premisesEndingInfo}
 
@@ -224,6 +229,7 @@ export async function POST(request: Request) {
       minSceneLength,
       premisesAndEndings,
       characterProfiles,
+      formattedCharacters,
     } = await request.json();
 
     if (!storyDetails || !chapterOutline) {
@@ -266,6 +272,7 @@ export async function POST(request: Request) {
         minSceneLength: minSceneLength ?? 300,
         premisesAndEndings,
         characterProfiles,
+        formattedCharacters,
       });
 
       const chapterTitle = `Chapter ${chapter.number ?? "?"}: ${chapter.title ?? "Untitled"}`;
