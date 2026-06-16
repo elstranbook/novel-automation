@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
+import CharactersTab from "@/components/tabs/CharactersTab";
 
 const AUTO = "auto" as const;
 
@@ -89,7 +90,6 @@ export default function SeriesPage() {
   const [seriesCharacters, setSeriesCharacters] = useState<
     Array<Record<string, unknown>>
   >([]);
-  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
   const [seriesWorld, setSeriesWorld] = useState<Record<string, unknown> | null>(null);
   const [worldSummaryDraft, setWorldSummaryDraft] = useState("");
   const [worldSettingDraft, setWorldSettingDraft] = useState("");
@@ -313,37 +313,6 @@ export default function SeriesPage() {
     );
   }, [filteredTimeline]);
 
-  const groupedCharacters = useMemo(() => {
-    return seriesCharacters.reduce(
-      (acc, character) => {
-        const role = String(character.role ?? "supporting").toLowerCase();
-        const existing = Array.isArray(acc[role]) ? acc[role] : [];
-        acc[role] = [...existing, character];
-        return acc;
-      },
-      {} as Record<string, Array<Record<string, unknown>>>
-    );
-  }, [seriesCharacters]);
-
-  const selectedCharacter = useMemo(() => {
-    return (
-      seriesCharacters.find(
-        (character) => String(character.id) === String(selectedCharacterId)
-      ) ?? null
-    );
-  }, [seriesCharacters, selectedCharacterId]);
-
-  const selectedCharacterRelationships = useMemo(() => {
-    if (!selectedCharacter) return [];
-    const name = String(selectedCharacter.name ?? "").toLowerCase();
-    if (!name) return [];
-    return seriesMemory.filter((entry) => {
-      const a = String(entry.character_a_name ?? "").toLowerCase();
-      const b = String(entry.character_b_name ?? "").toLowerCase();
-      return a === name || b === name;
-    });
-  }, [seriesMemory, selectedCharacter]);
-
   const logTypes = useMemo(() => {
     const types = new Set<string>();
     seriesLogs.forEach((log) => {
@@ -406,7 +375,6 @@ export default function SeriesPage() {
   const clearSeriesData = () => {
     setSeriesBooks([]);
     setSeriesCharacters([]);
-    setSelectedCharacterId(null);
     setSeriesWorld(null);
     setWorldSettingDraft("");
     setWorldRulesDraft("");
@@ -1647,223 +1615,57 @@ export default function SeriesPage() {
         )}
 
         {activeTab === "characters" && (
-          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-semibold">Characters</h2>
-                <p className="text-sm text-zinc-400">
-                  Manage the characters across your series.
-                </p>
-              </div>
-              <button
-                onClick={async () => {
-                  if (!activeSeries) return;
-                  const response = await fetch(
-                    `/api/series/characters?seriesId=${activeSeries.id}`
-                  );
-                  const data = await response.json();
-                  setSeriesCharacters(data.characters ?? []);
-                }}
-                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
-              >
-                Refresh Characters
-              </button>
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-4">
-              {[
-                { label: "Protagonists", key: "protagonist" },
-                { label: "Antagonists", key: "antagonist" },
-                { label: "Supporting", key: "supporting" },
-                { label: "Other", key: "" },
-              ].map((item) => {
-                const count = Object.entries(groupedCharacters).reduce(
-                  (acc, [role, list]) => {
-                    const items = Array.isArray(list) ? list : [];
-                    if (item.key && role.includes(item.key)) {
-                      return acc + items.length;
-                    }
-                    if (!item.key && !role.includes("protagonist") && !role.includes("antagonist") && !role.includes("support")) {
-                      return acc + items.length;
-                    }
-                    return acc;
-                  },
-                  0
-                );
-                return (
-                  <div
-                    key={item.label}
-                    className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs"
-                  >
-                    <p className="text-xs text-zinc-400">{item.label}</p>
-                    <p className="mt-2 text-2xl font-semibold text-zinc-100">
-                      {count}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              <div className="space-y-3">
-                {Object.keys(groupedCharacters).length === 0 && (
-                  <p className="text-sm text-zinc-500">No characters yet.</p>
-                )}
-                {Object.entries(groupedCharacters).map(([role, characters]) => {
-                  const list = Array.isArray(characters) ? characters : [];
-                  return (
-                    <div key={role} className="space-y-2">
-                      <p className="text-xs font-semibold uppercase text-zinc-400">
-                        {role || "Uncategorized"}
-                      </p>
-                      {list.map((character) => (
-                        <button
-                          key={String(character.id)}
-                          onClick={() => setSelectedCharacterId(String(character.id ?? ""))}
-                          className={`w-full rounded-lg border px-4 py-3 text-left text-xs transition ${
-                            String(character.id) === String(selectedCharacterId)
-                              ? "border-emerald-400/60 bg-emerald-500/10"
-                              : "border-zinc-800 bg-zinc-950/60"
-                          }`}
-                        >
-                          <p className="text-sm font-semibold text-zinc-100">
-                            {String(character.name ?? "Unnamed")}
-                          </p>
-                          <p className="text-xs text-zinc-400">
-                            {String(character.role ?? "Supporting")}
-                          </p>
-                          {character.description && (
-                            <p className="mt-2 text-xs text-zinc-300">
-                              {String(character.description)}
-                            </p>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200">
-                {selectedCharacter ? (
-                  <>
-                    <p className="text-sm font-semibold text-zinc-100">
-                      {String(selectedCharacter.name ?? "Unnamed")}
-                    </p>
-                    <p className="text-xs text-zinc-400">
-                      Role: {String(selectedCharacter.role ?? "Supporting")}
-                    </p>
-                    <p className="mt-3 text-xs">
-                      {String(selectedCharacter.description ?? "No description yet.")}
-                    </p>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
-                        <p className="text-[10px] uppercase text-zinc-400">Motivation</p>
-                        <p className="mt-2 text-xs text-zinc-200">
-                          {String(selectedCharacter.motivation ?? "Not set")}
-                        </p>
-                      </div>
-                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
-                        <p className="text-[10px] uppercase text-zinc-400">Conflict</p>
-                        <p className="mt-2 text-xs text-zinc-200">
-                          {String(selectedCharacter.conflict ?? "Not set")}
-                        </p>
-                      </div>
-                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
-                        <p className="text-[10px] uppercase text-zinc-400">Personality</p>
-                        <p className="mt-2 text-xs text-zinc-200">
-                          {String(selectedCharacter.personality ?? "Not set")}
-                        </p>
-                      </div>
-                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
-                        <p className="text-[10px] uppercase text-zinc-400">Backstory</p>
-                        <p className="mt-2 text-xs text-zinc-200">
-                          {String(selectedCharacter.backstory ?? "Not set")}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-4 space-y-2">
-                      <p className="text-xs font-semibold uppercase text-zinc-400">
-                        Emotional Memory
-                      </p>
-                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-3 text-xs text-zinc-200">
-                        {selectedCharacter.emotional_memory ? (
-                          <pre className="whitespace-pre-wrap text-[11px]">
-                            {JSON.stringify(selectedCharacter.emotional_memory ?? {}, null, 2)}
-                          </pre>
-                        ) : (
-                          <p className="text-xs text-zinc-400">No emotional memory captured.</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="mt-4 space-y-2">
-                      <p className="text-xs font-semibold uppercase text-zinc-400">
-                        Arc Stages
-                      </p>
-                      <div className="space-y-2">
-                        {(() => {
-                          const arcStages = Array.isArray(selectedCharacter.arc_stages)
-                            ? selectedCharacter.arc_stages
-                            : Array.isArray((selectedCharacter.arc as { stages?: unknown })?.stages)
-                              ? ((selectedCharacter.arc as { stages?: unknown[] }).stages ?? [])
-                              : [];
-                          return arcStages.slice(0, 4).map((stage, index) => (
-                            <div
-                              key={`${selectedCharacter.id}-stage-${index}`}
-                              className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-200"
-                            >
-                              {typeof stage === "string" ? stage : JSON.stringify(stage)}
-                            </div>
-                          ));
-                        })()}
-                        {!Array.isArray(selectedCharacter.arc_stages) &&
-                          !Array.isArray((selectedCharacter.arc as { stages?: unknown })?.stages) && (
-                            <p className="text-xs text-zinc-400">No arc stages available.</p>
-                          )}
-                      </div>
-                    </div>
-                    <div className="mt-4 space-y-2">
-                      <p className="text-xs font-semibold uppercase text-zinc-400">
-                        Relationships Snapshot
-                      </p>
-                      <div className="space-y-2">
-                        {selectedCharacterRelationships.slice(0, 4).map((relationship) => (
-                          <div
-                            key={String(relationship.id)}
-                            className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-200"
-                          >
-                            <p className="text-xs text-zinc-400">
-                              {String(relationship.character_a_name ?? "?")} ↔ {String(
-                                relationship.character_b_name ?? "?"
-                              )}
-                            </p>
-                            <p className="mt-1 text-xs">
-                              {String(relationship.relationship_type ?? "")}
-                            </p>
-                          </div>
-                        ))}
-                        {selectedCharacterRelationships.length === 0 && (
-                          <p className="text-xs text-zinc-400">No relationships logged.</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="mt-4 space-y-2">
-                      <p className="text-xs font-semibold uppercase text-zinc-400">
-                        Arc Snapshot
-                      </p>
-                      <pre className="whitespace-pre-wrap rounded-lg bg-zinc-900/70 p-3 text-[11px] text-zinc-200">
-                        {JSON.stringify(selectedCharacter.arc ?? {}, null, 2)}
-                      </pre>
-                    </div>
-                  </>
-                ) : (
-                  <p className="text-sm text-zinc-400">
-                    Select a character to view details.
-                  </p>
-                )}
-              </div>
-            </div>
-          </section>
+          <CharactersTab
+            characters={seriesCharacters.map((c) => ({
+              id: String(c.id ?? ""),
+              name: String(c.name ?? ""),
+              role: String(c.role ?? "supporting"),
+              age: c.age != null ? String(c.age) : null,
+              gender: c.gender != null ? String(c.gender) : null,
+              appearance: c.appearance ?? null,
+              personality: c.personality ?? null,
+              backstory: c.backstory != null ? String(c.backstory) : null,
+              description: c.description != null ? String(c.description) : null,
+              motivation: c.motivation != null ? String(c.motivation) : null,
+              conflict: c.conflict != null ? String(c.conflict) : null,
+              core_desire: c.core_desire != null ? String(c.core_desire) : null,
+              big_fear: c.big_fear != null ? String(c.big_fear) : null,
+              hidden_secret: c.hidden_secret != null ? String(c.hidden_secret) : null,
+              start_state: c.start_state != null ? String(c.start_state) : null,
+              end_state: c.end_state != null ? String(c.end_state) : null,
+              growth_arc: c.growth_arc ?? null,
+              arc: c.arc ?? null,
+              arc_stages: Array.isArray(c.arc_stages) ? c.arc_stages : null,
+              voice_profile: c.voice_profile ?? null,
+              emotional_memory: c.emotional_memory ?? null,
+              knowledge_timeline: c.knowledge_timeline ?? null,
+              relationships: c.relationships ?? null,
+              introduced_in_book: typeof c.introduced_in_book === "number" ? c.introduced_in_book : null,
+              introduced_in_chapter: typeof c.introduced_in_chapter === "number" ? c.introduced_in_chapter : null,
+              is_fully_developed: typeof c.is_fully_developed === "boolean" ? c.is_fully_developed : null,
+            }))}
+            relationships={seriesMemory.filter((entry) => {
+              // Only pass relationship entries to the CharactersTab
+              const cat = String(entry.category ?? "").toLowerCase();
+              return cat === "relationship" || !!entry.character_a_name || !!entry.character_b_name;
+            }).map((entry) => ({
+              id: String(entry.id ?? ""),
+              character_a_name: entry.character_a_name != null ? String(entry.character_a_name) : undefined,
+              character_b_name: entry.character_b_name != null ? String(entry.character_b_name) : undefined,
+              relationship_type: entry.relationship_type != null ? String(entry.relationship_type) : undefined,
+              status: entry.status != null ? String(entry.status) : undefined,
+              trust_level: typeof entry.trust_level === "number" ? entry.trust_level : undefined,
+              tension_level: typeof entry.tension_level === "number" ? entry.tension_level : undefined,
+            }))}
+            onRefresh={async () => {
+              if (!activeSeries) return;
+              const response = await fetch(
+                `/api/series/characters?seriesId=${activeSeries.id}`
+              );
+              const data = await response.json();
+              setSeriesCharacters(data.characters ?? []);
+            }}
+          />
         )}
 
         {activeTab === "world" && (
