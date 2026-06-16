@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
+import { formatCanonForPrompt } from "@/lib/canonPrompt";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -48,9 +49,7 @@ export async function POST(request: Request) {
       storyDetails.series_context
         ? trimContext(summarizeContext(storyDetails.series_context as Record<string, unknown>), 1200)
         : ""
-    }\nCanon Facts: ${
-      storyDetails.series_context?.canon_entries ? trimContext(storyDetails.series_context.canon_entries, 800) : ""
-    }\nMystery Log: ${
+    }\n${formatCanonForPrompt(storyDetails.series_context?.canon_entries, { maxLength: 800 })}\nMystery Log: ${
       storyDetails.series_context?.secrets ? trimContext(storyDetails.series_context.secrets, 800) : ""
     }\nRelationships: ${
       storyDetails.series_context?.relationships ? trimContext(storyDetails.series_context.relationships, 800) : ""

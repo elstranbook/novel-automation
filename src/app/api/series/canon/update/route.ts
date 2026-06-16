@@ -5,17 +5,36 @@ type CanonUpdate = {
   id: string;
   fact?: string;
   category?: string;
+  source?: string;
+  cannot_change?: boolean;
 };
 
 export async function PUT(request: Request) {
   try {
-    const { id, fact, category } = (await request.json()) as CanonUpdate;
+    const { id, fact, category, source, cannot_change } =
+      (await request.json()) as CanonUpdate;
+
+    if (!id) {
+      return NextResponse.json({ error: "id required" }, { status: 400 });
+    }
+
+    // Build the update payload from provided fields only
+    const updates: Record<string, unknown> = {};
+    if (fact !== undefined) updates.fact = fact;
+    if (category !== undefined) updates.category = category;
+    if (source !== undefined) updates.source = source;
+    if (cannot_change !== undefined) updates.cannot_change = cannot_change;
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json(
+        { error: "At least one of fact, category, source, cannot_change required" },
+        { status: 400 }
+      );
+    }
+
     const { data, error } = await supabaseAdmin
       .from("canon_log_entry")
-      .update({
-        fact,
-        category,
-      })
+      .update(updates)
       .eq("id", id)
       .select("*")
       .single();

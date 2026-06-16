@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 import { formatCharactersForPrompt } from "@/lib/characterPrompt";
+import { formatCanonForPrompt } from "@/lib/canonPrompt";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -119,8 +120,7 @@ ${novelAbout}
 
 Series Context:
 ${storyDetails.series_context ? JSON.stringify(storyDetails.series_context).slice(0, 1600) : ""}
-Canon Facts:
-${storyDetails.series_context?.canon_entries ? JSON.stringify(storyDetails.series_context.canon_entries).slice(0, 800) : ""}
+${formatCanonForPrompt(storyDetails.series_context?.canon_entries, { maxLength: 800 })}
 Mystery Log:
 ${storyDetails.series_context?.secrets ? JSON.stringify(storyDetails.series_context.secrets).slice(0, 800) : ""}
 Relationships:

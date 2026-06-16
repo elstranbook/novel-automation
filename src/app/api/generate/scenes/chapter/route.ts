@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
+import { formatCanonForPrompt } from "@/lib/canonPrompt";
 
 type SceneSummary = {
   scene_number?: number;
@@ -292,8 +293,7 @@ ${novelAbout}
 
 Series Context:
 ${seriesContext ? JSON.stringify(seriesContext).slice(0, 1600) : ""}
-Canon Facts:
-${seriesContext?.canon_entries ? JSON.stringify(seriesContext.canon_entries).slice(0, 800) : ""}
+${formatCanonForPrompt(seriesContext?.canon_entries as Parameters<typeof formatCanonForPrompt>[0], { maxLength: 800 })}
 Mysteries:
 ${seriesContext?.secrets ? JSON.stringify(seriesContext.secrets).slice(0, 800) : ""}
 Relationships:

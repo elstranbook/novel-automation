@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 import { formatCharactersForPrompt } from "@/lib/characterPrompt";
+import { formatCanonForPrompt } from "@/lib/canonPrompt";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -190,7 +191,7 @@ Novel Context:
 - Novel Plan: ${(novelPlan ?? "").slice(0, 1000) || "Not provided"}
 - Author Intent: ${(storyDetails?.novel_about ?? "").slice(0, 500) || "Not provided"}
 - Series Context: ${storyDetails?.series_context ? JSON.stringify(storyDetails.series_context).slice(0, 1600) : "Not provided"}${blueprintSection}
-- Canon Facts: ${storyDetails?.series_context?.canon_entries ? JSON.stringify(storyDetails.series_context.canon_entries).slice(0, 800) : "Not provided"}
+${formatCanonForPrompt(storyDetails?.series_context?.canon_entries, { maxLength: 800 }) || "- Canon Facts: Not provided"}
 - Mysteries: ${storyDetails?.series_context?.secrets ? JSON.stringify(storyDetails.series_context.secrets).slice(0, 800) : "Not provided"}
 - Relationships: ${storyDetails?.series_context?.relationships ? JSON.stringify(storyDetails.series_context.relationships).slice(0, 800) : "Not provided"}
 - Plot Threads: ${storyDetails?.series_context?.plot_threads ? JSON.stringify(storyDetails.series_context.plot_threads).slice(0, 800) : "Not provided"}

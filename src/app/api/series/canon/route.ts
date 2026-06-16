@@ -6,6 +6,7 @@ type CanonEntryPayload = {
   category: string;
   fact: string;
   source?: string;
+  cannot_change?: boolean;
 };
 
 export async function GET(request: Request) {
@@ -32,7 +33,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { seriesId, category, fact, source } =
+    const { seriesId, category, fact, source, cannot_change } =
       (await request.json()) as CanonEntryPayload;
     if (!seriesId || !category || !fact) {
       return NextResponse.json(
@@ -54,6 +55,8 @@ export async function POST(request: Request) {
         category,
         fact,
         source: source ?? "",
+        // Default to locked (true) unless explicitly set to false
+        cannot_change: cannot_change !== false,
       })
       .select("*")
       .single();

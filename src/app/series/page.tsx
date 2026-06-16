@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 import CharactersTab from "@/components/tabs/CharactersTab";
@@ -122,6 +122,11 @@ export default function SeriesPage() {
   const [relationshipA, setRelationshipA] = useState("");
   const [canonFilter, setCanonFilter] = useState("all");
   const [canonSearch, setCanonSearch] = useState("");
+  // Canon lock toggle for new entries (default: locked = cannot_change: true)
+  const [canonLocked, setCanonLocked] = useState(true);
+  // Multi-select for bulk actions
+  const [selectedCanonIds, setSelectedCanonIds] = useState<Set<string>>(new Set());
+  const [bulkCanonCategory, setBulkCanonCategory] = useState("world");
   const [mysterySearch, setMysterySearch] = useState("");
   const [mysteryBookFilter, setMysteryBookFilter] = useState(0);
   const [relationshipsSearch, setRelationshipsSearch] = useState("");
@@ -148,6 +153,8 @@ export default function SeriesPage() {
   const [editingCanonId, setEditingCanonId] = useState<string | null>(null);
   const [editingCanonFact, setEditingCanonFact] = useState("");
   const [editingCanonCategory, setEditingCanonCategory] = useState("world");
+  const [editingCanonSource, setEditingCanonSource] = useState("");
+  const [editingCanonLocked, setEditingCanonLocked] = useState(true);
   const [editingSecretId, setEditingSecretId] = useState<string | null>(null);
   const [editingSecretTitle, setEditingSecretTitle] = useState("");
   const [editingSecretDescription, setEditingSecretDescription] = useState("");
@@ -185,14 +192,35 @@ export default function SeriesPage() {
 
   const filteredCanon = useMemo(() => {
     const query = canonSearch.trim().toLowerCase();
-    return seriesMemory.filter((entry) => {
-      const category = String(entry.category ?? "").toLowerCase();
-      const matchesCategory = canonFilter === "all" || category === canonFilter;
-      const matchesQuery =
-        !query || JSON.stringify(entry).toLowerCase().includes(query);
-      return matchesCategory && matchesQuery;
-    });
+    // Only include actual canon entries (they have a `fact` field).
+    // seriesMemory also contains mystery + relationship entries which we must exclude.
+    return seriesMemory
+      .filter((entry) => entry.fact != null)
+      .filter((entry) => {
+        const category = String(entry.category ?? "").toLowerCase();
+        const matchesCategory = canonFilter === "all" || category === canonFilter;
+        const matchesQuery =
+          !query || JSON.stringify(entry).toLowerCase().includes(query);
+        return matchesCategory && matchesQuery;
+      });
   }, [seriesMemory, canonFilter, canonSearch]);
+
+  // Refresh ONLY canon entries from the API and merge them back into seriesMemory,
+  // preserving mystery + relationship entries. This prevents the bug where editing
+  // a canon entry wipes sibling-tab data from local state.
+  const refreshCanonOnly = useCallback(async () => {
+    if (!activeSeries) return;
+    const response = await fetch(
+      `/api/series/canon?seriesId=${activeSeries.id}`
+    );
+    const data = await response.json();
+    const freshCanon = (data.entries ?? []) as Array<Record<string, unknown>>;
+    // Remove old canon entries (those with a `fact` field) and append fresh ones.
+    setSeriesMemory((prev) => [
+      ...prev.filter((e) => e.fact == null),
+      ...freshCanon,
+    ]);
+  }, [activeSeries]);
 
   const filteredMystery = useMemo(() => {
     const query = mysterySearch.trim().toLowerCase();
@@ -2103,8 +2131,11 @@ export default function SeriesPage() {
           <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
             <h2 className="text-xl font-semibold">Canon Log</h2>
             <p className="text-sm text-zinc-400">
-              Canon facts that must never change.
+              Canon facts that must never change. Locked facts (🔒) are passed
+              to the writing pipeline as immutable constraints.
             </p>
+
+            {/* ─── Add Form ─────────────────────────────────────────── */}
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <label className="text-xs text-zinc-300">
                 Category
@@ -2136,7 +2167,22 @@ export default function SeriesPage() {
                   className="min-h-[100px] rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                 />
               </label>
+              <label className="flex items-center gap-2 text-xs text-zinc-300 md:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={canonLocked}
+                  onChange={(event) => setCanonLocked(event.target.checked)}
+                  className="h-4 w-4 rounded border-zinc-700 bg-zinc-950"
+                />
+                <span>
+                  🔒 Locked (cannot change) — the writing pipeline will treat
+                  this as an immutable constraint. Unchecked = soft canon
+                  (advisory only).
+                </span>
+              </label>
             </div>
+
+            {/* ─── Filter Bar ───────────────────────────────────────── */}
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <label className="text-xs text-zinc-300">
                 Filter
@@ -2171,16 +2217,14 @@ export default function SeriesPage() {
                       category: canonCategory,
                       fact: canonFact,
                       source: canonSource,
+                      cannot_change: canonLocked,
                     }),
                   });
                   setCanonFact("");
-                  const response = await fetch(
-                    `/api/series/canon?seriesId=${activeSeries.id}`
-                  );
-                  const data = await response.json();
-                  setSeriesMemory(data.entries ?? []);
+                  setCanonSource("");
+                  await refreshCanonOnly();
                 }}
-                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
+                className="rounded-full border border-emerald-500/60 px-4 py-2.5 text-sm text-emerald-200"
               >
                 Add Canon Fact
               </button>
@@ -2188,115 +2232,333 @@ export default function SeriesPage() {
                 onClick={() => {
                   setCanonFilter("all");
                   setCanonSearch("");
+                  setSelectedCanonIds(new Set());
                 }}
                 className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Clear Filters
               </button>
               <button
-                onClick={async () => {
-                  if (!activeSeries) return;
-                  const response = await fetch(
-                    `/api/series/canon?seriesId=${activeSeries.id}`
-                  );
-                  const data = await response.json();
-                  setSeriesMemory(data.entries ?? []);
-                }}
+                onClick={refreshCanonOnly}
                 className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Refresh Canon
               </button>
             </div>
-            <div className="mt-4 space-y-3">
-              {seriesMemory.map((entry) => (
-                <div
-                  key={String(entry.id)}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
-                >
-                  <p className="text-xs text-zinc-400">
-                    <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
-                      {String(entry.category ?? "fact")}
-                    </span>
-                    <span className="ml-2">{String(entry.source ?? "")}</span>
-                  </p>
-                  {editingCanonId === String(entry.id ?? "") ? (
-                    <div className="mt-2 space-y-2">
-                      <select
-                        value={editingCanonCategory}
-                        onChange={(event) => setEditingCanonCategory(event.target.value)}
-                        className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
-                      >
-                        <option value="world">World</option>
-                        <option value="character">Character</option>
-                        <option value="event">Event</option>
-                        <option value="rule">Rule</option>
-                      </select>
-                      <textarea
-                        value={editingCanonFact}
-                        onChange={(event) => setEditingCanonFact(event.target.value)}
-                        className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
-                      />
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-xs">{String(entry.fact ?? "")}</p>
-                  )}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {editingCanonId === String(entry.id ?? "") ? (
-                      <button
-                        onClick={async () => {
-                          await fetch("/api/series/canon/update", {
-                            method: "PUT",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              id: String(entry.id ?? ""),
-                              fact: editingCanonFact,
-                              category: editingCanonCategory,
-                            }),
-                          });
-                          setEditingCanonId(null);
-                          const refreshed = await fetch(
-                            `/api/series/canon?seriesId=${activeSeries.id}`
-                          );
-                          const data = await refreshed.json();
-                          setSeriesMemory(data.entries ?? []);
-                        }}
-                        className="rounded-full border border-emerald-500/60 px-3 py-1 text-[10px] text-emerald-200"
-                      >
-                        Save
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setEditingCanonId(String(entry.id ?? ""));
-                          setEditingCanonFact(String(entry.fact ?? ""));
-                          setEditingCanonCategory(String(entry.category ?? "world"));
-                        }}
-                        className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
-                      >
-                        Edit
-                      </button>
-                    )}
-                    <button
-                      onClick={() =>
-                        setPendingDelete({
-                          id: String(entry.id ?? ""),
-                          endpoint: "/api/series/canon/delete",
-                          refresh: async () => {
-                            const refreshed = await fetch(
-                              `/api/series/canon?seriesId=${activeSeries.id}`
-                            );
-                            const data = await refreshed.json();
-                            setSeriesMemory(data.entries ?? []);
-                          },
+
+            {/* ─── Bulk Actions Bar (shown when items are selected) ─── */}
+            {selectedCanonIds.size > 0 && (
+              <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
+                <span className="font-semibold text-amber-200">
+                  {selectedCanonIds.size} selected
+                </span>
+                <button
+                  onClick={async () => {
+                    const ids = Array.from(selectedCanonIds);
+                    await Promise.all(
+                      ids.map((id) =>
+                        fetch("/api/series/canon/delete", {
+                          method: "DELETE",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ id }),
                         })
+                      )
+                    );
+                    setSelectedCanonIds(new Set());
+                    await refreshCanonOnly();
+                  }}
+                  className="rounded-full border border-rose-500/60 px-3 py-1.5 text-[11px] text-rose-200"
+                >
+                  Delete {selectedCanonIds.size} selected
+                </button>
+                <label className="flex items-center gap-2 text-zinc-300">
+                  Recategorize to:
+                  <select
+                    value={bulkCanonCategory}
+                    onChange={(event) => setBulkCanonCategory(event.target.value)}
+                    className="rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs"
+                  >
+                    <option value="world">World</option>
+                    <option value="character">Character</option>
+                    <option value="event">Event</option>
+                    <option value="rule">Rule</option>
+                  </select>
+                </label>
+                <button
+                  onClick={async () => {
+                    const ids = Array.from(selectedCanonIds);
+                    await Promise.all(
+                      ids.map((id) =>
+                        fetch("/api/series/canon/update", {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            id,
+                            category: bulkCanonCategory,
+                          }),
+                        })
+                      )
+                    );
+                    setSelectedCanonIds(new Set());
+                    await refreshCanonOnly();
+                  }}
+                  className="rounded-full border border-zinc-700 px-3 py-1.5 text-[11px]"
+                >
+                  Apply
+                </button>
+                <button
+                  onClick={() => setSelectedCanonIds(new Set())}
+                  className="ml-auto rounded-full border border-zinc-700 px-3 py-1.5 text-[11px]"
+                >
+                  Clear selection
+                </button>
+              </div>
+            )}
+
+            {/* ─── Select All + Count ───────────────────────────────── */}
+            {filteredCanon.length > 0 && (
+              <div className="mt-4 flex items-center gap-3 text-xs text-zinc-400">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={
+                      filteredCanon.length > 0 &&
+                      filteredCanon.every((e) =>
+                        selectedCanonIds.has(String(e.id ?? ""))
+                      )
+                    }
+                    onChange={(event) => {
+                      if (event.target.checked) {
+                        setSelectedCanonIds(
+                          new Set(
+                            filteredCanon.map((e) => String(e.id ?? ""))
+                          )
+                        );
+                      } else {
+                        setSelectedCanonIds(new Set());
                       }
-                      className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
-                    >
-                      Delete
-                    </button>
-                  </div>
+                    }}
+                    className="h-4 w-4 rounded border-zinc-700 bg-zinc-950"
+                  />
+                  Select all ({filteredCanon.length})
+                </label>
+              </div>
+            )}
+
+            {/* ─── Entry List ───────────────────────────────────────── */}
+            <div className="mt-4 space-y-3">
+              {filteredCanon.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-zinc-700 bg-zinc-950/40 p-8 text-center text-sm text-zinc-500">
+                  {seriesMemory.some((e) => e.fact != null)
+                    ? "No canon entries match your filter. Try clearing the filter or search."
+                    : "No canon facts yet. Add one above to start enforcing continuity across your series."}
                 </div>
-              ))}
+              ) : (
+                filteredCanon.map((entry) => {
+                  const entryId = String(entry.id ?? "");
+                  const isSelected = selectedCanonIds.has(entryId);
+                  const isLocked = entry.cannot_change !== false && entry.cannot_change !== null;
+                  const category = String(entry.category ?? "fact");
+                  // Color-coded category badge
+                  const categoryColor =
+                    category === "world"
+                      ? "border-emerald-500/60 text-emerald-300 bg-emerald-500/10"
+                      : category === "character"
+                        ? "border-blue-500/60 text-blue-300 bg-blue-500/10"
+                        : category === "event"
+                          ? "border-purple-500/60 text-purple-300 bg-purple-500/10"
+                          : category === "rule"
+                            ? "border-amber-500/60 text-amber-300 bg-amber-500/10"
+                            : "border-zinc-700 text-zinc-300";
+                  // Format created_at
+                  const createdAt = entry.created_at
+                    ? new Date(String(entry.created_at)).toLocaleDateString(
+                        undefined,
+                        { year: "numeric", month: "short", day: "numeric" }
+                      )
+                    : null;
+
+                  return (
+                    <div
+                      key={entryId}
+                      className={`rounded-lg border p-4 text-xs text-zinc-200 transition-colors ${
+                        isSelected
+                          ? "border-amber-500/50 bg-amber-500/5"
+                          : "border-zinc-800 bg-zinc-950/60"
+                      }`}
+                    >
+                      {/* Header row: checkbox + badge + lock + source + date */}
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(event) => {
+                            setSelectedCanonIds((prev) => {
+                              const next = new Set(prev);
+                              if (event.target.checked) next.add(entryId);
+                              else next.delete(entryId);
+                              return next;
+                            });
+                          }}
+                          className="mt-0.5 h-4 w-4 rounded border-zinc-700 bg-zinc-950"
+                        />
+                        <div className="flex-1">
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+                            <span
+                              className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${categoryColor}`}
+                            >
+                              {category}
+                            </span>
+                            <span
+                              className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                                isLocked
+                                  ? "border-rose-500/50 text-rose-300 bg-rose-500/10"
+                                  : "border-zinc-600 text-zinc-400"
+                              }`}
+                              title={
+                                isLocked
+                                  ? "Locked — pipeline treats this as immutable"
+                                  : "Soft canon — advisory only"
+                              }
+                            >
+                              {isLocked ? "🔒 Locked" : "🔓 Soft"}
+                            </span>
+                            {String(entry.source ?? "").trim() && (
+                              <span className="text-zinc-500">
+                                📖 {String(entry.source)}
+                              </span>
+                            )}
+                            {createdAt && (
+                              <span className="text-zinc-600">
+                                📅 {createdAt}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Edit mode or display mode */}
+                      {editingCanonId === entryId ? (
+                        <div className="mt-3 space-y-2 pl-7">
+                          <select
+                            value={editingCanonCategory}
+                            onChange={(event) => setEditingCanonCategory(event.target.value)}
+                            className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm"
+                          >
+                            <option value="world">World</option>
+                            <option value="character">Character</option>
+                            <option value="event">Event</option>
+                            <option value="rule">Rule</option>
+                          </select>
+                          <textarea
+                            value={editingCanonFact}
+                            onChange={(event) => setEditingCanonFact(event.target.value)}
+                            className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm"
+                          />
+                          <input
+                            value={editingCanonSource}
+                            onChange={(event) => setEditingCanonSource(event.target.value)}
+                            className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm"
+                            placeholder="Source (e.g. Book 1, Chapter 3)"
+                          />
+                          <label className="flex items-center gap-2 text-xs text-zinc-300">
+                            <input
+                              type="checkbox"
+                              checked={editingCanonLocked}
+                              onChange={(event) => setEditingCanonLocked(event.target.checked)}
+                              className="h-4 w-4 rounded border-zinc-700 bg-zinc-950"
+                            />
+                            🔒 Locked (cannot change)
+                          </label>
+                        </div>
+                      ) : (
+                        <p className="mt-2 pl-7 text-xs">{String(entry.fact ?? "")}</p>
+                      )}
+
+                      {/* Action buttons */}
+                      <div className="mt-3 flex flex-wrap gap-2 pl-7">
+                        {editingCanonId === entryId ? (
+                          <>
+                            <button
+                              onClick={async () => {
+                                await fetch("/api/series/canon/update", {
+                                  method: "PUT",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    id: entryId,
+                                    fact: editingCanonFact,
+                                    category: editingCanonCategory,
+                                    source: editingCanonSource,
+                                    cannot_change: editingCanonLocked,
+                                  }),
+                                });
+                                setEditingCanonId(null);
+                                await refreshCanonOnly();
+                              }}
+                              className="rounded-full border border-emerald-500/60 px-3 py-1 text-[10px] text-emerald-200"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingCanonId(null)}
+                              className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => {
+                                setEditingCanonId(entryId);
+                                setEditingCanonFact(String(entry.fact ?? ""));
+                                setEditingCanonCategory(String(entry.category ?? "world"));
+                                setEditingCanonSource(String(entry.source ?? ""));
+                                setEditingCanonLocked(
+                                  entry.cannot_change !== false && entry.cannot_change !== null
+                                );
+                              }}
+                              className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                            >
+                              Edit
+                            </button>
+                            {/* Quick lock/unlock toggle without entering edit mode */}
+                            <button
+                              onClick={async () => {
+                                await fetch("/api/series/canon/update", {
+                                  method: "PUT",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    id: entryId,
+                                    cannot_change: !isLocked,
+                                  }),
+                                });
+                                await refreshCanonOnly();
+                              }}
+                              className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
+                              title={isLocked ? "Unlock (make soft canon)" : "Lock (make immutable)"}
+                            >
+                              {isLocked ? "🔓 Unlock" : "🔒 Lock"}
+                            </button>
+                          </>
+                        )}
+                        <button
+                          onClick={() =>
+                            setPendingDelete({
+                              id: entryId,
+                              endpoint: "/api/series/canon/delete",
+                              refresh: refreshCanonOnly,
+                            })
+                          }
+                          className="rounded-full border border-rose-500/40 px-3 py-1 text-[10px] text-rose-300"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </section>
         )}

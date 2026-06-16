@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
+import { formatCanonForPrompt } from "@/lib/canonPrompt";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -34,7 +35,7 @@ This novel is Book ${bookNumber} of ${totalBooks} in a series.
 
 Series Title: ${seriesContext.series_title ?? "Untitled Series"}
 Series Arc: ${seriesContext.series_arc ?? "No series arc provided"}
-Canonical Facts: ${trimContext(seriesContext.canon_entries, 1200)}
+${formatCanonForPrompt(seriesContext.canon_entries, { maxLength: 1200 })}
 Relationships: ${trimContext(seriesContext.relationships, 800)}
 Mysteries: ${trimContext(seriesContext.secrets, 800)}
 World Elements: ${trimContext(seriesContext.world_elements, 800)}
