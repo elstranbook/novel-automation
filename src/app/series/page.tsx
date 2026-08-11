@@ -3771,6 +3771,7 @@ export default function SeriesPage() {
                     {editingRelationshipId === String(relationship.id ?? "") ? (
                       <button
                         onClick={async () => {
+                          if (!activeSeries) return;
                           await fetch("/api/series/relationships/entries", {
                             method: "PUT",
                             headers: { "Content-Type": "application/json" },
@@ -3809,19 +3810,21 @@ export default function SeriesPage() {
                       </button>
                     )}
                     <button
-                      onClick={() =>
+                      onClick={() => {
+                        if (!activeSeries) return;
+                        const seriesId = activeSeries.id;
                         setPendingDelete({
                           id: String(relationship.id ?? ""),
                           endpoint: "/api/series/relationships/entries/delete",
                           refresh: async () => {
                             const refreshed = await fetch(
-                              `/api/series/relationships/entries?seriesId=${activeSeries.id}`
+                              `/api/series/relationships/entries?seriesId=${seriesId}`
                             );
                             const data = await refreshed.json();
                             setSeriesMemory(data.entries ?? []);
                           },
-                        })
-                      }
+                        });
+                      }}
                       className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
                     >
                       Delete
@@ -4021,6 +4024,7 @@ export default function SeriesPage() {
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
                         onClick={async () => {
+                          if (!activeSeries) return;
                           await fetch("/api/series/plot-threads/update", {
                             method: "PUT",
                             headers: { "Content-Type": "application/json" },
@@ -4041,19 +4045,21 @@ export default function SeriesPage() {
                         Mark In Progress
                       </button>
                       <button
-                        onClick={() =>
+                        onClick={() => {
+                          if (!activeSeries) return;
+                          const seriesId = activeSeries.id;
                           setPendingDelete({
                             id: String(thread.id ?? ""),
                             endpoint: "/api/series/plot-threads/delete",
                             refresh: async () => {
                               const response = await fetch(
-                                `/api/series/plot-threads?seriesId=${activeSeries.id}`
+                                `/api/series/plot-threads?seriesId=${seriesId}`
                               );
                               const data = await response.json();
                               setPlotThreads(data.threads ?? []);
                             },
-                          })
-                        }
+                          });
+                        }}
                         className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
                       >
                         Delete
@@ -4571,6 +4577,7 @@ export default function SeriesPage() {
                             {editingTimelineId === String(event.id ?? "") ? (
                               <button
                                 onClick={async () => {
+                                  if (!activeSeries) return;
                                   await fetch("/api/series/timeline-events/update", {
                                     method: "PUT",
                                     headers: { "Content-Type": "application/json" },
@@ -4607,19 +4614,21 @@ export default function SeriesPage() {
                               </button>
                             )}
                             <button
-                              onClick={() =>
+                              onClick={() => {
+                                if (!activeSeries) return;
+                                const seriesId = activeSeries.id;
                                 setPendingDelete({
                                   id: String(event.id ?? ""),
                                   endpoint: "/api/series/timeline-events/delete",
                                   refresh: async () => {
                                     const response = await fetch(
-                                      `/api/series/timeline?seriesId=${activeSeries.id}`
+                                      `/api/series/timeline?seriesId=${seriesId}`
                                     );
                                     const data = await response.json();
                                     setSeriesTimeline(data.events ?? []);
                                   },
-                                })
-                              }
+                                });
+                              }}
                               className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
                             >
                               Delete
