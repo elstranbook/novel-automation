@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
 import CharactersTab from "@/components/tabs/CharactersTab";
@@ -219,6 +219,8 @@ export default function SeriesPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const seriesLoadIdRef = useRef(0);
+  const creatingNewRef = useRef(false);
 
   const activeSeries = useMemo(() => {
     if (!selectedSeriesId) return null;
@@ -503,8 +505,24 @@ export default function SeriesPage() {
     setSuiteTargetAudience("");
   };
 
+  const startNewSeries = () => {
+    creatingNewRef.current = true;
+    seriesLoadIdRef.current += 1;
+    clearSeriesData();
+    setSelectedSeriesId(null);
+    setTitle("");
+    setDescription("");
+    setNumBooks(3);
+    setError(null);
+    setShowCreateForm(true);
+    setActiveTab("overview");
+    setSidebarOpen(false);
+  };
+
   const selectSeries = async (seriesId: string, seriesListRef?: SeriesSummary[]) => {
     console.log(`[selectSeries] Loading data for series ${seriesId}`);
+    creatingNewRef.current = false;
+    const loadId = ++seriesLoadIdRef.current;
     setSelectedSeriesId(seriesId);
     clearSeriesData();
     setSidebarOpen(false);
@@ -553,6 +571,8 @@ export default function SeriesPage() {
         // World tab: world elements
         fetch(`/api/series/world-elements?seriesId=${seriesId}`).then(r => r.json()),
       ]);
+
+      if (loadId !== seriesLoadIdRef.current) return;
 
       // Books (from server-side API)
       if (booksRes.status === "fulfilled") {
@@ -779,6 +799,7 @@ export default function SeriesPage() {
     if (data && data.length > 0) {
       console.log(`[loadSeries] Found ${data.length} series, selecting target`);
       setSeriesList(data);
+      if (creatingNewRef.current) return;
       const targetId = selectedSeriesId ?? (data[0]?.id ?? null);
       if (targetId && data.some((s: SeriesSummary) => s.id === targetId)) {
         // Use selectSeries to load all data for the target series
@@ -843,6 +864,7 @@ export default function SeriesPage() {
       setTitle("");
       setDescription("");
       setShowCreateForm(false);
+      creatingNewRef.current = false;
       await loadSeries(user.id);
       // Auto-select the newly created series (it will be first after reload)
       // Use the server-side API to avoid RLS issues
@@ -984,17 +1006,7 @@ export default function SeriesPage() {
           {/* New Series button */}
           <div className="px-3 pt-3">
             <button
-              onClick={() => {
-                clearSeriesData();
-                setSelectedSeriesId(null);
-                setTitle("");
-                setDescription("");
-                setNumBooks(3);
-                setError(null);
-                setShowCreateForm(true);
-                setActiveTab("overview");
-                setSidebarOpen(false);
-              }}
+              onClick={startNewSeries}
               className="w-full rounded-lg border border-zinc-700 bg-zinc-800/50 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-emerald-500/40 hover:text-emerald-200"
             >
               + New Series
