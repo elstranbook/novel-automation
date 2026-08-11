@@ -984,6 +984,7 @@ export default function SeriesPage() {
           <div className="px-3 pt-3">
             <button
               onClick={() => {
+                setShowCreateForm(true);
                 setActiveTab("overview");
                 setSidebarOpen(false);
               }}
