@@ -221,10 +221,8 @@ export default function SeriesPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const activeSeries = useMemo(() => {
-    if (selectedSeriesId) {
-      return seriesList.find(s => s.id === selectedSeriesId) ?? seriesList[0] ?? null;
-    }
-    return seriesList[0] ?? null;
+    if (!selectedSeriesId) return null;
+    return seriesList.find(s => s.id === selectedSeriesId) ?? null;
   }, [selectedSeriesId, seriesList]);
 
   const filteredCanon = useMemo(() => {
@@ -473,6 +471,7 @@ export default function SeriesPage() {
     setSeriesBooks([]);
     setSeriesCharacters([]);
     setSeriesWorld(null);
+    setWorldSummaryDraft("");
     setWorldSettingDraft("");
     setWorldRulesDraft("");
     setWorldLoreDraft("");
@@ -482,6 +481,8 @@ export default function SeriesPage() {
     setNewElementImportance("moderate");
     setEditingElementId(null);
     setSeriesMemory([]);
+    setMysterySecrets([]);
+    setMysteryClues([]);
     setSeriesTimeline([]);
     setPlotThreads([]);
     setSeriesLogs([]);
@@ -984,6 +985,12 @@ export default function SeriesPage() {
           <div className="px-3 pt-3">
             <button
               onClick={() => {
+                clearSeriesData();
+                setSelectedSeriesId(null);
+                setTitle("");
+                setDescription("");
+                setNumBooks(3);
+                setError(null);
                 setShowCreateForm(true);
                 setActiveTab("overview");
                 setSidebarOpen(false);
