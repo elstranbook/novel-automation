@@ -1,15 +1,25 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
-import { formatCanonForPrompt } from "@/lib/canonPrompt";
-import { formatMysteryForPrompt } from "@/lib/mysteryPrompt";
+import {
+  getSeriesContext,
+  hydrateStoryDetailsWithLiveSeriesContext,
+  seriesGenerationMeta,
+} from "@/lib/seriesContext";
+import { formatSeriesContextForPrompt } from "@/lib/seriesPrompt";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function POST(request: Request) {
   try {
-    const { storyDetails, premisesAndEndings, model, studioTitle } = await request.json();
+    const { storyDetails: rawDetails, premisesAndEndings, model, studioTitle, seriesId, bookNumber: requestBookNumber } =
+      await request.json();
+    const storyDetails = await hydrateStoryDetailsWithLiveSeriesContext(
+      rawDetails,
+      seriesId,
+      requestBookNumber
+    );
 
     if (!storyDetails) {
       return NextResponse.json(
@@ -21,44 +31,24 @@ export async function POST(request: Request) {
     const title = storyDetails.title ?? studioTitle ?? "Untitled";
     const theme = storyDetails.story_theme ?? "Growth and self-discovery";
     const wordCount = storyDetails.estimated_word_count ?? "70,000-90,000";
-    const targetAge = storyDetails.target_age_range ?? "13-18";
+    const targetAge = storyDetails.target_age_range ?? "";
     const mainCharacter = storyDetails.main_character_name ?? "the protagonist";
     const conflict = storyDetails.central_conflict ?? "a significant challenge";
-
-    const trimContext = (value: unknown, max = 1200) =>
-      JSON.stringify(value ?? "").slice(0, max);
-
-    const summarizeContext = (context: Record<string, unknown>) => ({
-      series_title: context.series_title,
-      series_arc: context.series_arc,
-      book_number: context.book_number,
-      total_books: context.total_books,
-      canon_entries: (context.canon_entries as unknown[] | undefined)?.slice(0, 5),
-      secrets: (context.secrets as unknown[] | undefined)?.slice(0, 5),
-      clues: (context.clues as unknown[] | undefined)?.slice(0, 5),
-      relationships: (context.relationships as unknown[] | undefined)?.slice(0, 5),
-      plot_threads: (context.plot_threads as unknown[] | undefined)?.slice(0, 5),
-      callbacks: (context.callbacks as unknown[] | undefined)?.slice(0, 5),
-    });
+    const genre = storyDetails.genre ?? "Fiction";
+    const narrativeStyle = String(storyDetails.narrative_style ?? "").trim();
 
     const description = `Theme: ${theme}\nGenre: ${
-      storyDetails.genre ?? "Young Adult Fiction"
+      storyDetails.genre ?? "Fiction"
     }\nCentral Concept: ${
-      storyDetails.central_concept ?? "A coming-of-age journey"
-    }\nSetting: ${storyDetails.setting ?? "A world of possibility"}\nNovel About: ${
+      storyDetails.central_concept ?? "A compelling journey"
+    }\nSetting: ${storyDetails.setting ?? "A vivid world"}\nNovel About: ${
       storyDetails.novel_about ?? ""
-    }\nSeries Context: ${
-      storyDetails.series_context
-        ? trimContext(summarizeContext(storyDetails.series_context as Record<string, unknown>), 1200)
-        : ""
-    }\n${formatCanonForPrompt(storyDetails.series_context?.canon_entries, { maxLength: 800 })}\n${formatMysteryForPrompt(storyDetails.series_context?.secrets, storyDetails.series_context?.clues, { maxLength: 1200 })}\nRelationships: ${
-      storyDetails.series_context?.relationships ? trimContext(storyDetails.series_context.relationships, 800) : ""
-    }`;
+    }\n${formatSeriesContextForPrompt(getSeriesContext(storyDetails))}`;
 
     const premise = premisesAndEndings?.chosen_premise ?? "";
     const ending = premisesAndEndings?.chosen_ending ?? "";
 
-    const seriesContext = storyDetails.series_context ?? null;
+    const seriesContext = getSeriesContext(storyDetails);
     let seriesGuidance = "";
     if (seriesContext) {
       const bookNumber = seriesContext.book_number ?? 1;
@@ -73,19 +63,19 @@ This novel is Book ${bookNumber} of ${totalBooks} in a series titled "${seriesTi
 Series Arc: ${seriesContext.series_arc ?? "No series arc provided"}
 `;
 
-      if (seriesContext.character_arcs) {
+      if (seriesContext.character_arcs && typeof seriesContext.character_arcs === "object") {
         seriesGuidance += "\nCharacter Arcs Across Series:\n";
-        Object.entries(seriesContext.character_arcs).forEach(
+        Object.entries(seriesContext.character_arcs as Record<string, unknown>).forEach(
           ([charName, charArc]) => {
             seriesGuidance += `- ${charName}: ${charArc}\n`;
           }
         );
       }
 
-      if (seriesContext.themes) {
+      if (Array.isArray(seriesContext.themes)) {
         seriesGuidance += "\nSeries Themes to Incorporate:\n";
-        seriesContext.themes.forEach((themeItem: string) => {
-          seriesGuidance += `- ${themeItem}\n`;
+        seriesContext.themes.forEach((themeItem) => {
+          seriesGuidance += `- ${String(themeItem)}\n`;
         });
       }
 
@@ -117,18 +107,19 @@ Series Arc: ${seriesContext.series_arc ?? "No series arc provided"}
     }
 
     const prompt = `
-I am writing a Young Adult fantasy Novel titled "${title}".
+I am writing a ${genre} novel titled "${title}".
 
 The theme centers around ${theme}.
 
 Target word count range: ${wordCount}
-Intended YA audience: ${targetAge}
+${targetAge ? `Intended audience: ${targetAge}` : "Intended audience: match the genre and author brief"}
+${narrativeStyle ? `Narrative style: ${narrativeStyle}` : ""}
 
 The story follows ${mainCharacter} as they face ${conflict}.
 
 ${seriesGuidance}
 
-Given the following premise and story information, provide a highly detailed synopsis for this YA novel using a traditional three-act structure.
+Given the following premise and story information, provide a highly detailed synopsis for this novel using a traditional three-act structure.
 
 The synopsis should:
 – Clearly label Act I, Act II, and Act III
@@ -137,7 +128,7 @@ The synopsis should:
 – Hint at the resolution without spoiling the ending completely
 – Leave readers eager to dive into the story
 
-Use a tone and language that captures the spirit of a YA novel while still offering depth, clarity, and structure.
+Use a tone and language that fits the genre (${genre}) while still offering depth, clarity, and structure.
 
 Description:
 ${description}
@@ -146,15 +137,17 @@ Premise: ${premise}
 Ending: ${ending}
 `;
 
-    const system = `You are a professional YA novelist skilled at creating compelling synopses.
+    const system = `You are a professional novelist skilled at creating compelling synopses for ${genre} fiction.
 Create a detailed three-act structure synopsis that would excite both readers and publishers.
-Focus on emotional arcs, character development, and the unique aspects that make this story stand out in the YA market.`;
+Focus on emotional arcs, character development, and the unique aspects that make this story stand out.
+Match the stated genre and audience; do not assume Young Adult unless the material calls for it.`;
 
     const response = await runChatCompletion({
       model: resolveModel(model, PipelineStep.SYNOPSIS),
       system,
       prompt,
       jsonResponse: false,
+      generationMeta: seriesGenerationMeta(storyDetails, "synopsis", seriesId),
     });
 
     return NextResponse.json({ synopsis: response });

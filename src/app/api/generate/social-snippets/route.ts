@@ -40,9 +40,13 @@ export async function POST(request: Request) {
       "Untitled"
     );
     const theme = getStoryValue(storyDetails, "story_theme", "Coming of age");
-    const genre = getStoryValue(storyDetails, "genre", "Young Adult Fiction");
+    const genre = getStoryValue(storyDetails, "genre", "Fiction");
+    const targetAge = getStoryValue(storyDetails, "target_age_range", "");
+    const audienceHint = targetAge
+      ? `readers aged ${targetAge}`
+      : `${genre} readers`;
 
-    let context = `Novel: ${title}\nGenre: ${genre}\nTheme: ${theme}`;
+    let context = `Novel: ${title}\nGenre: ${genre}\nTheme: ${theme}${targetAge ? `\nAudience: ${targetAge}` : ""}`;
     if (articleContent) {
       context += `\n\nArticle excerpt: ${articleContent.slice(0, 500)}...`;
     }
@@ -61,7 +65,7 @@ export async function POST(request: Request) {
     };
 
     const prompt = `
-Create social media promotional content for the YA novel "${title}".
+Create social media promotional content for the ${genre} novel "${title}".
 
 ${context}
 
@@ -71,12 +75,13 @@ ${platform ? platformPrompts[platform] ?? "" : "1. TWITTER/X POSTS (3 variations
 
 Format each section clearly with headers.
 
-Make the tone emotionally engaging, fast-paced, and tailored to teen readers.
+Make the tone emotionally engaging and tailored to ${audienceHint}.
 Use hooks, curiosity, and relatable language. Avoid generic phrasing.
+Do not assume Young Adult or teen voice unless the genre/audience calls for it.
 `;
 
     const system =
-      "You are a social media marketing expert specializing in YA book promotion. Create engaging, platform-appropriate content that drives book discovery and purchases. Write with an emotionally engaging, fast-paced tone tailored to teen readers, using hooks, curiosity, and relatable language while avoiding generic phrasing.";
+      `You are a social media marketing expert specializing in ${genre} book promotion. Create engaging, platform-appropriate content that drives book discovery and purchases. Match the stated genre and audience; do not assume Young Adult unless the material calls for it.`;
 
     const response = await runChatCompletion({
       model: resolveModel(model, PipelineStep.SOCIAL_SNIPPETS),

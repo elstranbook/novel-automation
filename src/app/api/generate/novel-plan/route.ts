@@ -2,16 +2,55 @@ import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 import { formatCharactersForPrompt } from "@/lib/characterPrompt";
-import { formatCanonForPrompt } from "@/lib/canonPrompt";
-import { formatMysteryForPrompt } from "@/lib/mysteryPrompt";
+import {
+  getSeriesContext,
+  hydrateStoryDetailsWithLiveSeriesContext,
+  seriesGenerationMeta,
+} from "@/lib/seriesContext";
+import { formatSeriesContextForPrompt } from "@/lib/seriesPrompt";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+function resolveWordCount(storyDetails: Record<string, unknown>): number {
+  const raw = storyDetails.estimated_word_count;
+  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+    return Math.round(raw);
+  }
+  if (typeof raw === "string") {
+    const digits = raw.replace(/,/g, "").match(/\d+/);
+    if (digits) {
+      const n = Number(digits[0]);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+  }
+  return 80000;
+}
+
+function formatBlueprintBlock(blueprint: unknown): string {
+  if (!blueprint) return "";
+  if (typeof blueprint === "string") {
+    const trimmed = blueprint.trim();
+    return trimmed ? `BOOK BLUEPRINT:\n${trimmed}` : "";
+  }
+  try {
+    const text = JSON.stringify(blueprint, null, 2);
+    if (!text || text === "{}" || text === "[]") return "";
+    return `BOOK BLUEPRINT:\n${text.slice(0, 3500)}`;
+  } catch {
+    return "";
+  }
+}
+
 export async function POST(request: Request) {
   try {
-    const { storyDetails, synopsis, characterProfiles, model } =
+    const { storyDetails: rawDetails, synopsis, characterProfiles, model, seriesId, bookNumber } =
       await request.json();
+    const storyDetails = await hydrateStoryDetailsWithLiveSeriesContext(
+      rawDetails,
+      seriesId,
+      bookNumber
+    );
 
     if (!storyDetails) {
       return NextResponse.json(
@@ -20,7 +59,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const seriesContext = storyDetails.series_context ?? null;
+    const seriesContext = getSeriesContext(storyDetails);
     let seriesGuidance = "";
     if (seriesContext) {
       seriesGuidance = `
@@ -81,17 +120,31 @@ As a MIDDLE book (${position} in the series):
     const synopsisValue = synopsis ?? "";
     const profilesValue = characterProfiles ?? "";
     const novelAbout = storyDetails.novel_about ?? "";
+    const genre = String(storyDetails.genre ?? "fiction").trim() || "fiction";
+    const targetAge = String(storyDetails.target_age_range ?? "").trim();
+    const narrativeStyle = String(storyDetails.narrative_style ?? "").trim();
+    const wordCount = resolveWordCount(storyDetails);
+
+    // Prefer live series blueprint when present; else standalone storyDetails blueprint
+    const blueprint =
+      seriesContext?.book_blueprint ?? storyDetails.book_blueprint ?? null;
+    const blueprintBlock = formatBlueprintBlock(blueprint);
 
     // Build formatted character section from series_characters if available
-    const seriesCharacters = storyDetails?.series_context?.characters;
+    const seriesCharacters = seriesContext?.characters;
     const formattedCharacters = (Array.isArray(seriesCharacters) && seriesCharacters.length > 0)
-      ? formatCharactersForPrompt(seriesCharacters, { maxLength: 4000 })
+      ? formatCharactersForPrompt(
+          seriesCharacters as Parameters<typeof formatCharactersForPrompt>[0],
+          { maxLength: 4000 }
+        )
       : (typeof profilesValue === 'string' ? profilesValue : "");
 
     const prompt = `
-Following the synopsis below, create a structured plan to guide me in building a compelling, emotionally rich narrative that keeps readers engaged throughout my 120000-word novel. Break the novel down into 3 parts, providing an approximate word count for each section along with key milestones and plot points to hit.
+Following the synopsis below, create a structured plan to guide me in building a compelling, emotionally rich narrative that keeps readers engaged throughout my ${wordCount}-word ${genre} novel${targetAge ? ` for readers aged ${targetAge}` : ""}${narrativeStyle ? ` written in ${narrativeStyle}` : ""}. Break the novel down into 3 parts, providing an approximate word count for each section along with key milestones and plot points to hit.
 
 ${seriesGuidance}
+
+${blueprintBlock}
 
 Include specific guidance for:
 
@@ -120,38 +173,24 @@ Author Intent (What the novel is about):
 ${novelAbout}
 
 Series Context:
-${storyDetails.series_context ? JSON.stringify(storyDetails.series_context).slice(0, 1600) : ""}
-${formatCanonForPrompt(storyDetails.series_context?.canon_entries, { maxLength: 800 })}
-${formatMysteryForPrompt(storyDetails.series_context?.secrets, storyDetails.series_context?.clues, { maxLength: 1500 })}
-Relationships:
-${storyDetails.series_context?.relationships ? JSON.stringify(storyDetails.series_context.relationships).slice(0, 800) : ""}
-Plot Threads:
-${storyDetails.series_context?.plot_threads ? JSON.stringify(storyDetails.series_context.plot_threads).slice(0, 800) : ""}
-Callbacks:
-${storyDetails.series_context?.callbacks ? JSON.stringify(storyDetails.series_context.callbacks).slice(0, 800) : ""}
-World Setting:
-${storyDetails.series_context?.world?.setting ? String(storyDetails.series_context.world.setting).slice(0, 600) : ""}
-World Rules & Constraints:
-${storyDetails.series_context?.world?.rules ? String(storyDetails.series_context.world.rules).slice(0, 600) : ""}
-World Lore & History:
-${storyDetails.series_context?.world?.lore ? String(storyDetails.series_context.world.lore).slice(0, 600) : ""}
-World Elements (locations, magic systems, artifacts, factions, etc.):
-${storyDetails.series_context?.world_elements ? JSON.stringify(storyDetails.series_context.world_elements).slice(0, 800) : ""}
+${formatSeriesContextForPrompt(seriesContext, { includeCharacters: false })}
 
 Character Profiles:
 ${formattedCharacters || profilesValue}
 `;
 
-    const system = `You are a professional novel structure expert and writing coach.
+    const system = `You are a professional novel structure expert and writing coach for ${genre} fiction.
 Create a comprehensive novel plan that gives practical, actionable guidance for developing a compelling narrative.
 Focus on emotional arcs, structural balance, and specific plot milestones that will help the author craft a satisfying story.
-Provide a balance of big-picture guidance and specific tactical suggestions.`;
+Provide a balance of big-picture guidance and specific tactical suggestions.
+Match the stated genre, audience, and narrative style; do not assume Young Adult unless the material calls for it.`;
 
     const response = await runChatCompletion({
       model: resolveModel(model, PipelineStep.NOVEL_PLAN),
       system,
       prompt,
       jsonResponse: false,
+      generationMeta: seriesGenerationMeta(storyDetails, "novel-plan", seriesId),
     });
 
     return NextResponse.json({ plan: response });

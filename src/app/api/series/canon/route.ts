@@ -44,7 +44,7 @@ export async function POST(request: Request) {
 
     const { data: log } = await supabaseAdmin
       .from("canon_log")
-      .upsert({ series_id: seriesId })
+      .upsert({ series_id: seriesId }, { onConflict: "series_id" })
       .select("id")
       .single();
 

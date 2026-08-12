@@ -1,5 +1,9 @@
 import OpenAI from "openai";
 import { isDashScopeModel, runDashScopeCompletion } from "./dashscopeClient";
+import {
+  finishSeriesGenerationLog,
+  startSeriesGenerationLog,
+} from "./seriesGenerationLog";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? "";
 
@@ -45,6 +49,7 @@ export const runChatCompletion = async ({
   prompt,
   jsonResponse = false,
   maxTokens,
+  temperature,
   generationMeta,
 }: {
   model: string;
@@ -52,6 +57,7 @@ export const runChatCompletion = async ({
   prompt: string;
   jsonResponse?: boolean;
   maxTokens?: number;
+  temperature?: number;
   generationMeta?: {
     seriesId?: string;
     type?: string;
@@ -66,6 +72,7 @@ export const runChatCompletion = async ({
       prompt,
       jsonResponse,
       maxTokens,
+      temperature,
       generationMeta,
     });
   }
@@ -82,63 +89,50 @@ export const runChatCompletion = async ({
   let generationLogId: string | null = null;
 
   if (generationMeta?.seriesId && generationMeta?.type) {
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/series/generation-log`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            seriesId: generationMeta.seriesId,
-            type: generationMeta.type,
-            targetId: generationMeta.targetId ?? null,
-            prompt,
-            status: "running",
-          }),
-        }
-      );
-      const data = await response.json();
-      generationLogId = data?.log?.id ?? null;
-    } catch {
-      // ignore logging errors
-    }
-  }
-
-  const response = await openaiClient.chat.completions.create({
-    model,
-    messages,
-    max_completion_tokens: maxTokens ?? 4000,
-    response_format: jsonResponse ? { type: "json_object" } : undefined,
-  });
-
-  const content = response.choices[0]?.message?.content ?? "";
-
-  if (generationMeta?.seriesId && generationMeta?.type && generationLogId) {
-    try {
-      await fetch(
-        `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/series/generation-log/update`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: generationLogId,
-            status: "completed",
-            result: content,
-          }),
-        }
-      );
-    } catch {
-      // ignore logging errors
-    }
-  }
-
-  if (!jsonResponse) {
-    return content;
+    generationLogId = await startSeriesGenerationLog({
+      seriesId: generationMeta.seriesId,
+      type: generationMeta.type,
+      targetId: generationMeta.targetId ?? null,
+      prompt,
+    });
   }
 
   try {
-    return JSON.parse(content);
-  } catch {
-    return { error: "Failed to parse JSON response", raw: content };
+    const response = await getOpenAIClient().chat.completions.create({
+      model,
+      messages,
+      max_completion_tokens: maxTokens ?? 4000,
+      ...(typeof temperature === "number" ? { temperature } : {}),
+      response_format: jsonResponse ? { type: "json_object" } : undefined,
+    });
+
+    const content = response.choices[0]?.message?.content ?? "";
+
+    if (generationLogId) {
+      await finishSeriesGenerationLog({
+        id: generationLogId,
+        status: "completed",
+        result: content,
+      });
+    }
+
+    if (!jsonResponse) {
+      return content;
+    }
+
+    try {
+      return JSON.parse(content);
+    } catch {
+      return { error: "Failed to parse JSON response", raw: content };
+    }
+  } catch (error) {
+    if (generationLogId) {
+      await finishSeriesGenerationLog({
+        id: generationLogId,
+        status: "failed",
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
+    throw error;
   }
 };

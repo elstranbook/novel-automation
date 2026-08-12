@@ -17,6 +17,7 @@ import { QWEN3_MODELS } from "./dashscopeClient";
 export enum PipelineStep {
   // Prose writing
   PROSE = "prose",
+  PROSE_REVISE = "prose_revise",
 
   // Planning / reasoning tasks
   CHAPTER_OUTLINE = "chapter_outline",
@@ -41,6 +42,9 @@ export enum PipelineStep {
   SERIES_BIBLE = "series_bible",
   SERIES_MAP = "series_map",
 
+  // Continuity / post-prose
+  CONTINUITY_EXTRACT = "continuity_extract",
+
   // Marketing assets
   KEYWORDS = "keywords",
   BISAC = "bisac",
@@ -61,6 +65,7 @@ export enum PipelineStep {
 const STEP_MODEL_MAP: Record<PipelineStep, string> = {
   // Prose writing — best creative writing model
   [PipelineStep.PROSE]: QWEN3_MODELS.QWEN3_235B_INSTRUCT,
+  [PipelineStep.PROSE_REVISE]: QWEN3_MODELS.QWEN3_235B_INSTRUCT,
 
   // Planning / reasoning — thinking model for complex narrative structure
   [PipelineStep.CHAPTER_OUTLINE]: QWEN3_MODELS.QWEN3_235B_THINKING,
@@ -84,6 +89,8 @@ const STEP_MODEL_MAP: Record<PipelineStep, string> = {
   [PipelineStep.SERIES_EVOLUTION]: QWEN3_MODELS.QWEN3_235B_THINKING,
   [PipelineStep.SERIES_BIBLE]: QWEN3_MODELS.QWEN3_235B_THINKING,
   [PipelineStep.SERIES_MAP]: QWEN3_MODELS.QWEN3_235B_THINKING,
+
+  [PipelineStep.CONTINUITY_EXTRACT]: QWEN3_MODELS.QWEN3_235B_THINKING,
 
   // Marketing assets — fast & cheap
   [PipelineStep.KEYWORDS]: QWEN3_MODELS.QWEN3_14B,

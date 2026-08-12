@@ -7,6 +7,7 @@ type TimelinePayload = {
   title?: string;
   description: string;
   bookNumber?: number | null;
+  chapterNumber?: number | null;
 };
 
 export async function GET(request: Request) {
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { seriesId, eventOrder, title, description, bookNumber } =
+    const { seriesId, eventOrder, title, description, bookNumber, chapterNumber } =
       (await request.json()) as TimelinePayload;
     if (!seriesId || !description) {
       return NextResponse.json(
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
         title: title ?? "",
         description,
         book_number: bookNumber ?? null,
+        chapter_number: chapterNumber ?? null,
       })
       .select("*")
       .single();

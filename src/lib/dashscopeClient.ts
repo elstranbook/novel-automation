@@ -1,4 +1,8 @@
 import OpenAI from "openai";
+import {
+  finishSeriesGenerationLog,
+  startSeriesGenerationLog,
+} from "./seriesGenerationLog";
 
 /**
  * OpenRouter client for Qwen3 models.
@@ -99,6 +103,7 @@ export const runDashScopeCompletion = async ({
   prompt,
   jsonResponse = false,
   maxTokens,
+  temperature,
   generationMeta,
 }: {
   model: string;
@@ -106,6 +111,7 @@ export const runDashScopeCompletion = async ({
   prompt: string;
   jsonResponse?: boolean;
   maxTokens?: number;
+  temperature?: number;
   generationMeta?: {
     seriesId?: string;
     type?: string;
@@ -130,87 +136,76 @@ export const runDashScopeCompletion = async ({
   let generationLogId: string | null = null;
 
   if (generationMeta?.seriesId && generationMeta?.type) {
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/series/generation-log`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            seriesId: generationMeta.seriesId,
-            type: generationMeta.type,
-            targetId: generationMeta.targetId ?? null,
-            prompt,
-            status: "running",
-          }),
-        }
-      );
-      const data = await response.json();
-      generationLogId = data?.log?.id ?? null;
-    } catch {
-      // ignore logging errors
-    }
+    generationLogId = await startSeriesGenerationLog({
+      seriesId: generationMeta.seriesId,
+      type: generationMeta.type,
+      targetId: generationMeta.targetId ?? null,
+      prompt,
+    });
   }
 
-  const response = await getDashScopeClient().chat.completions.create({
-    model,
-    messages,
-    max_completion_tokens: maxTokens ?? 4000,
-    // Thinking models don't support response_format; skip for them
-    ...(jsonResponse && !model.includes("thinking") ? { response_format: { type: "json_object" } } : {}),
-  });
-
-  let content = response.choices[0]?.message?.content ?? "";
-
-  // Strip <think/> tags from thinking model responses
-  content = content.replace(/<think[\s\S]*?<\/think>\s*/g, "").trim();
-
-  if (generationMeta?.seriesId && generationMeta?.type && generationLogId) {
-    try {
-      await fetch(
-        `${process.env.NEXT_PUBLIC_SITE_URL ?? ""}/api/series/generation-log/update`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: generationLogId,
-            status: "completed",
-            result: content,
-          }),
-        }
-      );
-    } catch {
-      // ignore logging errors
-    }
-  }
-
-  if (!jsonResponse) {
-    return content;
-  }
-
-  // For thinking models that couldn't use response_format,
-  // try to extract JSON from the response
   try {
-    return JSON.parse(content);
-  } catch {
-    // Try to find JSON object in the response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        return JSON.parse(jsonMatch[0]);
-      } catch {
-        // fall through
-      }
+    const response = await getDashScopeClient().chat.completions.create({
+      model,
+      messages,
+      max_completion_tokens: maxTokens ?? 4000,
+      ...(typeof temperature === "number" ? { temperature } : {}),
+      // Thinking models don't support response_format; skip for them
+      ...(jsonResponse && !model.includes("thinking")
+        ? { response_format: { type: "json_object" as const } }
+        : {}),
+    });
+
+    let content = response.choices[0]?.message?.content ?? "";
+
+    // Strip <think/> tags from thinking model responses
+    content = content.replace(/<think[\s\S]*?<\/think>\s*/g, "").trim();
+
+    if (generationLogId) {
+      await finishSeriesGenerationLog({
+        id: generationLogId,
+        status: "completed",
+        result: content,
+      });
     }
-    // Try to find JSON array
-    const arrayMatch = content.match(/\[[\s\S]*\]/);
-    if (arrayMatch) {
-      try {
-        return JSON.parse(arrayMatch[0]);
-      } catch {
-        // fall through
-      }
+
+    if (!jsonResponse) {
+      return content;
     }
-    return { error: "Failed to parse JSON response", raw: content };
+
+    // For thinking models that couldn't use response_format,
+    // try to extract JSON from the response
+    try {
+      return JSON.parse(content);
+    } catch {
+      // Try to find JSON object in the response
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          return JSON.parse(jsonMatch[0]);
+        } catch {
+          // fall through
+        }
+      }
+      // Try to find JSON array
+      const arrayMatch = content.match(/\[[\s\S]*\]/);
+      if (arrayMatch) {
+        try {
+          return JSON.parse(arrayMatch[0]);
+        } catch {
+          // fall through
+        }
+      }
+      return { error: "Failed to parse JSON response", raw: content };
+    }
+  } catch (error) {
+    if (generationLogId) {
+      await finishSeriesGenerationLog({
+        id: generationLogId,
+        status: "failed",
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
+    throw error;
   }
 };

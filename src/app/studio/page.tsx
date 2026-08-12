@@ -4,6 +4,19 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabaseClient";
+import {
+  assessSeriesContextGates,
+  fetchSeriesPreflight,
+  isProsePartial,
+  lastNWordsLocal,
+  type PreflightResult,
+} from "@/lib/seriesPreflight";
+import type { AlignmentResult } from "@/lib/blueprintAlign";
+import {
+  formatCharacterProfilesForDisplay,
+  parseCharacterProfilesPayload,
+  toSeriesCharacterPayload,
+} from "@/lib/characterProfiles";
 
 // Mockup App Imports
 import { MockupEditor } from "@/components/editor/MockupEditor";
@@ -208,10 +221,16 @@ const pageBreakText = "\f";
 const pageBreakMarkdown = "\n\n\\pagebreak\n\n";
 const pageBreakHtml = '<div style="page-break-after: always; break-after: page;"></div>';
 
+const chapterExportTitle = (chapterKey: string, index: number) => {
+  const trimmed = String(chapterKey ?? "").trim();
+  if (/^chapter\s+\d+/i.test(trimmed)) return trimmed;
+  return `Chapter ${index + 1}: ${trimmed || "Untitled"}`;
+};
+
 const formatProseText = (prose: ScenesMap) =>
   sortScenesEntries(prose)
     .map(([chapter, scenes], index) => {
-      const chapterHeader = `Chapter ${index + 1}: ${chapter}`;
+      const chapterHeader = chapterExportTitle(chapter, index);
       return `${chapterHeader}\n\n${scenes.join("\n\n")}`;
     })
     .join(`\n\n${pageBreakText}\n\n`);
@@ -219,7 +238,7 @@ const formatProseText = (prose: ScenesMap) =>
 const formatProseMarkdown = (prose: ScenesMap) =>
   sortScenesEntries(prose)
     .map(([chapter, scenes], index) => {
-      const chapterHeader = `## Chapter ${index + 1}: ${chapter}`;
+      const chapterHeader = `## ${chapterExportTitle(chapter, index)}`;
       return `${chapterHeader}\n\n${scenes.join("\n\n")}`;
     })
     .join(pageBreakMarkdown);
@@ -227,7 +246,7 @@ const formatProseMarkdown = (prose: ScenesMap) =>
 const formatProseHtml = (prose: ScenesMap) =>
   `<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\" />\n<title>Novel Export</title>\n</head>\n<body>\n${sortScenesEntries(prose)
     .map(([chapter, scenes], index) => {
-      const header = `<h2>Chapter ${index + 1}: ${chapter}</h2>`;
+      const header = `<h2>${chapterExportTitle(chapter, index)}</h2>`;
       const body = scenes
         .map((scene) => `<p>${scene.replace(/\n+/g, "</p><p>")}</p>`)
         .join("\n");
@@ -387,11 +406,11 @@ function StudioContent() {
   const [maxSceneLength, setMaxSceneLength] = useState(1000);
   const [minSceneLength, setMinSceneLength] = useState(300);
 
-  const [seriesId] = useState<string | null>(
-    searchParams.get("seriesId")
-  );
-  const [seriesBookNumber] = useState<number>(
-    Number(searchParams.get("bookNumber") ?? 1)
+  const urlSeriesId = searchParams.get("seriesId");
+  const urlBookNumber = searchParams.get("bookNumber");
+  const [seriesId, setSeriesId] = useState<string | null>(urlSeriesId);
+  const [seriesBookNumber, setSeriesBookNumber] = useState<number>(
+    Number(urlBookNumber ?? 1)
   );
   const [seriesBookOptions, setSeriesBookOptions] = useState<
     Array<{ book_number: number; title: string }>
@@ -417,6 +436,7 @@ function StudioContent() {
     target_age_range: "",
     narrative_style: "",
     novel_about: "",
+    voice_sample: "",
   });
   const [premisesAndEndings, setPremisesAndEndings] =
     useState<PremisesAndEndings | null>(null);
@@ -497,6 +517,24 @@ function StudioContent() {
   const [publishPublicId, setPublishPublicId] = useState<string | null>(null);
   const [novelIdCopied, setNovelIdCopied] = useState(false);
   const [proseScenes, setProseScenes] = useState<ScenesMap | null>(null);
+  const [outlineAlignment, setOutlineAlignment] =
+    useState<AlignmentResult | null>(null);
+  const [continuityCandidates, setContinuityCandidates] = useState<
+    Array<{
+      id: string;
+      kind: "canon" | "memory";
+      category: string;
+      content: string;
+      source?: string;
+      cannot_change?: boolean;
+      speculative?: boolean;
+    }>
+  >([]);
+  const [selectedContinuityIds, setSelectedContinuityIds] = useState<
+    Set<string>
+  >(new Set());
+  const [continuityLoading, setContinuityLoading] = useState(false);
+  const [continuitySaving, setContinuitySaving] = useState(false);
 
   // Blog publish state — per-article editable overrides
   const [blogArticleEdits, setBlogArticleEdits] = useState<Record<number, { title: string; excerpt: string; category: string; tags: string }>>({});
@@ -642,20 +680,69 @@ function StudioContent() {
       )
       .join("\n\n");
 
+  /** Keep structured scene objects as JSON so parseScenePayload retains summary/beat/cast. */
+  const serializeScenePayload = (scene: unknown): string => {
+    if (typeof scene === "string") return scene;
+    if (scene && typeof scene === "object") {
+      try {
+        return JSON.stringify(scene);
+      } catch {
+        return String(scene);
+      }
+    }
+    return scene != null ? String(scene) : "";
+  };
+
+  const formatSceneForDisplay = (scene: string): string => {
+    const trimmed = String(scene ?? "").trim();
+    if (!trimmed) return "";
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === "object") {
+          const rec = Array.isArray(parsed) ? parsed[0] : parsed;
+          if (rec && typeof rec === "object") {
+            const summary = String(
+              (rec as Record<string, unknown>).summary ??
+                (rec as Record<string, unknown>).scene ??
+                ""
+            ).trim();
+            if (summary) {
+              const beat = (rec as Record<string, unknown>).beat_reference;
+              const cast = (rec as Record<string, unknown>).cast;
+              const castLine = Array.isArray(cast)
+                ? `Cast: ${cast.map(String).join(", ")}`
+                : typeof cast === "string" && cast.trim()
+                  ? `Cast: ${cast}`
+                  : "";
+              return [
+                beat ? `Beat: ${String(beat)}` : "",
+                castLine,
+                summary,
+              ]
+                .filter(Boolean)
+                .join("\n");
+            }
+          }
+          return formatReadable(parsed);
+        }
+      } catch {
+        // fall through
+      }
+    }
+    return trimmed;
+  };
+
   const normalizeScenesResponse = (scenes: unknown): string[] => {
     if (Array.isArray(scenes)) {
-      return scenes.map((scene) => (typeof scene === "string" ? scene : formatReadable(scene)));
+      return scenes.map(serializeScenePayload).filter(Boolean);
     }
     if (scenes && typeof scenes === "object") {
       const record = scenes as Record<string, unknown>;
       if (Array.isArray(record.scenes)) {
-        return record.scenes.map((scene) =>
-          typeof scene === "string" ? scene : formatReadable(scene)
-        );
+        return record.scenes.map(serializeScenePayload).filter(Boolean);
       }
-      return Object.values(record).map((scene) =>
-        typeof scene === "string" ? scene : formatReadable(scene)
-      );
+      return Object.values(record).map(serializeScenePayload).filter(Boolean);
     }
     return scenes ? [String(scenes)] : [];
   };
@@ -702,120 +789,140 @@ function StudioContent() {
       return [
         {
           step: "Story details",
+          track: "write" as const,
           requires: ["Title", "Novel about"],
           produces: ["storyDetails"],
           status: isFilled(storyDetails) ? "ready" : "missing",
         },
         {
           step: "Premises & endings",
+          track: "write" as const,
           requires: ["storyDetails"],
           produces: ["premisesAndEndings"],
           status: isFilled(premisesAndEndings) ? "ready" : "missing",
         },
         {
           step: "Synopsis",
+          track: "write" as const,
           requires: ["storyDetails", "premisesAndEndings"],
           produces: ["novelSynopsis"],
           status: isFilled(novelSynopsis) ? "ready" : "missing",
         },
         {
           step: "Character profiles",
+          track: "write" as const,
           requires: ["storyDetails", "novelSynopsis"],
           produces: ["characterProfiles"],
           status: isFilled(characterProfiles) ? "ready" : "missing",
         },
         {
           step: "Book descriptions",
+          track: "market" as const,
           requires: ["storyDetails", "novelSynopsis"],
           produces: ["bookDescriptions"],
           status: isFilled(bookDescriptions) ? "ready" : "missing",
         },
         {
           step: "Keywords",
+          track: "market" as const,
           requires: ["storyDetails", "novelSynopsis"],
           produces: ["novelKeywords"],
           status: isFilled(novelKeywords) ? "ready" : "missing",
         },
         {
           step: "BISAC",
+          track: "market" as const,
           requires: ["storyDetails", "novelSynopsis"],
           produces: ["novelBisac"],
           status: isFilled(novelBisac) ? "ready" : "missing",
         },
         {
           step: "SEO Enrichment",
+          track: "market" as const,
           requires: ["storyDetails", "novelSynopsis"],
           produces: ["seoEnriched"],
           status: seoEnriched ? "ready" : "missing",
         },
         {
           step: "Novel plan",
+          track: "write" as const,
           requires: ["storyDetails", "novelSynopsis", "characterProfiles", "World data", charactersLabel, mysteryLabel],
           produces: ["novelPlan"],
           status: isFilled(novelPlan) ? "ready" : "missing",
         },
         {
           step: "Chapter outline",
+          track: "write" as const,
           requires: ["storyDetails", "novelPlan"],
           produces: ["chapterOutline"],
           status: isFilled(chapterOutline) ? "ready" : "missing",
         },
         {
           step: "Chapter guide",
+          track: "write" as const,
           requires: ["chapterOutline", "novelSynopsis", "characterProfiles", "novelPlan", "World data", charactersLabel, mysteryLabel],
           produces: ["chapterGuide"],
           status: isFilled(chapterGuide) ? "ready" : "missing",
         },
         {
           step: "Chapter beats",
+          track: "write" as const,
           requires: ["chapterGuide", "World data", charactersLabel, mysteryLabel],
           produces: ["chapterBeats"],
           status: isFilled(chapterBeats) ? "ready" : "missing",
         },
         {
           step: "Scenes",
+          track: "write" as const,
           requires: ["chapterBeats", "World data", charactersLabel, mysteryLabel],
           produces: ["allScenes"],
           status: isFilled(allScenes) ? "ready" : "missing",
         },
         {
           step: "Prose",
+          track: "write" as const,
           requires: ["allScenes", "World data", charactersLabel, mysteryLabel, "POV character"],
           produces: ["proseScenes"],
           status: isFilled(proseScenes) ? "ready" : "missing",
         },
         {
           step: "Cover prompt",
+          track: "market" as const,
           requires: ["storyDetails"],
           produces: ["coverPrompt"],
           status: isFilled(coverPrompt) ? "ready" : "missing",
         },
         {
           step: "Quotes",
+          track: "market" as const,
           requires: ["proseScenes"],
           produces: ["novelQuotes"],
           status: isFilled(novelQuotes) ? "ready" : "missing",
         },
         {
           step: "Promotional articles",
+          track: "market" as const,
           requires: ["storyDetails"],
           produces: ["promotionalArticles"],
           status: isFilled(promotionalArticles) ? "ready" : "missing",
         },
         {
           step: "Social snippets",
+          track: "market" as const,
           requires: ["promotionalArticles"],
           produces: ["socialSnippets"],
           status: isFilled(socialSnippets) ? "ready" : "missing",
         },
         {
           step: "Dedication",
+          track: "market" as const,
           requires: ["storyDetails", "novelSynopsis"],
           produces: ["novelDedication"],
           status: isFilled(novelDedication) ? "ready" : "missing",
         },
         {
           step: "Exports",
+          track: "market" as const,
           requires: ["proseScenes"],
           produces: ["novelFormats"],
           status: isFilled(novelFormats) ? "ready" : "missing",
@@ -848,10 +955,17 @@ function StudioContent() {
     ]
   );
 
-  const stepsCompleted = useMemo(
-    () => pipelineSteps.filter((row) => row.status === "ready").length,
+  const writingSteps = useMemo(
+    () => pipelineSteps.filter((row) => row.track === "write"),
     [pipelineSteps]
   );
+
+  const stepsCompleted = useMemo(
+    () => writingSteps.filter((row) => row.status === "ready").length,
+    [writingSteps]
+  );
+
+  const writingStepsTotal = writingSteps.length;
 
   const renderStepBadge = (stepName: string) => {
     const step = pipelineSteps.find((row) => row.step === stepName);
@@ -927,6 +1041,73 @@ function StudioContent() {
     });
     if (insertError) throw insertError;
     setLastSavedAt(new Date().toLocaleString());
+  };
+
+  /** Incremental prose checkpoint — does not wipe sibling scenes. */
+  const upsertProseScene = async (payload: {
+    novelIdValue: string;
+    userIdValue: string;
+    chapterTitle: string;
+    sceneContent: string;
+    chapterOrder: number;
+    sceneOrder: number;
+  }) => {
+    const { error: upsertError } = await supabase.from("prose_scenes").upsert(
+      {
+        novel_id: payload.novelIdValue,
+        user_id: payload.userIdValue,
+        chapter_title: payload.chapterTitle,
+        scene_content: payload.sceneContent,
+        chapter_order: payload.chapterOrder,
+        scene_order: payload.sceneOrder,
+      },
+      { onConflict: "novel_id,chapter_order,scene_order" }
+    );
+    if (upsertError) throw upsertError;
+    setLastSavedAt(new Date().toLocaleString());
+  };
+
+  const runWritingPreflight = async (): Promise<boolean> => {
+    if (!seriesId) return true;
+
+    const localGates = assessSeriesContextGates(seriesId, seriesContext);
+
+    let remote: PreflightResult = { warnings: [], blockers: [] };
+    try {
+      remote = await fetchSeriesPreflight(seriesId);
+    } catch (err) {
+      console.warn("[preflight] validate API failed, using local gates", err);
+    }
+
+    const blockerMap = new Map<string, { id: string; message: string; severity: string }>();
+    [...localGates.blockers, ...remote.blockers].forEach((b) =>
+      blockerMap.set(b.id, b)
+    );
+    const blockers = Array.from(blockerMap.values());
+    if (blockers.length) {
+      setError(blockers.map((b) => b.message).join(" "));
+      return false;
+    }
+
+    const warningMap = new Map<string, { id: string; message: string; severity: string }>();
+    [...localGates.warnings, ...remote.warnings]
+      .filter(
+        (w) =>
+          w.severity === "warning" || w.id === "mystery-empty-with-setup"
+      )
+      .forEach((w) => warningMap.set(w.id, w));
+    const confirmWarnings = Array.from(warningMap.values());
+    if (confirmWarnings.length) {
+      const ok = window.confirm(
+        `${confirmWarnings.map((w) => w.message).join("\n\n")}\n\nContinue anyway?`
+      );
+      if (!ok) {
+        setMessage("Preflight cancelled.");
+        return false;
+      }
+    }
+
+    return true;
   };
 
   const loadNovels = async (userIdValue: string) => {
@@ -1056,8 +1237,32 @@ function StudioContent() {
       setStoryDetails(novel.story_details ?? null);
       setSeoEnriched(!!novel.metadata_enriched_at);
 
+      // Bind series from the novel when Studio wasn't opened with series URL params
+      if (!urlSeriesId) {
+        const novelSeriesId =
+          typeof novel.series_id === "string" && novel.series_id
+            ? novel.series_id
+            : typeof storyDetails?.series_id === "string"
+              ? (storyDetails.series_id as string)
+              : null;
+        const novelBookNumber = Number(
+          novel.book_number ?? storyDetails?.book_number ?? 1
+        );
+        if (novelSeriesId) {
+          setSeriesId(novelSeriesId);
+          setSeriesBookNumber(
+            Number.isFinite(novelBookNumber) && novelBookNumber > 0
+              ? novelBookNumber
+              : 1
+          );
+        } else {
+          setSeriesId(null);
+          setSeriesBookNumber(1);
+        }
+      }
+
       // Load standalone blueprint (only if no series context provides one)
-      if (!seriesId) {
+      if (!(urlSeriesId || novel.series_id)) {
         if (novel.blueprint) {
           setBookBlueprint(novel.blueprint as Record<string, unknown>);
         } else if (novel.story_details?.book_blueprint) {
@@ -1532,6 +1737,9 @@ function StudioContent() {
     setNovelBisac(null);
     setNovelPlan(null);
     setChapterOutline(null);
+    setOutlineAlignment(null);
+    setContinuityCandidates([]);
+    setSelectedContinuityIds(new Set());
     setChapterGuide(null);
     setChapterBeats(null);
     setAllScenes(null);
@@ -1555,6 +1763,10 @@ function StudioContent() {
     setProseScenes(null);
   };
 
+  const seriesRequestFields = seriesId
+    ? { seriesId, bookNumber: seriesBookNumber }
+    : {};
+
   const generateBlueprint = async () => {
     setLoadingStep("blueprint");
     setError(null);
@@ -1564,7 +1776,14 @@ function StudioContent() {
         method: "POST",
         signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, novelAbout, model }),
+        body: JSON.stringify({
+          title,
+          novelAbout,
+          model,
+          genre: storyDetails?.genre ?? undefined,
+          targetAgeRange: storyDetails?.target_age_range ?? undefined,
+          narrativeStyle: storyDetails?.narrative_style ?? undefined,
+        }),
       });
 
       if (!response.ok) {
@@ -1630,6 +1849,7 @@ function StudioContent() {
           seriesContext,
           // Pass standalone blueprint only when no series context provides one
           bookBlueprint: !seriesContext?.book_blueprint ? bookBlueprint : null,
+          ...seriesRequestFields,
         }),
       });
 
@@ -1640,9 +1860,14 @@ function StudioContent() {
       }
 
       const data = await response.json();
-      const combined = seriesContext
-        ? { ...data, series_context: seriesContext }
-        : { ...data, ...(bookBlueprint ? { book_blueprint: bookBlueprint } : {}) };
+      const combined = {
+        ...data,
+        ...(seriesContext ? { series_context: seriesContext } : {}),
+        ...(bookBlueprint && !seriesContext?.book_blueprint
+          ? { book_blueprint: bookBlueprint }
+          : {}),
+        ...(seriesId ? { series_id: seriesId, book_number: seriesBookNumber } : {}),
+      };
       setStoryDetails(combined);
 
       const novelIdValue = await ensureNovel(user.id);
@@ -1742,7 +1967,7 @@ function StudioContent() {
         method: "POST",
         signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ storyDetails, model }),
+        body: JSON.stringify({ storyDetails, model, ...seriesRequestFields }),
       });
       if (!response.ok) throw new Error("Failed to generate premises");
       const data = await response.json();
@@ -1918,6 +2143,7 @@ function StudioContent() {
           premisesAndEndings,
           model,
           studioTitle: title,
+          ...seriesRequestFields,
         }),
       });
       if (!response.ok) throw new Error("Failed to generate synopsis");
@@ -1958,19 +2184,99 @@ function StudioContent() {
         method: "POST",
         signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ storyDetails, synopsis: novelSynopsis, model }),
+        body: JSON.stringify({ storyDetails, synopsis: novelSynopsis, model, ...seriesRequestFields }),
       });
-      if (!response.ok) throw new Error("Failed to generate profiles");
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => null);
+        throw new Error(errBody?.error || "Failed to generate profiles");
+      }
       const data = await response.json();
-      setCharacterProfiles(data.profiles);
+      const stored =
+        typeof data.profiles === "string"
+          ? data.profiles
+          : JSON.stringify(data.characters ?? data.profiles ?? "", null, 2);
+      setCharacterProfiles(stored);
       await saveSingleRow(
         "character_profiles",
-        { profiles: data.profiles ?? "" },
+        { profiles: stored },
         novelIdValue,
         user.id
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setLoadingStep(null);
+    }
+  };
+
+  const syncProfilesToSeries = async () => {
+    if (!seriesId) {
+      setError("Link this novel to a series before syncing characters.");
+      return;
+    }
+    const characters = parseCharacterProfilesPayload(characterProfiles);
+    if (!characters.length) {
+      setError("No structured character profiles to sync. Regenerate profiles first.");
+      return;
+    }
+    setLoadingStep("profiles");
+    setError(null);
+    try {
+      let created = 0;
+      let updated = 0;
+      const existingRes = await fetch(
+        `/api/series/characters?seriesId=${encodeURIComponent(seriesId)}`
+      );
+      const existingData = await existingRes.json().catch(() => null);
+      const existing = Array.isArray(existingData?.characters)
+        ? (existingData.characters as Array<{ id: string; name?: string }>)
+        : [];
+
+      for (const character of characters) {
+        const match = existing.find(
+          (e) =>
+            String(e.name ?? "")
+              .trim()
+              .toLowerCase() === character.name.trim().toLowerCase()
+        );
+        if (match?.id) {
+          const payload = toSeriesCharacterPayload(
+            seriesId,
+            character,
+            seriesBookNumber
+          );
+          const { seriesId: _sid, ...updates } = payload;
+          void _sid;
+          const res = await fetch("/api/series/characters", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ characterId: match.id, updates }),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            throw new Error(body?.error || `Failed to update ${character.name}`);
+          }
+          updated += 1;
+        } else {
+          const res = await fetch("/api/series/characters", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(
+              toSeriesCharacterPayload(seriesId, character, seriesBookNumber)
+            ),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            throw new Error(body?.error || `Failed to create ${character.name}`);
+          }
+          created += 1;
+        }
+      }
+      setMessage(
+        `Synced characters to Series (${created} created, ${updated} updated).`
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to sync characters");
     } finally {
       setLoadingStep(null);
     }
@@ -2141,6 +2447,7 @@ function StudioContent() {
           synopsis: novelSynopsis,
           characterProfiles,
           model,
+          ...seriesRequestFields,
         }),
       });
       if (!response.ok) throw new Error("Failed to generate plan");
@@ -2168,17 +2475,36 @@ function StudioContent() {
         method: "POST",
         signal: AbortSignal.timeout(240000),
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ storyDetails, model, novelPlan }),
+        body: JSON.stringify({ storyDetails, model, novelPlan, ...seriesRequestFields }),
       });
-      if (!response.ok) throw new Error("Failed to generate outline");
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => null);
+        throw new Error(errBody?.error || "Failed to generate outline");
+      }
       const data = await response.json();
       setChapterOutline(data.outline ?? []);
+      setOutlineAlignment(
+        data.alignment && typeof data.alignment === "object"
+          ? (data.alignment as AlignmentResult)
+          : null
+      );
       await saveSingleRow(
         "chapter_outlines",
         { outline: data.outline ?? [] },
         novelIdValue,
         user.id
       );
+      if (
+        data.alignment &&
+        Array.isArray(data.alignment.issues) &&
+        data.alignment.issues.some(
+          (i: { severity?: string }) => i.severity === "warning"
+        )
+      ) {
+        setMessage(
+          "Chapter outline generated with blueprint alignment warnings — review below."
+        );
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -2203,9 +2529,13 @@ function StudioContent() {
           novelPlan,
           storyDetails,
           model,
+          ...seriesRequestFields,
         }),
       });
-      if (!response.ok) throw new Error("Failed to generate guide");
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => null);
+        throw new Error(errBody?.error || "Failed to generate guide");
+      }
       const data = await response.json();
       setChapterGuide(data.guide ?? {});
       await saveSingleRow(
@@ -2239,9 +2569,13 @@ function StudioContent() {
           novelPlan,
           storyDetails,
           model,
+          ...seriesRequestFields,
         }),
       });
-      if (!response.ok) throw new Error("Failed to generate beats");
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => null);
+        throw new Error(errBody?.error || "Failed to generate beats");
+      }
       const data = await response.json();
       setChapterBeats(data.beats ?? {});
       await saveSingleRow(
@@ -2262,6 +2596,9 @@ function StudioContent() {
       setError("Generate chapter outline first.");
       return;
     }
+
+    const preflightOk = await runWritingPreflight();
+    if (!preflightOk) return;
 
     setLoadingStep("scenes");
     setError(null);
@@ -2300,12 +2637,18 @@ function StudioContent() {
             minSceneLength,
             premisesAndEndings,
             characterProfiles,
+            totalChapters: chapters.length,
+            ...seriesRequestFields,
           }),
         });
 
         if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(errorText || "Failed to generate scenes");
+          const errorData = await response.json().catch(() => null);
+          throw new Error(
+            (errorData && typeof errorData.error === "string"
+              ? errorData.error
+              : null) || "Failed to generate scenes"
+          );
         }
 
         const data = await response.json();
@@ -2357,29 +2700,322 @@ function StudioContent() {
     }
   };
 
-  const generateProse = async () => {
+  const hasCharacterBible = Boolean(
+    (characterProfiles && String(characterProfiles).trim()) ||
+      (seriesId &&
+        Array.isArray(
+          (seriesContext as Record<string, unknown> | null)?.characters
+        ) &&
+        (
+          (seriesContext as Record<string, unknown>).characters as unknown[]
+        ).length > 0)
+  );
+
+  const proseIsPartial = isProsePartial(allScenes, proseScenes);
+
+  const extractContinuityCandidates = async (novelIdValue: string) => {
+    if (!seriesId) return;
+    setContinuityLoading(true);
+    try {
+      const response = await fetch("/api/series/continuity/extract", {
+        method: "POST",
+        signal: AbortSignal.timeout(240000),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          seriesId,
+          bookNumber: seriesBookNumber,
+          novelId: novelIdValue,
+          model,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.error || "Continuity extract failed");
+      }
+      const candidates = Array.isArray(data?.candidates) ? data.candidates : [];
+      setContinuityCandidates(candidates);
+      const defaults = new Set<string>(
+        candidates
+          .filter((c: { speculative?: boolean }) => !c.speculative)
+          .map((c: { id: string }) => c.id)
+      );
+      setSelectedContinuityIds(defaults);
+      if (candidates.length) {
+        setMessage(
+          `Prose complete. Review ${candidates.length} continuity candidate(s) below before writing to Series.`
+        );
+      } else {
+        setMessage("Prose complete. No new continuity candidates found.");
+      }
+    } catch (err) {
+      console.warn("[studio] continuity extract failed:", err);
+      setMessage(
+        "Prose complete. Continuity extract skipped — you can retry from the Continuity panel."
+      );
+    } finally {
+      setContinuityLoading(false);
+    }
+  };
+
+  const saveSelectedContinuity = async () => {
+    if (!seriesId || !selectedContinuityIds.size) return;
+    setContinuitySaving(true);
+    setError(null);
+    try {
+      const selected = continuityCandidates.filter((c) =>
+        selectedContinuityIds.has(c.id)
+      );
+      let saved = 0;
+      for (const candidate of selected) {
+        if (candidate.kind === "canon") {
+          const res = await fetch("/api/series/canon", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              seriesId,
+              category: candidate.category || "fact",
+              fact: candidate.content,
+              source:
+                candidate.source ||
+                `Book ${seriesBookNumber} prose`,
+              cannot_change: candidate.cannot_change === true,
+            }),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            throw new Error(body?.error || "Failed to save canon entry");
+          }
+        } else {
+          const res = await fetch("/api/series/memory/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              seriesId,
+              category: candidate.category || "canon",
+              content: candidate.content,
+            }),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => null);
+            throw new Error(body?.error || "Failed to save memory entry");
+          }
+        }
+        saved += 1;
+      }
+      setMessage(`Saved ${saved} continuity update(s) to Series.`);
+      setContinuityCandidates((prev) =>
+        prev.filter((c) => !selectedContinuityIds.has(c.id))
+      );
+      setSelectedContinuityIds(new Set());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save continuity");
+    } finally {
+      setContinuitySaving(false);
+    }
+  };
+
+  const generateProse = async (options?: { force?: boolean }) => {
     if (!allScenes) {
       setError("Generate scenes first.");
       return;
     }
+    if (!hasCharacterBible) {
+      setError(
+        seriesId
+          ? "Add series characters or book character profiles before generating prose."
+          : "Generate character profiles before generating prose."
+      );
+      return;
+    }
+
+    const force = Boolean(options?.force);
+    if (force) {
+      const ok = window.confirm(
+        "Regenerate all prose? This deletes existing prose scenes for this novel and starts over."
+      );
+      if (!ok) return;
+    }
+
+    const preflightOk = await runWritingPreflight();
+    if (!preflightOk) return;
 
     setLoadingStep("prose");
     setError(null);
     try {
       const user = await requireUser();
       const novelIdValue = await ensureNovel(user.id);
-      const prose: ScenesMap = {};
+
+      if (force) {
+        await supabase.from("prose_scenes").delete().eq("novel_id", novelIdValue);
+        setProseScenes(null);
+      }
+
+      // Seed from DB so resume works after refresh
+      let existingProse: ScenesMap = force ? {} : { ...(proseScenes ?? {}) };
+      if (!force) {
+        const { data: proseRows } = await supabase
+          .from("prose_scenes")
+          .select("chapter_title,scene_content,scene_order,chapter_order")
+          .eq("novel_id", novelIdValue)
+          .order("chapter_order", { ascending: true })
+          .order("scene_order", { ascending: true });
+        if (proseRows?.length) {
+          const grouped: ScenesMap = {};
+          const order: string[] = [];
+          (proseRows as SceneTableRow[]).forEach((row) => {
+            if (!grouped[row.chapter_title]) {
+              grouped[row.chapter_title] = [];
+              order.push(row.chapter_title);
+            }
+            grouped[row.chapter_title].push(String(row.scene_content ?? ""));
+          });
+          const ordered: ScenesMap = {};
+          order.forEach((title) => {
+            ordered[title] = grouped[title];
+          });
+          existingProse = ordered;
+        }
+      }
+
+      const prose: ScenesMap = { ...existingProse };
+      let liveVoiceSample =
+        typeof storyDetails?.voice_sample === "string"
+          ? String(storyDetails.voice_sample)
+          : "";
+
+      const outlineArray = Array.isArray(chapterOutline)
+        ? chapterOutline
+        : chapterOutline &&
+            typeof chapterOutline === "object" &&
+            Array.isArray((chapterOutline as Record<string, unknown>).chapters)
+          ? ((chapterOutline as Record<string, unknown>).chapters as Record<
+              string,
+              unknown
+            >[])
+          : [];
+      const totalChapters = Math.max(outlineArray.length, 1);
+      const lateCutoff = Math.floor(totalChapters * 0.85);
 
       const entries = sortScenesEntries(allScenes);
+      let generatedAny = false;
+
       for (let index = 0; index < entries.length; index += 1) {
         const [chapterTitle, scenes] = entries[index];
-        const chapterProse: string[] = [];
+        const chapterProse: string[] = [...(prose[chapterTitle] ?? [])];
+        while (chapterProse.length < scenes.length) {
+          chapterProse.push("");
+        }
+        const chapterKey = String(index + 1);
+        const outlineEntry =
+          (outlineArray[index] as Record<string, unknown> | undefined) ?? {};
+        const beatsForChapter =
+          (chapterBeats?.[chapterKey] as Array<Record<string, unknown>> | undefined) ??
+          (chapterBeats?.[index + 1] as Array<Record<string, unknown>> | undefined) ??
+          [];
+        const guideEntry =
+          (chapterGuide?.[chapterKey] as Record<string, unknown> | undefined) ??
+          (chapterGuide?.[String(outlineEntry.number ?? "")] as
+            | Record<string, unknown>
+            | undefined) ??
+          {};
+        const previousChapterEnding =
+          index > 0
+            ? (() => {
+                const prev = prose[entries[index - 1][0]];
+                return prev?.length
+                  ? lastNWordsLocal(prev[prev.length - 1] || "")
+                  : "";
+              })()
+            : "";
 
         for (let sceneIndex = 0; sceneIndex < scenes.length; sceneIndex += 1) {
+          const existing = String(chapterProse[sceneIndex] ?? "").trim();
+          if (!force && existing) {
+            continue;
+          }
+
           const scene = scenes[sceneIndex];
           setMessage(
             `Generating prose for ${chapterTitle} scene ${sceneIndex + 1}/${scenes.length}`
           );
+
+          const matchingBeat =
+            beatsForChapter[sceneIndex] ??
+            beatsForChapter[Math.min(sceneIndex, beatsForChapter.length - 1)] ??
+            null;
+
+          const previousSceneEnding =
+            sceneIndex > 0
+              ? lastNWordsLocal(chapterProse[sceneIndex - 1] || "")
+              : "";
+
+          const sceneCastNames = (() => {
+            let rec: Record<string, unknown> | null = null;
+            if (scene && typeof scene === "object" && !Array.isArray(scene)) {
+              rec = scene as Record<string, unknown>;
+            } else if (typeof scene === "string") {
+              const trimmed = scene.trim();
+              if (trimmed.startsWith("{")) {
+                try {
+                  const parsed = JSON.parse(trimmed);
+                  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                    rec = parsed as Record<string, unknown>;
+                  }
+                } catch {
+                  // ignore
+                }
+              }
+            }
+            if (!rec) return [] as string[];
+            const raw =
+              rec.cast ??
+              rec.characters ??
+              rec.character_names ??
+              rec.cast_names ??
+              rec.participants;
+            if (Array.isArray(raw)) {
+              return raw
+                .map((item) =>
+                  typeof item === "string"
+                    ? item.trim()
+                    : String(
+                        (item as Record<string, unknown>)?.name ??
+                          (item as Record<string, unknown>)?.character ??
+                          ""
+                      ).trim()
+                )
+                .filter(Boolean);
+            }
+            if (typeof raw === "string" && raw.trim()) {
+              return raw.split(/,|&|\band\b/i).map((s) => s.trim()).filter(Boolean);
+            }
+            return [] as string[];
+          })();
+
+          const beatAction =
+            matchingBeat && typeof matchingBeat === "object"
+              ? String(
+                  (matchingBeat as Record<string, unknown>).action ?? ""
+                ).trim()
+              : "";
+          const beatHook =
+            matchingBeat && typeof matchingBeat === "object"
+              ? String(
+                  (matchingBeat as Record<string, unknown>).tension_hook ?? ""
+                ).trim()
+              : "";
+          const guideEmotional = String(
+            guideEntry.emotional_beat ??
+              guideEntry.emotional_state ??
+              guideEntry.emotional_arc ??
+              ""
+          ).trim();
+          const guideConflict = String(
+            guideEntry.key_conflict ??
+              guideEntry.conflict ??
+              guideEntry.stakes ??
+              ""
+          ).trim();
 
           const response = await fetch("/api/generate/prose/chapter", {
             method: "POST",
@@ -2389,75 +3025,124 @@ function StudioContent() {
               scene,
               chapterTitle,
               sceneNumber: sceneIndex + 1,
+              sceneCount: scenes.length,
               model,
               maxSceneLength,
-              chapterSummary: chapterOutline?.[index]?.summary ?? "",
-              chapterBeats: chapterBeats?.[chapterTitle] ?? chapterBeats?.[index + 1],
-              previousScene: sceneIndex > 0 ? chapterProse[sceneIndex - 1] : "",
-              emotionalState: chapterOutline?.[index]?.emotional_development ?? "",
-              keyConflict: chapterOutline?.[index]?.theme_focus ?? "",
-              voiceAnchor: storyDetails?.tone ?? "raw, emotional, slightly messy, introspective",
-              worldContext: seriesContext ? {
-                setting: (seriesContext as Record<string, unknown>).world
-                  ? String(((seriesContext as Record<string, unknown>).world as Record<string, unknown>)?.setting ?? "")
-                  : "",
-                rules: (seriesContext as Record<string, unknown>).world
-                  ? String(((seriesContext as Record<string, unknown>).world as Record<string, unknown>)?.rules ?? "")
-                  : "",
-                lore: (seriesContext as Record<string, unknown>).world
-                  ? String(((seriesContext as Record<string, unknown>).world as Record<string, unknown>)?.lore ?? "")
-                  : "",
-                elements: (seriesContext as Record<string, unknown>).world_elements ?? [],
-              } : null,
-              // Pass seriesId so the prose route can fetch character profiles from DB
-              seriesId: storyDetails?.series_id ?? null,
-              // Pass the POV character name from the chapter outline
-              povCharacter: chapterOutline?.[index]?.pov ?? chapterOutline?.[index]?.pov_character ?? null,
+              chapterSummary: outlineEntry.summary ?? "",
+              chapterBeats: beatsForChapter,
+              beat: matchingBeat,
+              previousSceneEnding:
+                sceneIndex > 0 ? previousSceneEnding : undefined,
+              previousChapterEnding:
+                sceneIndex === 0 ? previousChapterEnding : undefined,
+              emotionalState:
+                guideEmotional ||
+                String(outlineEntry.emotional_development ?? ""),
+              keyConflict: guideConflict || beatHook,
+              chapterGoal: beatAction || String(guideEntry.scene_goal ?? ""),
+              sensory: guideEntry.sensory_details ?? null,
+              keyDialogue: guideEntry.key_dialogue ?? null,
+              narrativeStyle: storyDetails?.narrative_style ?? null,
+              voiceSample: liveVoiceSample || null,
+              seriesId: seriesId ?? storyDetails?.series_id ?? null,
+              bookNumber: seriesBookNumber,
+              chapterNumber: index + 1,
+              povCharacter:
+                outlineEntry.pov ?? outlineEntry.pov_character ?? null,
+              castNames: sceneCastNames,
+              characterContext: characterProfiles
+                ? formatCharacterProfilesForDisplay(characterProfiles).slice(
+                    0,
+                    4000
+                  )
+                : null,
+              chosenEnding: premisesAndEndings?.chosen_ending ?? null,
+              isLateBook: index + 1 >= lateCutoff,
+              totalChapters,
+              novelId: novelIdValue,
             }),
           });
 
           if (!response.ok) {
-            throw new Error("Failed to generate prose");
+            const errBody = await response.json().catch(() => null);
+            prose[chapterTitle] = chapterProse.filter((s) =>
+              String(s ?? "").trim()
+            );
+            setProseScenes({ ...prose });
+            throw new Error(
+              errBody?.error ||
+                `Stopped at ${chapterTitle} scene ${sceneIndex + 1}. Click Resume Prose to continue.`
+            );
           }
 
           const data = await response.json();
-          chapterProse.push(String(data.prose));
+          const proseText = String(data.prose);
+          chapterProse[sceneIndex] = proseText;
+          generatedAny = true;
 
-          await saveSingleRow(
-            "novel_formats",
-            {
-              format_name: `prose_${chapterTitle}_scene_${sceneIndex + 1}`,
-              content: String(data.prose),
-              prose_raw: data.proseRaw ?? null,
-            },
+          if (
+            typeof data.voiceSample === "string" &&
+            data.voiceSample.trim() &&
+            !liveVoiceSample
+          ) {
+            liveVoiceSample = data.voiceSample.trim();
+            if (storyDetails) {
+              const updated = {
+                ...storyDetails,
+                voice_sample: liveVoiceSample,
+              };
+              setStoryDetails(updated);
+            }
+          }
+
+          await upsertProseScene({
             novelIdValue,
-            user.id
-          );
+            userIdValue: user.id,
+            chapterTitle,
+            sceneContent: proseText,
+            chapterOrder: index,
+            sceneOrder: sceneIndex,
+          });
+
+          prose[chapterTitle] = [...chapterProse];
+          setProseScenes({ ...prose });
         }
 
+        while (
+          chapterProse.length &&
+          !String(chapterProse[chapterProse.length - 1] ?? "").trim()
+        ) {
+          chapterProse.pop();
+        }
         prose[chapterTitle] = chapterProse;
       }
 
-      setMessage(null);
       setProseScenes(prose);
-
-      await supabase.from("prose_scenes").delete().eq("novel_id", novelIdValue);
-      const proseRows: Array<Record<string, unknown>> = [];
-      sortScenesEntries(prose).forEach(([chapterTitle, scenes], chapterIndex) => {
-        scenes.forEach((scene, sceneOrder) => {
-          proseRows.push({
-            novel_id: novelIdValue,
-            user_id: user.id,
-            chapter_title: chapterTitle,
-            scene_content: scene,
-            scene_order: sceneOrder,
-            chapter_order: chapterIndex,
-          });
-        });
-      });
-      if (proseRows.length) {
-        await supabase.from("prose_scenes").insert(proseRows);
+      if (generatedAny) {
+        setMessage("Prose generation complete.");
+        if (seriesId) {
+          await extractContinuityCandidates(novelIdValue);
+          try {
+            const compileRes = await fetch("/api/series/book-memory/compile", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                seriesId,
+                bookNumber: seriesBookNumber,
+                model,
+              }),
+            });
+            if (!compileRes.ok) {
+              console.warn("[studio] book memory compile failed");
+            }
+          } catch (compileErr) {
+            console.warn("[studio] book memory compile error:", compileErr);
+          }
+        }
+      } else {
+        setMessage("All scenes already have prose. Use Regenerate Prose to rewrite.");
       }
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
@@ -3476,7 +4161,9 @@ function StudioContent() {
               generate everything you need.
             </p>
             <div className="flex flex-wrap items-center gap-4 text-sm text-zinc-400">
-              <span>Steps complete: {stepsCompleted} / 10</span>
+              <span>
+                Writing steps: {stepsCompleted} / {writingStepsTotal}
+              </span>
               {userId ? (
                 <span className="rounded-full border border-zinc-700 px-3 py-1">
                   Signed in
@@ -3606,15 +4293,20 @@ function StudioContent() {
                         <p className="text-sm font-semibold text-zinc-100">
                           {row.step}
                         </p>
-                        <span
-                          className={`rounded-full border px-2 py-0.5 text-xs ${
-                            row.status === "ready"
-                              ? "border-emerald-400/60 text-emerald-200"
-                              : "border-amber-500/40 text-amber-200"
-                          }`}
-                        >
-                          {row.status === "ready" ? "Ready" : "Missing"}
-                        </span>
+                        <div className="flex items-center gap-1">
+                          <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
+                            {row.track === "write" ? "Write" : "Market"}
+                          </span>
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-xs ${
+                              row.status === "ready"
+                                ? "border-emerald-400/60 text-emerald-200"
+                                : "border-amber-500/40 text-amber-200"
+                            }`}
+                          >
+                            {row.status === "ready" ? "Ready" : "Missing"}
+                          </span>
+                        </div>
                       </div>
                       {row.status === "ready" && (
                         <span className="mt-2 inline-flex rounded-full border border-emerald-400/40 px-2 py-0.5 text-xs text-emerald-200">
@@ -3896,6 +4588,7 @@ function StudioContent() {
                         target_age_range: String(storyDetails.target_age_range ?? ""),
                         narrative_style: String(storyDetails.narrative_style ?? ""),
                         novel_about: String(storyDetails.novel_about ?? ""),
+                        voice_sample: String(storyDetails.voice_sample ?? ""),
                       };
                       setDetailsForm(form);
                       setDetailsFreeText("");
@@ -3911,6 +4604,7 @@ function StudioContent() {
                         target_age_range: "",
                         narrative_style: "",
                         novel_about: novelAbout || "",
+                        voice_sample: "",
                       });
                       setDetailsFreeText("");
                     }
@@ -4036,6 +4730,20 @@ function StudioContent() {
                           className="bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
                         />
                       </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-400 mb-1">Voice Sample</label>
+                      <Textarea
+                        value={detailsForm.voice_sample}
+                        onChange={(e) =>
+                          setDetailsForm((f) => ({
+                            ...f,
+                            voice_sample: e.target.value,
+                          }))
+                        }
+                        placeholder="~160 words in the protagonist's voice (mundane moment, no plot). Used as house style for prose."
+                        className="min-h-[100px] bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-zinc-400 mb-1">Plot Summary</label>
@@ -4478,20 +5186,31 @@ function StudioContent() {
           </button>
           {characterProfiles && (
             <div className="mt-4 space-y-3">
-              <button
-                onClick={() =>
-                  downloadText(
-                    `${title || "story"}_character_profiles.txt`,
-                    characterProfiles
-                  )
-                }
-                className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
-              >
-                Download TXT
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() =>
+                    downloadText(
+                      `${title || "story"}_character_profiles.txt`,
+                      formatCharacterProfilesForDisplay(characterProfiles)
+                    )
+                  }
+                  className="rounded-full border border-zinc-700 px-3 py-2 text-xs"
+                >
+                  Download TXT
+                </button>
+                {seriesId && (
+                  <button
+                    onClick={syncProfilesToSeries}
+                    disabled={loadingStep === "profiles"}
+                    className="rounded-full border border-emerald-500/50 px-3 py-2 text-xs text-emerald-200 disabled:opacity-50"
+                  >
+                    Sync to Series
+                  </button>
+                )}
+              </div>
               <Collapsible label="Character profiles">
                 <pre className="whitespace-pre-wrap text-xs text-zinc-200">
-                  {characterProfiles}
+                  {formatCharacterProfilesForDisplay(characterProfiles)}
                 </pre>
               </Collapsible>
             </div>
@@ -4720,6 +5439,24 @@ function StudioContent() {
           </div>
           {chapterOutline && (
             <div className="mt-4 space-y-3">
+              {outlineAlignment && outlineAlignment.issues?.length > 0 && (
+                <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-xs text-amber-100">
+                  <p className="text-sm font-semibold text-amber-50">
+                    Blueprint alignment
+                    {outlineAlignment.ok ? " (info)" : " warnings"}
+                  </p>
+                  <ul className="mt-2 list-disc space-y-1 pl-4">
+                    {outlineAlignment.issues.map((issue, idx) => (
+                      <li key={`${issue.role}-${idx}`}>
+                        {issue.message}
+                        {issue.foundChapter
+                          ? ` (found: Chapter ${issue.foundChapter})`
+                          : ""}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <button
                 onClick={() =>
                   downloadText(
@@ -4874,9 +5611,7 @@ function StudioContent() {
                     </p>
                     {scenes.map((scene, index) => (
                       <pre key={index} className="mt-2 whitespace-pre-wrap">
-                        {typeof scene === "string"
-                          ? scene
-                          : formatReadable(scene)}
+                        {formatSceneForDisplay(scene)}
                       </pre>
                     ))}
                   </div>
@@ -4890,20 +5625,195 @@ function StudioContent() {
           <SectionHeading title="10. Generate Prose" step="Prose" />
           <div className="mt-4 flex flex-wrap gap-3">
             <button
-              onClick={generateProse}
-              disabled={!allScenes || !storyDetails?.novel_about || loadingStep === "prose"}
+              onClick={() => generateProse()}
+              disabled={
+                !allScenes ||
+                !storyDetails?.novel_about ||
+                !hasCharacterBible ||
+                loadingStep === "prose"
+              }
               className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loadingStep === "prose" ? "Generating..." : "Generate Prose"}
+              {loadingStep === "prose"
+                ? "Generating..."
+                : proseIsPartial
+                  ? "Resume Prose"
+                  : "Generate Prose"}
             </button>
             <button
-              onClick={generateProse}
-              disabled={!allScenes}
+              onClick={() => generateProse({ force: true })}
+              disabled={!allScenes || !hasCharacterBible || loadingStep === "prose"}
               className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
             >
-              ♻️ Regenerate Prose
+              Regenerate Prose
             </button>
+            {proseIsPartial && (
+              <p className="w-full text-xs text-emerald-200">
+                Partial manuscript saved. Resume continues from the next unfinished scene.
+              </p>
+            )}
+            {!hasCharacterBible && (
+              <p className="w-full text-xs text-amber-200">
+                {seriesId
+                  ? "Add series characters or book character profiles before prose."
+                  : "Generate character profiles before prose."}
+              </p>
+            )}
           </div>
+
+          {seriesId && (
+            <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-emerald-100">
+                    Continuity updates
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-400">
+                    Review facts extracted from finished prose, then accept to
+                    write canon/memory. Nothing is saved until you confirm.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={
+                      !proseScenes ||
+                      continuityLoading ||
+                      loadingStep === "prose"
+                    }
+                    onClick={async () => {
+                      try {
+                        const user = await requireUser();
+                        const novelIdValue = await ensureNovel(user.id);
+                        await extractContinuityCandidates(novelIdValue);
+                      } catch (err) {
+                        setError(
+                          err instanceof Error
+                            ? err.message
+                            : "Failed to extract continuity"
+                        );
+                      }
+                    }}
+                    className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs disabled:opacity-50"
+                  >
+                    {continuityLoading ? "Extracting..." : "Extract from prose"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      !selectedContinuityIds.size || continuitySaving
+                    }
+                    onClick={saveSelectedContinuity}
+                    className="rounded-full bg-emerald-500/90 px-3 py-1.5 text-xs font-semibold text-zinc-950 disabled:opacity-50"
+                  >
+                    {continuitySaving
+                      ? "Saving..."
+                      : `Accept selected (${selectedContinuityIds.size})`}
+                  </button>
+                </div>
+              </div>
+
+              {continuityCandidates.length > 0 ? (
+                <div className="mt-4 space-y-2">
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <button
+                      type="button"
+                      className="rounded-full border border-zinc-700 px-2 py-1"
+                      onClick={() =>
+                        setSelectedContinuityIds(
+                          new Set(continuityCandidates.map((c) => c.id))
+                        )
+                      }
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full border border-zinc-700 px-2 py-1"
+                      onClick={() =>
+                        setSelectedContinuityIds(
+                          new Set(
+                            continuityCandidates
+                              .filter((c) => !c.speculative)
+                              .map((c) => c.id)
+                          )
+                        )
+                      }
+                    >
+                      Safe only
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full border border-zinc-700 px-2 py-1"
+                      onClick={() => setSelectedContinuityIds(new Set())}
+                    >
+                      Clear
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full border border-zinc-700 px-2 py-1"
+                      onClick={() => {
+                        setContinuityCandidates([]);
+                        setSelectedContinuityIds(new Set());
+                      }}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                  {continuityCandidates.map((candidate) => {
+                    const checked = selectedContinuityIds.has(candidate.id);
+                    return (
+                      <label
+                        key={candidate.id}
+                        className="flex cursor-pointer gap-3 rounded-lg border border-zinc-800 bg-zinc-950/50 p-3 text-xs text-zinc-200"
+                      >
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={checked}
+                          onChange={() => {
+                            setSelectedContinuityIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(candidate.id)) next.delete(candidate.id);
+                              else next.add(candidate.id);
+                              return next;
+                            });
+                          }}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex flex-wrap gap-2 text-[10px] uppercase tracking-wide text-zinc-400">
+                            <span>{candidate.kind}</span>
+                            <span>{candidate.category}</span>
+                            {candidate.speculative && (
+                              <span className="text-amber-300">speculative</span>
+                            )}
+                            {candidate.cannot_change && (
+                              <span className="text-rose-300">locked</span>
+                            )}
+                          </span>
+                          <span className="mt-1 block whitespace-pre-wrap text-zinc-100">
+                            {candidate.content}
+                          </span>
+                          {candidate.source && (
+                            <span className="mt-1 block text-zinc-500">
+                              Source: {candidate.source}
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-zinc-500">
+                  {continuityLoading
+                    ? "Extracting candidates…"
+                    : "No candidates yet. Finish prose or click Extract."}
+                </p>
+              )}
+            </div>
+          )}
+
           {proseScenes && (
             <div className="mt-4 space-y-4">
               <div className="flex flex-wrap gap-2">

@@ -32,3 +32,6 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS prose_scenes_novel_id_chapter_order_idx
   ON public.prose_scenes (novel_id, chapter_order, scene_order);
+
+CREATE UNIQUE INDEX IF NOT EXISTS prose_scenes_novel_chapter_scene_uidx
+  ON public.prose_scenes (novel_id, chapter_order, scene_order);

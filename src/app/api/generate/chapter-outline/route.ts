@@ -1,17 +1,18 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
-import { formatCanonForPrompt } from "@/lib/canonPrompt";
-import { formatMysteryForPrompt } from "@/lib/mysteryPrompt";
+import {
+  getSeriesContext,
+  hydrateStoryDetailsWithLiveSeriesContext,
+  seriesGenerationMeta,
+} from "@/lib/seriesContext";
+import { formatSeriesContextForPrompt } from "@/lib/seriesPrompt";
+import { alignBlueprintToOutline } from "@/lib/blueprintAlign";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const ensureOutlineShape = (
-  outline: unknown,
-  minCount = 18,
-  fillMissing = true
-) => {
+const normalizeOutline = (outline: unknown): Array<Record<string, unknown>> => {
   let response: Array<Record<string, unknown>> = [];
 
   if (Array.isArray(outline)) {
@@ -25,41 +26,51 @@ const ensureOutlineShape = (
     }
   }
 
-  if (response.length < minCount && fillMissing) {
-    const existingCount = response.length;
-    for (let i = existingCount + 1; i <= minCount; i += 1) {
-      response.push({
-        number: i,
-        title: `Chapter ${i} (needs generation)`,
-        pov: "Main Character",
-        summary: `Missing outline for chapter ${i}. Please regenerate.`,
-        emotional_development: "Missing emotional development",
-        theme_focus: "Missing theme focus",
-        estimated_word_count: 900,
-        events: [`Missing event for chapter ${i}`],
-      });
-    }
-  }
+  return response
+    .map((chapter: Record<string, unknown>, index: number) => ({
+      number: Number(chapter.number ?? index + 1),
+      title: String(chapter.title ?? "").trim(),
+      pov: String(chapter.pov ?? "Main Character").trim(),
+      summary: String(chapter.summary ?? "").trim(),
+      emotional_development: String(
+        chapter.emotional_development ?? ""
+      ).trim(),
+      theme_focus: String(chapter.theme_focus ?? "").trim(),
+      estimated_word_count: Number(
+        chapter.estimated_word_count ?? chapter.word_count ?? 900
+      ),
+      events: Array.isArray(chapter.events)
+        ? chapter.events.map((e) => String(e))
+        : [],
+    }))
+    .filter(
+      (chapter) =>
+        chapter.title &&
+        !chapter.title.includes("needs generation") &&
+        chapter.summary &&
+        !chapter.summary.startsWith("Missing outline")
+    );
+};
 
-  return response.map((chapter: Record<string, unknown>, index: number) => ({
-    number: chapter.number ?? index + 1,
-    title: chapter.title ?? `Chapter ${index + 1}`,
-    pov: chapter.pov ?? "Main Character",
-    summary: chapter.summary ?? `Summary of Chapter ${index + 1}`,
-    emotional_development:
-      chapter.emotional_development ?? "Character growth and emotional changes",
-    theme_focus: chapter.theme_focus ?? "Main theme explored in this chapter",
-    estimated_word_count:
-      chapter.estimated_word_count ?? chapter.word_count ?? 900,
-    events: Array.isArray(chapter.events)
-      ? chapter.events
-      : [`Event 1 in Chapter ${index + 1}`, `Event 2 in Chapter ${index + 1}`],
-  }));
+const parseOutlineRaw = (raw: unknown): unknown => {
+  if (typeof raw !== "string") return raw;
+  try {
+    const match = raw.match(/\[\s*{[\s\S]*}\s*\]/);
+    return match ? JSON.parse(match[0]) : JSON.parse(raw);
+  } catch {
+    return raw;
+  }
 };
 
 export async function POST(request: Request) {
   try {
-    const { storyDetails, model, novelPlan } = await request.json();
+    const { storyDetails: rawDetails, model, novelPlan, seriesId, bookNumber } =
+      await request.json();
+    const storyDetails = await hydrateStoryDetailsWithLiveSeriesContext(
+      rawDetails,
+      seriesId,
+      bookNumber
+    );
 
     if (!storyDetails) {
       return NextResponse.json(
@@ -73,8 +84,9 @@ export async function POST(request: Request) {
     const structuredPlan = novelPlan ?? "";
     const novelAbout = storyDetails.novel_about ?? "";
 
-    // Use series blueprint if available, otherwise fall back to standalone book_blueprint
-    const effectiveBlueprint = storyDetails.series_context?.book_blueprint ?? storyDetails.book_blueprint ?? null;
+    const seriesContext = getSeriesContext(storyDetails);
+    const effectiveBlueprint =
+      seriesContext?.book_blueprint ?? storyDetails.book_blueprint ?? null;
 
     const blueprintSection = effectiveBlueprint
       ? `\n═══ BOOK BLUEPRINT — MANDATORY STRUCTURAL PLAN ═══\nYour chapter outline MUST follow this blueprint exactly. It defines the structural arc this book must follow:\n${JSON.stringify(effectiveBlueprint, null, 2)}\n\nBlueprint Alignment Rules:\n- opening_shift: Your FIRST 2-3 chapters MUST establish this starting situation for the protagonist.\n- midpoint_shock: Place this pivotal reversal at approximately the MIDDLE of your chapter outline (around chapter 50% mark).\n- lowest_point: Position this darkest hour at approximately the 70-75% mark of your chapters.\n- climax: Place the decisive confrontation at approximately the 85-90% mark.\n- ending_change: Your LAST 1-2 chapters MUST deliver this transformative resolution.\n- relationship_changes: Distribute these across chapters, showing gradual evolution.\n- theme_pressure: Every chapter's theme_focus should reflect or build upon this pressure.\n- full_outline: Use this as the overarching framework for chapter sequencing.\n═══ END BLUEPRINT ═══\n`
@@ -89,6 +101,7 @@ Guidelines:
 – The outline should follow the Parts in your structured plan (e.g., Part I, Part II, etc.)
 – Ensure that each chapter reflects shifts in tone, rising stakes, or key moments of character growth
 – Design each chapter to support a powerful emotional arc, exploring the complexities of all core themes
+– Return a complete outline (typically 15–25 chapters). Do not omit chapters.
 
 For each chapter, include:
 * Short summary of what happens
@@ -104,15 +117,7 @@ Author Intent (What the novel is about):
 ${novelAbout}
 
 Series Context:
-${storyDetails.series_context ? JSON.stringify(storyDetails.series_context).slice(0, 1600) : ""}
-${formatCanonForPrompt(storyDetails.series_context?.canon_entries, { maxLength: 800 })}
-${formatMysteryForPrompt(storyDetails.series_context?.secrets, storyDetails.series_context?.clues, { maxLength: 1500 })}
-Relationships:
-${storyDetails.series_context?.relationships ? JSON.stringify(storyDetails.series_context.relationships).slice(0, 800) : ""}
-Plot Threads:
-${storyDetails.series_context?.plot_threads ? JSON.stringify(storyDetails.series_context.plot_threads).slice(0, 800) : ""}
-Callbacks:
-${storyDetails.series_context?.callbacks ? JSON.stringify(storyDetails.series_context.callbacks).slice(0, 800) : ""}
+${formatSeriesContextForPrompt(seriesContext)}
 
 Format your response as a JSON array of chapter objects with the following fields:
 - "number": The chapter number (integer)
@@ -130,83 +135,111 @@ Create a compelling chapter outline that follows the provided structured plan wh
 You must structure your response as a valid JSON array with all required fields.
 This is for a software application that needs this exact format to function properly.`;
 
+    const generationMeta = seriesGenerationMeta(
+      storyDetails,
+      "chapter-outline",
+      seriesId
+    );
+    const resolvedModel = resolveModel(model, PipelineStep.CHAPTER_OUTLINE);
+
     const raw = await runChatCompletion({
-      model: resolveModel(model, PipelineStep.CHAPTER_OUTLINE),
+      model: resolvedModel,
       system,
       prompt,
       jsonResponse: false,
+      maxTokens: 8000,
+      generationMeta,
     });
 
-    let parsed: unknown = raw;
-    try {
-      if (typeof raw === "string") {
-        const match = raw.match(/\[\s*{[\s\S]*}\s*\]/);
-        parsed = match ? JSON.parse(match[0]) : JSON.parse(raw);
-      } else {
-        parsed = raw;
+    let outline = normalizeOutline(parseOutlineRaw(raw));
+
+    // If short, try one continuation fill for the missing numbers only
+    if (outline.length > 0 && outline.length < 12) {
+      const have = new Set(outline.map((c) => Number(c.number)));
+      const maxNum = Math.max(...outline.map((c) => Number(c.number)), 0);
+      const targetCount = Math.max(18, maxNum);
+      const missingNumbers: number[] = [];
+      for (let i = 1; i <= targetCount; i += 1) {
+        if (!have.has(i)) missingNumbers.push(i);
       }
-    } catch {
-      parsed = raw;
-    }
 
-    let outline = ensureOutlineShape(parsed, 18);
-
-    if (outline.some((chapter) => String(chapter.title ?? "").includes("needs generation"))) {
-      const missingStart = outline.findIndex((chapter) =>
-        String(chapter.title ?? "").includes("needs generation")
-      );
-      const missingNumbers = outline
-        .filter((chapter) => String(chapter.title ?? "").includes("needs generation"))
-        .map((chapter) => Number(chapter.number ?? 0))
-        .filter((value) => value > 0);
-
-      const fillPrompt = `You are continuing a chapter outline for "${title}".
-We already have chapters 1-${missingStart}. Create full chapter entries for chapters ${missingNumbers.join(", ")},
+      if (missingNumbers.length > 0 && missingNumbers.length <= 12) {
+        const fillPrompt = `You are continuing a chapter outline for "${title}".
+Create full chapter entries ONLY for chapters ${missingNumbers.join(", ")},
 keeping the tone, emotional arc, and themes consistent. Use the same JSON array format with fields:
 number, title, pov, summary, emotional_development, theme_focus, estimated_word_count, events.
-Do not include chapters outside of ${missingNumbers.join(", ")}.`; 
+Do not include chapters outside of ${missingNumbers.join(", ")}.
 
-      const fillRaw = await runChatCompletion({
-        model: resolveModel(model, PipelineStep.CHAPTER_OUTLINE),
-        system,
-        prompt: `${fillPrompt}\n\nContext:\n${structuredPlan}\n\nAuthor Intent:\n${novelAbout}`,
-        jsonResponse: false,
-      });
+Context:
+${structuredPlan}
 
-      let fillParsed: unknown = fillRaw;
-      try {
-        if (typeof fillRaw === "string") {
-          const match = fillRaw.match(/\[\s*{[\s\S]*}\s*\]/);
-          fillParsed = match ? JSON.parse(match[0]) : JSON.parse(fillRaw);
-        } else {
-          fillParsed = fillRaw;
-        }
-      } catch {
-        fillParsed = fillRaw;
-      }
+Author Intent:
+${novelAbout}
 
-      const fillOutline = ensureOutlineShape(fillParsed, missingNumbers.length, false);
-      const filledMap = new Map(
-        fillOutline.map((chapter) => [Number(chapter.number ?? 0), chapter])
-      );
+Existing chapters (for continuity):
+${JSON.stringify(outline.slice(0, 8), null, 2)}`;
 
-      outline = outline.map((chapter) => {
-        const num = Number(chapter.number ?? 0);
-        if (filledMap.has(num)) {
-          return filledMap.get(num) ?? chapter;
-        }
-        return chapter;
-      });
-
-      if (outline.some((chapter) => String(chapter.title ?? "").includes("needs generation"))) {
-        return NextResponse.json({
-          outline,
-          warning: "Outline incomplete; regenerate to fill missing chapters.",
+        const fillRaw = await runChatCompletion({
+          model: resolvedModel,
+          system,
+          prompt: fillPrompt,
+          jsonResponse: false,
+          maxTokens: 6000,
+          generationMeta,
         });
+
+        const filled = normalizeOutline(parseOutlineRaw(fillRaw));
+        const filledMap = new Map(
+          filled.map((chapter) => [Number(chapter.number), chapter])
+        );
+        for (const num of missingNumbers) {
+          const chapter = filledMap.get(num);
+          if (chapter) outline.push(chapter);
+        }
+        outline = outline
+          .sort((a, b) => Number(a.number) - Number(b.number))
+          .filter(
+            (c, i, arr) =>
+              arr.findIndex((x) => Number(x.number) === Number(c.number)) === i
+          );
       }
     }
 
-    return NextResponse.json({ outline });
+    if (outline.length < 8) {
+      return NextResponse.json(
+        {
+          error:
+            "Chapter outline incomplete after generation. Regenerate the outline.",
+          outline,
+        },
+        { status: 422 }
+      );
+    }
+
+    const invalid = outline.some(
+      (c) =>
+        !c.title ||
+        !c.summary ||
+        String(c.title).includes("needs generation")
+    );
+    if (invalid) {
+      return NextResponse.json(
+        {
+          error:
+            "Chapter outline contained placeholder chapters. Regenerate the outline.",
+          outline,
+        },
+        { status: 422 }
+      );
+    }
+
+    return NextResponse.json({
+      outline,
+      alignment: alignBlueprintToOutline(
+        effectiveBlueprint as Parameters<typeof alignBlueprintToOutline>[0],
+        outline
+      ),
+    });
   } catch (error) {
     console.error(error);
     return NextResponse.json(

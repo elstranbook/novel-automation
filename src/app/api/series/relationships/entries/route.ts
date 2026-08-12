@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type RelationshipEntryPayload = {
+  id?: string;
   seriesId: string;
   relationshipLogId?: string;
   characterAName: string;
@@ -47,6 +48,7 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   try {
     const {
+      id,
       seriesId,
       relationshipLogId,
       characterAName,
@@ -59,11 +61,29 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "seriesId required" }, { status: 400 });
     }
 
+    if (id) {
+      const { data, error } = await supabaseAdmin
+        .from("relationship_entry")
+        .update({
+          character_a_name: characterAName,
+          character_b_name: characterBName,
+          relationship_type: relationshipType,
+          status: status ?? "neutral",
+        })
+        .eq("id", id)
+        .select("*")
+        .single();
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      return NextResponse.json({ entry: data });
+    }
+
     let logId = relationshipLogId;
     if (!logId) {
       const { data: log } = await supabaseAdmin
         .from("relationship_log")
-        .upsert({ series_id: seriesId })
+        .upsert({ series_id: seriesId }, { onConflict: "series_id" })
         .select("id")
         .single();
       logId = log?.id ?? null;
@@ -71,7 +91,7 @@ export async function PUT(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from("relationship_entry")
-      .upsert({
+      .insert({
         relationship_log_id: logId,
         character_a_name: characterAName,
         character_b_name: characterBName,

@@ -8,7 +8,8 @@ export const maxDuration = 300;
 
 export async function POST(request: Request) {
   try {
-    const { userId, title, description, numBooks, model } = await request.json();
+    const { userId, title, description, numBooks, model, genre, targetAgeRange } =
+      await request.json();
 
     if (!userId || !title) {
       return NextResponse.json(
@@ -30,8 +31,12 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
+    const genreLabel = String(genre ?? "").trim() || "fiction";
+    const audience = String(targetAgeRange ?? "").trim();
+
     const arcPrompt = `
-Create a cohesive series arc for a YA series titled "${title}" with ${numBooks ?? 1} books.
+Create a cohesive series arc for a ${genreLabel} series titled "${title}" with ${numBooks ?? 1} books.
+${audience ? `Target audience: ${audience}` : ""}
 
 Series Description:
 ${description ?? ""}
@@ -47,13 +52,14 @@ Return JSON with keys overall_arc, character_arcs (object), themes (array), cont
 `;
 
     const arcSystem =
-      "You are a series architect for YA fiction. Provide cohesive multi-book arcs.";
+      `You are a series architect for ${genreLabel} fiction. Provide cohesive multi-book arcs. Match the stated genre and audience; do not assume Young Adult unless the material calls for it.`;
 
     const arcResponse = await runChatCompletion({
       model: resolveModel(model, PipelineStep.SERIES_CREATE),
       system: arcSystem,
       prompt: arcPrompt,
       jsonResponse: true,
+      generationMeta: { seriesId: series.id, type: "series-create" },
     });
 
     const { error: arcError } = await supabaseAdmin

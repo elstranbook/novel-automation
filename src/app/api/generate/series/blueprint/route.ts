@@ -45,6 +45,16 @@ export async function POST(request: Request) {
       .eq("series_id", seriesId)
       .maybeSingle();
 
+    const { data: seriesRow } = await supabaseAdmin
+      .from("series")
+      .select("genre, target_audience")
+      .eq("id", seriesId)
+      .maybeSingle();
+
+    const genreLabel =
+      String(seriesRow?.genre ?? "").trim() || "fiction";
+    const audience = String(seriesRow?.target_audience ?? "").trim();
+
     const contextParts = [
       bible ? `SERIES BIBLE:\n${JSON.stringify(bible, null, 2).slice(0, 2000)}` : "",
       bookMap ? `BOOK MAP:\n${JSON.stringify(bookMap.map_data, null, 2)}` : "",
@@ -54,7 +64,8 @@ export async function POST(request: Request) {
     ].filter(Boolean);
 
     const prompt = `
-Generate a detailed BOOK BLUEPRINT for Book ${bookNumber} of ${numBooks} in the "${title}" series.
+Generate a detailed BOOK BLUEPRINT for Book ${bookNumber} of ${numBooks} in the "${title}" ${genreLabel} series.
+${audience ? `Target audience: ${audience}` : ""}
 
 ${contextParts.join("\n\n")}
 
@@ -119,9 +130,10 @@ Return as JSON:
 }
 `;
 
-    const system = `You are an expert YA novel architect. Create emotionally powerful
+    const system = `You are an expert novel architect for ${genreLabel}. Create emotionally powerful
 book outlines with perfect pacing, shocking twists, and satisfying arcs. Every
-chapter must serve the story. Build toward the climax with mounting tension.`;
+chapter must serve the story. Build toward the climax with mounting tension.
+Match the stated genre and audience; do not assume Young Adult unless the material calls for it.`;
 
     const response = await runChatCompletion({
       model: resolveModel(model, PipelineStep.SERIES_BLUEPRINT),
@@ -129,6 +141,7 @@ chapter must serve the story. Build toward the climax with mounting tension.`;
       prompt,
       jsonResponse: true,
       maxTokens: 6000,
+      generationMeta: { seriesId, type: "series-blueprint" },
     });
 
     const { error } = await supabaseAdmin

@@ -9,11 +9,14 @@ type BlueprintRequest = {
   title: string;
   novelAbout?: string;
   model?: string;
+  genre?: string;
+  targetAgeRange?: string;
+  narrativeStyle?: string;
 };
 
 export async function POST(request: Request) {
   try {
-    const { title, novelAbout, model } =
+    const { title, novelAbout, model, genre, targetAgeRange, narrativeStyle } =
       (await request.json()) as BlueprintRequest;
 
     if (!title) {
@@ -23,9 +26,15 @@ export async function POST(request: Request) {
       );
     }
 
+    const genreLabel = String(genre ?? "").trim() || "fiction";
+    const audience = String(targetAgeRange ?? "").trim();
+    const style = String(narrativeStyle ?? "").trim();
+
     const prompt = `
-Generate a detailed BOOK BLUEPRINT for a standalone Young Adult novel titled "${title}".
+Generate a detailed BOOK BLUEPRINT for a standalone ${genreLabel} novel titled "${title}".
 ${novelAbout ? `\nThe author describes the novel as follows:\n${novelAbout}\n` : ""}
+${audience ? `Target audience: ${audience}\n` : ""}
+${style ? `Narrative style: ${style}\n` : ""}
 
 Create a complete structural outline including:
 
@@ -84,10 +93,11 @@ Return as JSON with exactly these keys:
 Note: This is a STANDALONE novel (not part of a series), so do NOT include a "next_book_setup" field.
 `;
 
-    const system = `You are an expert YA novel architect. Create emotionally powerful
+    const system = `You are an expert novel architect for ${genreLabel}. Create emotionally powerful
 book outlines with perfect pacing, shocking twists, and satisfying arcs. Every
 chapter must serve the story. Build toward the climax with mounting tension.
-This is a standalone novel, so deliver a complete, self-contained narrative arc.`;
+This is a standalone novel, so deliver a complete, self-contained narrative arc.
+Match the stated genre and audience; do not assume Young Adult unless the material calls for it.`;
 
     const response = await runChatCompletion({
       model: resolveModel(model, PipelineStep.STANDALONE_BLUEPRINT),

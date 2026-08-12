@@ -170,8 +170,9 @@ Focus on lines that are:
 - Short and punchy (good for social media)
 - Longer, profound lines (good for trailers or book blurbs)
 
-Make the tone emotionally engaging, fast-paced, and tailored to teen readers.
+Make the tone emotionally engaging and suited to the novel's genre and audience.
 Use hooks, curiosity, and relatable language. Avoid generic phrasing.
+Do not assume Young Adult or teen voice unless the material calls for it.
 
 Ignore minor dialogue or filler text. Prioritize quotes that would grab a reader's attention and make them curious about the story.
 
@@ -182,7 +183,7 @@ ${scenesText}
     const system = `You are a literary agent skilled at identifying powerful quotes from novels that would work well for marketing and publicity.
 Extract 10-15 impactful quotes from the novel sections provided, following the format requested precisely.
 Return the quotes as an array of properly formatted strings, not as a numbered list.
-Write with an emotionally engaging, fast-paced tone tailored to teen readers, using hooks, curiosity, and relatable language while avoiding generic phrasing.`;
+Match the novel's genre and audience; do not assume Young Adult unless the material calls for it.`;
 
     const attempts = [prompt, `${prompt}\n\nReturn only the formatted quotes.`];
     let response: unknown = null;

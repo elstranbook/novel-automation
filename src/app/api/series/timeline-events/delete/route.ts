@@ -6,7 +6,13 @@ type DeletePayload = { id: string };
 export async function DELETE(request: Request) {
   try {
     const { id } = (await request.json()) as DeletePayload;
-    const { error } = await supabaseAdmin.from("timeline_event").delete().eq("id", id);
+    if (!id) {
+      return NextResponse.json({ error: "id required" }, { status: 400 });
+    }
+    const { error } = await supabaseAdmin
+      .from("series_timeline_events")
+      .delete()
+      .eq("id", id);
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }

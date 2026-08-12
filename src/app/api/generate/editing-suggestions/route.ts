@@ -46,12 +46,12 @@ Focus on these elements specific to character descriptions:
 - Distinctiveness of voice and personality
 - Character motivation clarity
 - Potential for growth and development
-- Relatability for YA audience
+- Relatability for the intended audience
 `;
     }
 
     const prompt = `
-As a professional fiction editor specializing in young adult novels, analyze the following text and provide detailed editing suggestions.
+As a professional fiction editor, analyze the following text and provide detailed editing suggestions.
 
 ${contentSpecificGuidance}
 
@@ -77,10 +77,10 @@ Format your response as a JSON object with these keys:
 - "suggestions": Array of specific, actionable suggestions (array of strings)
 `;
 
-    const system = `You are an experienced editor for young adult fiction with expertise in developmental editing,
+    const system = `You are an experienced fiction editor with expertise in developmental editing,
 line editing, and substantive editing. Your feedback should be constructive, specific, and actionable.
-Follow the YA market conventions while preserving the author's unique voice. Balance positive feedback
-with areas for improvement.`;
+Match the text's genre and audience; do not assume Young Adult unless the material calls for it.
+Preserve the author's unique voice. Balance positive feedback with areas for improvement.`;
 
     const response = await runChatCompletion({
       model: resolveModel(model, PipelineStep.EDITING_SUGGESTIONS),

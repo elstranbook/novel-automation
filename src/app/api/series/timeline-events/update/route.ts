@@ -3,22 +3,31 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type TimelineUpdatePayload = {
   id: string;
+  title?: string;
   description?: string;
-  eventName?: string;
-  eventType?: string;
+  bookNumber?: number | null;
+  chapterNumber?: number | null;
+  eventOrder?: number;
 };
 
 export async function PUT(request: Request) {
   try {
-    const { id, description, eventName, eventType } =
+    const { id, title, description, bookNumber, chapterNumber, eventOrder } =
       (await request.json()) as TimelineUpdatePayload;
+    if (!id) {
+      return NextResponse.json({ error: "id required" }, { status: 400 });
+    }
+
+    const patch: Record<string, unknown> = {};
+    if (title !== undefined) patch.title = title;
+    if (description !== undefined) patch.description = description;
+    if (bookNumber !== undefined) patch.book_number = bookNumber;
+    if (chapterNumber !== undefined) patch.chapter_number = chapterNumber;
+    if (eventOrder !== undefined) patch.event_order = eventOrder;
+
     const { data, error } = await supabaseAdmin
-      .from("timeline_event")
-      .update({
-        description,
-        event_name: eventName,
-        event_type: eventType,
-      })
+      .from("series_timeline_events")
+      .update(patch)
       .eq("id", id)
       .select("*")
       .single();

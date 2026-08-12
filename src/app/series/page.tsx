@@ -77,6 +77,9 @@ export default function SeriesPage() {
   const [seriesBooks, setSeriesBooks] = useState<
     Array<Record<string, unknown>>
   >([]);
+  const [bookMemoryByBookId, setBookMemoryByBookId] = useState<
+    Record<string, Record<string, unknown>>
+  >({});
   const [loadingStep, setLoadingStep] = useState<string | null>(null);
   const [suiteTone, setSuiteTone] = useState("");
   const [suiteSetting, setSuiteSetting] = useState("");
@@ -107,7 +110,9 @@ export default function SeriesPage() {
   const [editingElementDescription, setEditingElementDescription] = useState("");
   const [editingElementImportance, setEditingElementImportance] = useState("moderate");
   const [editingElementIntroducedBook, setEditingElementIntroducedBook] = useState(0);
-  const [seriesMemory, setSeriesMemory] = useState<Array<Record<string, unknown>>>([]);
+  const [seriesCanon, setSeriesCanon] = useState<Array<Record<string, unknown>>>([]);
+  const [seriesRelationships, setSeriesRelationships] = useState<Array<Record<string, unknown>>>([]);
+  const [seriesMemoryEntries, setSeriesMemoryEntries] = useState<Array<Record<string, unknown>>>([]);
   const [seriesLogs, setSeriesLogs] = useState<Array<Record<string, unknown>>>([]);
   const [activeMemoryTab, setActiveMemoryTab] = useState("canon");
   const [logTypeFilter, setLogTypeFilter] = useState("all");
@@ -206,6 +211,7 @@ export default function SeriesPage() {
   const [timelineTitle, setTimelineTitle] = useState("");
   const [timelineDescription, setTimelineDescription] = useState("");
   const [timelineBook, setTimelineBook] = useState(1);
+  const [timelineChapter, setTimelineChapter] = useState<number | "">("");
   const [timelineOrder, setTimelineOrder] = useState(1);
   const [formError, setFormError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<
@@ -216,6 +222,7 @@ export default function SeriesPage() {
   const [editingTimelineDescription, setEditingTimelineDescription] = useState("");
   const [editingTimelineOrder, setEditingTimelineOrder] = useState(1);
   const [editingTimelineBook, setEditingTimelineBook] = useState(1);
+  const [editingTimelineChapter, setEditingTimelineChapter] = useState<number | "">("");
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -229,34 +236,31 @@ export default function SeriesPage() {
 
   const filteredCanon = useMemo(() => {
     const query = canonSearch.trim().toLowerCase();
-    // Only include actual canon entries (they have a `fact` field).
-    // seriesMemory also contains mystery + relationship entries which we must exclude.
-    return seriesMemory
-      .filter((entry) => entry.fact != null)
-      .filter((entry) => {
-        const category = String(entry.category ?? "").toLowerCase();
-        const matchesCategory = canonFilter === "all" || category === canonFilter;
-        const matchesQuery =
-          !query || JSON.stringify(entry).toLowerCase().includes(query);
-        return matchesCategory && matchesQuery;
-      });
-  }, [seriesMemory, canonFilter, canonSearch]);
+    return seriesCanon.filter((entry) => {
+      const category = String(entry.category ?? "").toLowerCase();
+      const matchesCategory = canonFilter === "all" || category === canonFilter;
+      const matchesQuery =
+        !query || JSON.stringify(entry).toLowerCase().includes(query);
+      return matchesCategory && matchesQuery;
+    });
+  }, [seriesCanon, canonFilter, canonSearch]);
 
-  // Refresh ONLY canon entries from the API and merge them back into seriesMemory,
-  // preserving mystery + relationship entries. This prevents the bug where editing
-  // a canon entry wipes sibling-tab data from local state.
   const refreshCanonOnly = useCallback(async () => {
     if (!activeSeries) return;
     const response = await fetch(
       `/api/series/canon?seriesId=${activeSeries.id}`
     );
     const data = await response.json();
-    const freshCanon = (data.entries ?? []) as Array<Record<string, unknown>>;
-    // Remove old canon entries (those with a `fact` field) and append fresh ones.
-    setSeriesMemory((prev) => [
-      ...prev.filter((e) => e.fact == null),
-      ...freshCanon,
-    ]);
+    setSeriesCanon((data.entries ?? []) as Array<Record<string, unknown>>);
+  }, [activeSeries]);
+
+  const refreshRelationshipsOnly = useCallback(async () => {
+    if (!activeSeries) return;
+    const response = await fetch(
+      `/api/series/relationships/entries?seriesId=${activeSeries.id}`
+    );
+    const data = await response.json();
+    setSeriesRelationships((data.entries ?? []) as Array<Record<string, unknown>>);
   }, [activeSeries]);
 
   // Refresh ONLY mystery entries (secrets + clues) from the API.
@@ -271,6 +275,87 @@ export default function SeriesPage() {
     setMysterySecrets((data.secrets ?? []) as Array<Record<string, unknown>>);
     setMysteryClues((data.clues ?? []) as Array<Record<string, unknown>>);
   }, [activeSeries]);
+
+  const refreshPlotsOnly = useCallback(async () => {
+    if (!activeSeries) return;
+    const response = await fetch(
+      `/api/series/plot-threads?seriesId=${activeSeries.id}`
+    );
+    const data = await response.json();
+    setPlotThreads(data.threads ?? []);
+  }, [activeSeries]);
+
+  const refreshMemoryOnly = useCallback(async () => {
+    if (!activeSeries) return;
+    const response = await fetch(
+      `/api/series/memory?seriesId=${activeSeries.id}`
+    );
+    const data = await response.json();
+    setSeriesMemoryEntries(data.entries ?? []);
+  }, [activeSeries]);
+
+  const refreshTimelineOnly = useCallback(async () => {
+    if (!activeSeries) return;
+    const response = await fetch(
+      `/api/series/timeline?seriesId=${activeSeries.id}`
+    );
+    const data = await response.json();
+    setSeriesTimeline(data.events ?? []);
+  }, [activeSeries]);
+
+  const loadBookMemories = useCallback(async (books: Array<Record<string, unknown>>) => {
+    const entries = await Promise.all(
+      books
+        .filter((book) => book.id)
+        .map(async (book) => {
+          const id = String(book.id);
+          const response = await fetch(`/api/series/book-memory?bookId=${id}`);
+          const data = await response.json().catch(() => null);
+          return [id, data?.memory ?? null] as const;
+        })
+    );
+    const next: Record<string, Record<string, unknown>> = {};
+    for (const [id, memory] of entries) {
+      if (memory && typeof memory === "object") {
+        next[id] = memory as Record<string, unknown>;
+      }
+    }
+    setBookMemoryByBookId(next);
+  }, []);
+
+  const runLlmFill = useCallback(
+    async (
+      step: string,
+      endpoint: string,
+      refresh: () => Promise<void>,
+      successMessage: (data: Record<string, unknown>) => string
+    ) => {
+      if (!activeSeries) return;
+      setLoadingStep(step);
+      setStatusMessage(null);
+      setFormError(null);
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ seriesId: activeSeries.id, model }),
+        });
+        const data = (await response.json()) as Record<string, unknown>;
+        if (!response.ok) {
+          setFormError(String(data.error ?? "LLM Fill failed"));
+          return;
+        }
+        await refresh();
+        setStatusMessage(successMessage(data));
+      } catch (error) {
+        console.error(error);
+        setFormError("LLM Fill failed");
+      } finally {
+        setLoadingStep(null);
+      }
+    },
+    [activeSeries, model]
+  );
 
   // Secrets are filtered separately from clues — they have different fields
   // (status, who_knows, revealed_in_book) and different filters (status filter).
@@ -307,7 +392,10 @@ export default function SeriesPage() {
 
   const filteredRelationships = useMemo(() => {
     const query = relationshipsSearch.trim().toLowerCase();
-    return seriesMemory.filter((entry) => {
+    return seriesRelationships.filter((entry) => {
+      const isRelationship =
+        !!entry.character_a_name || !!entry.character_b_name;
+      if (!isRelationship) return false;
       const status = String(entry.status ?? "").toLowerCase();
       const matchesStatus =
         relationshipsStatusFilter === "all" ||
@@ -316,7 +404,7 @@ export default function SeriesPage() {
         !query || JSON.stringify(entry).toLowerCase().includes(query);
       return matchesStatus && matchesQuery;
     });
-  }, [seriesMemory, relationshipsSearch, relationshipsStatusFilter]);
+  }, [seriesRelationships, relationshipsSearch, relationshipsStatusFilter]);
 
   const filteredPlots = useMemo(() => {
     const query = plotSearch.trim().toLowerCase();
@@ -381,6 +469,41 @@ export default function SeriesPage() {
         "Structuring chapters",
         "Saving blueprint memory",
       ],
+      "canon-llm-fill": [
+        "Loading series context",
+        "Drafting canon facts",
+        "Appending to canon log",
+      ],
+      "mystery-llm-fill": [
+        "Loading series context",
+        "Drafting secrets & clues",
+        "Appending to mystery log",
+      ],
+      "relationships-llm-fill": [
+        "Loading series context",
+        "Drafting relationships",
+        "Appending relationship entries",
+      ],
+      "plots-llm-fill": [
+        "Loading series context",
+        "Drafting plot threads",
+        "Appending plot threads",
+      ],
+      "timeline-llm-fill": [
+        "Loading series context",
+        "Drafting timeline events",
+        "Appending timeline",
+      ],
+      "memory-llm-fill": [
+        "Loading series context",
+        "Drafting memory notes",
+        "Appending memory entries",
+      ],
+      "book-memory-compile": [
+        "Loading book context",
+        "Compiling end-of-book memory",
+        "Saving character states",
+      ],
       default: ["Generating content", "Compiling output", "Finalizing"],
     };
     return stepsByType[loadingStep] ?? stepsByType.default;
@@ -427,7 +550,7 @@ export default function SeriesPage() {
   }, [seriesLogs, logTypeFilter]);
 
   const memoryCounts = useMemo(() => {
-    return seriesMemory.reduce(
+    return seriesMemoryEntries.reduce(
       (acc, entry) => {
         const category = String(entry.category ?? "canon").toLowerCase();
         const current = typeof acc[category] === "number" ? acc[category] : 0;
@@ -436,7 +559,7 @@ export default function SeriesPage() {
       },
       {} as Record<string, number>
     );
-  }, [seriesMemory]);
+  }, [seriesMemoryEntries]);
 
   const memoryTabs = [
     { id: "canon", label: "Canon" },
@@ -446,21 +569,21 @@ export default function SeriesPage() {
 
   const filteredMemoryEntries = useMemo(() => {
     if (activeMemoryTab === "relationships") {
-      return seriesMemory.filter((entry) =>
+      return seriesMemoryEntries.filter((entry) =>
         String(entry.category ?? "").toLowerCase().includes("relationship")
       );
     }
     if (activeMemoryTab === "mystery") {
-      return seriesMemory.filter((entry) => {
+      return seriesMemoryEntries.filter((entry) => {
         const category = String(entry.category ?? "").toLowerCase();
         return category.includes("clue") || category.includes("secret");
       });
     }
-    return seriesMemory.filter((entry) => {
+    return seriesMemoryEntries.filter((entry) => {
       const category = String(entry.category ?? "canon").toLowerCase();
       return category === "canon" || category === "warning";
     });
-  }, [activeMemoryTab, seriesMemory]);
+  }, [activeMemoryTab, seriesMemoryEntries]);
 
   const [newMemoryContent, setNewMemoryContent] = useState("");
   const [newMemoryCategory, setNewMemoryCategory] = useState("canon");
@@ -471,6 +594,7 @@ export default function SeriesPage() {
 
   const clearSeriesData = () => {
     setSeriesBooks([]);
+    setBookMemoryByBookId({});
     setSeriesCharacters([]);
     setSeriesWorld(null);
     setWorldSummaryDraft("");
@@ -482,7 +606,9 @@ export default function SeriesPage() {
     setNewElementDescription("");
     setNewElementImportance("moderate");
     setEditingElementId(null);
-    setSeriesMemory([]);
+    setSeriesCanon([]);
+    setSeriesRelationships([]);
+    setSeriesMemoryEntries([]);
     setMysterySecrets([]);
     setMysteryClues([]);
     setSeriesTimeline([]);
@@ -579,6 +705,7 @@ export default function SeriesPage() {
         const booksData = booksRes.value.books ?? [];
         console.log(`[selectSeries] Loaded ${booksData.length} series_books for series ${seriesId}`);
         setSeriesBooks(booksData);
+        void loadBookMemories(booksData);
       } else {
         console.error("[selectSeries] series_books query rejected:", booksRes.reason);
       }
@@ -609,14 +736,14 @@ export default function SeriesPage() {
         );
       }
 
-      // Canon / Memory: canon + relationships go into seriesMemory;
-      // mysteries now live in their own dedicated state (mysterySecrets + mysteryClues).
-      // Previously we tried to merge `mysteryRes.value.entries` into seriesMemory, but
-      // the mystery API returns `{ secrets, clues }` (no `entries` key) — so the
-      // mysteries tab appeared empty until manual refresh.
-      const canonEntries = canonRes.status === "fulfilled" ? (canonRes.value.entries ?? []) : [];
-      const relationshipEntries = relationshipsRes.status === "fulfilled" ? (relationshipsRes.value.entries ?? []) : [];
-      setSeriesMemory([...canonEntries, ...relationshipEntries]);
+      setSeriesCanon(
+        canonRes.status === "fulfilled" ? (canonRes.value.entries ?? []) : []
+      );
+      setSeriesRelationships(
+        relationshipsRes.status === "fulfilled"
+          ? (relationshipsRes.value.entries ?? [])
+          : []
+      );
 
       // Mystery: dedicated state for secrets and clues
       if (mysteryRes.status === "fulfilled") {
@@ -637,12 +764,8 @@ export default function SeriesPage() {
         setSeriesTimeline(timelineRes.value.events ?? []);
       }
 
-      // Memory (overwrite if memory endpoint returned entries)
       if (memoryRes.status === "fulfilled") {
-        const memEntries = memoryRes.value.entries ?? [];
-        if (memEntries.length > 0) {
-          setSeriesMemory(memEntries);
-        }
+        setSeriesMemoryEntries(memoryRes.value.entries ?? []);
       }
 
       // Generation logs
@@ -1131,6 +1254,16 @@ export default function SeriesPage() {
             {error}
           </div>
         )}
+        {formError && (
+          <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+            {formError}
+          </div>
+        )}
+        {statusMessage && !loadingStep && (
+          <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+            {statusMessage}
+          </div>
+        )}
 
         <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
           <div className="flex items-center justify-between">
@@ -1214,7 +1347,7 @@ export default function SeriesPage() {
           </section>
         )}
 
-        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+        <div className="flex flex-wrap gap-2 pb-2">
           {[
             { id: "overview", label: "Overview" },
             { id: "characters", label: "Characters" },
@@ -1773,8 +1906,7 @@ export default function SeriesPage() {
               introduced_in_chapter: typeof c.introduced_in_chapter === "number" ? c.introduced_in_chapter : null,
               is_fully_developed: typeof c.is_fully_developed === "boolean" ? c.is_fully_developed : null,
             }))}
-            relationships={seriesMemory.filter((entry) => {
-              // Only pass relationship entries to the CharactersTab
+            relationships={seriesRelationships.filter((entry) => {
               const cat = String(entry.category ?? "").toLowerCase();
               return cat === "relationship" || !!entry.character_a_name || !!entry.character_b_name;
             }).map((entry) => ({
@@ -2345,6 +2477,21 @@ export default function SeriesPage() {
               >
                 Refresh Canon
               </button>
+              <button
+                onClick={() =>
+                  runLlmFill(
+                    "canon-llm-fill",
+                    "/api/series/canon/llm-fill",
+                    refreshCanonOnly,
+                    (data) =>
+                      `Added ${Number(data.soft ?? 0)} soft / ${Number(data.locked ?? 0)} locked canon facts`
+                  )
+                }
+                disabled={!activeSeries || loadingStep === "canon-llm-fill"}
+                className="rounded-full border border-violet-500/60 px-4 py-2.5 text-sm text-violet-200 disabled:opacity-50"
+              >
+                {loadingStep === "canon-llm-fill" ? "Filling..." : "LLM Fill"}
+              </button>
             </div>
 
             {/* ─── Bulk Actions Bar (shown when items are selected) ─── */}
@@ -2450,7 +2597,7 @@ export default function SeriesPage() {
             <div className="mt-4 space-y-3">
               {filteredCanon.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-zinc-700 bg-zinc-950/40 p-8 text-center text-sm text-zinc-500">
-                  {seriesMemory.some((e) => e.fact != null)
+                  {seriesCanon.length > 0
                     ? "No canon entries match your filter. Try clearing the filter or search."
                     : "No canon facts yet. Add one above to start enforcing continuity across your series."}
                 </div>
@@ -2968,6 +3115,24 @@ export default function SeriesPage() {
                 className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Refresh Mysteries
+              </button>
+              <button
+                onClick={() =>
+                  runLlmFill(
+                    "mystery-llm-fill",
+                    "/api/series/mystery/llm-fill",
+                    refreshMysteryOnly,
+                    (data) => {
+                      const secrets = Array.isArray(data.secrets) ? data.secrets.length : 0;
+                      const clues = Array.isArray(data.clues) ? data.clues.length : 0;
+                      return `Added ${secrets} secrets and ${clues} clues`;
+                    }
+                  )
+                }
+                disabled={!activeSeries || loadingStep === "mystery-llm-fill"}
+                className="rounded-full border border-violet-500/60 px-4 py-2.5 text-sm text-violet-200 disabled:opacity-50"
+              >
+                {loadingStep === "mystery-llm-fill" ? "Filling..." : "LLM Fill"}
               </button>
             </div>
 
@@ -3698,11 +3863,7 @@ export default function SeriesPage() {
                   });
                   setRelationshipA("");
                   setRelationshipB("");
-                  const response = await fetch(
-                    `/api/series/relationships/entries?seriesId=${activeSeries.id}`
-                  );
-                  const data = await response.json();
-                  setSeriesMemory(data.entries ?? []);
+                  await refreshRelationshipsOnly();
                 }}
                 className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
@@ -3710,16 +3871,25 @@ export default function SeriesPage() {
               </button>
               <button
                 onClick={async () => {
-                  if (!activeSeries) return;
-                  const response = await fetch(
-                    `/api/series/relationships/entries?seriesId=${activeSeries.id}`
-                  );
-                  const data = await response.json();
-                  setSeriesMemory(data.entries ?? []);
+                  await refreshRelationshipsOnly();
                 }}
                 className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Refresh Relationships
+              </button>
+              <button
+                onClick={() =>
+                  runLlmFill(
+                    "relationships-llm-fill",
+                    "/api/series/relationships/llm-fill",
+                    refreshRelationshipsOnly,
+                    (data) => `Added ${Number(data.inserted ?? 0)} relationships`
+                  )
+                }
+                disabled={!activeSeries || loadingStep === "relationships-llm-fill"}
+                className="rounded-full border border-violet-500/60 px-4 py-2.5 text-sm text-violet-200 disabled:opacity-50"
+              >
+                {loadingStep === "relationships-llm-fill" ? "Filling..." : "LLM Fill"}
               </button>
             </div>
             <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -3788,6 +3958,7 @@ export default function SeriesPage() {
                             method: "PUT",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
+                              id: String(relationship.id ?? ""),
                               seriesId: activeSeries.id,
                               relationshipLogId: relationship.relationship_log_id,
                               characterAName: editingRelationshipA,
@@ -3797,11 +3968,7 @@ export default function SeriesPage() {
                             }),
                           });
                           setEditingRelationshipId(null);
-                          const response = await fetch(
-                            `/api/series/relationships/entries?seriesId=${activeSeries.id}`
-                          );
-                          const data = await response.json();
-                          setSeriesMemory(data.entries ?? []);
+                          await refreshRelationshipsOnly();
                         }}
                         className="rounded-full border border-emerald-500/60 px-3 py-1 text-[10px] text-emerald-200"
                       >
@@ -3824,17 +3991,10 @@ export default function SeriesPage() {
                     <button
                       onClick={() => {
                         if (!activeSeries) return;
-                        const seriesId = activeSeries.id;
                         setPendingDelete({
                           id: String(relationship.id ?? ""),
                           endpoint: "/api/series/relationships/entries/delete",
-                          refresh: async () => {
-                            const refreshed = await fetch(
-                              `/api/series/relationships/entries?seriesId=${seriesId}`
-                            );
-                            const data = await refreshed.json();
-                            setSeriesMemory(data.entries ?? []);
-                          },
+                          refresh: refreshRelationshipsOnly,
                         });
                       }}
                       className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
@@ -3995,15 +4155,25 @@ export default function SeriesPage() {
               <button
                 onClick={async () => {
                   if (!activeSeries) return;
-                  const response = await fetch(
-                    `/api/series/plot-threads?seriesId=${activeSeries.id}`
-                  );
-                  const data = await response.json();
-                  setPlotThreads(data.threads ?? []);
+                  await refreshPlotsOnly();
                 }}
                 className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Refresh Threads
+              </button>
+              <button
+                onClick={() =>
+                  runLlmFill(
+                    "plots-llm-fill",
+                    "/api/series/plot-threads/llm-fill",
+                    refreshPlotsOnly,
+                    (data) => `Added ${Number(data.inserted ?? 0)} plot threads`
+                  )
+                }
+                disabled={!activeSeries || loadingStep === "plots-llm-fill"}
+                className="rounded-full border border-violet-500/60 px-4 py-2.5 text-sm text-violet-200 disabled:opacity-50"
+              >
+                {loadingStep === "plots-llm-fill" ? "Filling..." : "LLM Fill"}
               </button>
             </div>
             <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -4127,7 +4297,9 @@ export default function SeriesPage() {
                   if (!activeSeries) return;
                   const res = await fetch(`/api/series/books?seriesId=${activeSeries.id}`);
                   const data = await res.json();
-                  setSeriesBooks(data.books ?? []);
+                  const books = data.books ?? [];
+                  setSeriesBooks(books);
+                  await loadBookMemories(books);
                 }}
                 className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
@@ -4138,11 +4310,23 @@ export default function SeriesPage() {
               {seriesBooks.length === 0 && (
                 <p className="text-xs text-zinc-500">No books yet.</p>
               )}
-              {seriesBooks.map((book) => (
-                <div
-                  key={String(book.id)}
-                  className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
-                >
+              {seriesBooks.map((book) => {
+                const bookId = String(book.id ?? "");
+                const memory = bookMemoryByBookId[bookId];
+                const summaryRaw = memory?.compressed_summary;
+                const summaryText =
+                  typeof summaryRaw === "string"
+                    ? summaryRaw
+                    : summaryRaw
+                      ? JSON.stringify(summaryRaw)
+                      : "";
+                const compiling =
+                  loadingStep === `book-memory-compile-${book.book_number}`;
+                return (
+                  <div
+                    key={bookId || String(book.book_number)}
+                    className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
+                  >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-zinc-100">
                       {String(book.title ?? "Untitled")}
@@ -4157,6 +4341,21 @@ export default function SeriesPage() {
                   <p className="mt-2 text-xs text-zinc-400">
                     {String(book.summary ?? "No summary yet.")}
                   </p>
+                  {book.book_purpose ? (
+                    <p className="mt-2 text-[11px] text-zinc-500">
+                      Purpose: {String(book.book_purpose)}
+                    </p>
+                  ) : null}
+                  {summaryText ? (
+                    <p className="mt-2 rounded border border-emerald-500/30 bg-emerald-500/5 p-2 text-[11px] text-emerald-100">
+                      Book memory: {summaryText.slice(0, 280)}
+                      {summaryText.length > 280 ? "…" : ""}
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-[11px] text-zinc-600">
+                      No compiled book memory yet.
+                    </p>
+                  )}
                   <div className="mt-3 flex flex-wrap gap-2">
                     {Boolean(book.novel_id) && (
                       <span className="rounded-full border border-emerald-500/40 px-2 py-0.5 text-[10px] text-emerald-200">
@@ -4172,9 +4371,57 @@ export default function SeriesPage() {
                     >
                       Open in Studio
                     </Link>
+                    <button
+                      onClick={async () => {
+                        if (!activeSeries) return;
+                        const step = `book-memory-compile-${book.book_number}`;
+                        setLoadingStep(step);
+                        setFormError(null);
+                        try {
+                          const response = await fetch(
+                            "/api/series/book-memory/compile",
+                            {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                seriesId: activeSeries.id,
+                                bookNumber: Number(book.book_number),
+                                model,
+                              }),
+                            }
+                          );
+                          const data = await response.json();
+                          if (!response.ok) {
+                            setFormError(
+                              String(data.error ?? "Failed to compile book memory")
+                            );
+                            return;
+                          }
+                          if (data.memory && bookId) {
+                            setBookMemoryByBookId((prev) => ({
+                              ...prev,
+                              [bookId]: data.memory as Record<string, unknown>,
+                            }));
+                          }
+                          setStatusMessage(
+                            `Compiled memory for Book ${String(book.book_number)}`
+                          );
+                        } catch (error) {
+                          console.error(error);
+                          setFormError("Failed to compile book memory");
+                        } finally {
+                          setLoadingStep(null);
+                        }
+                      }}
+                      disabled={!activeSeries || compiling || !!loadingStep}
+                      className="rounded-full border border-violet-500/60 px-2 py-0.5 text-[10px] text-violet-200 disabled:opacity-50"
+                    >
+                      {compiling ? "Compiling..." : "Compile Book Memory"}
+                    </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}
@@ -4188,24 +4435,36 @@ export default function SeriesPage() {
                   Capture canon updates, callbacks, and continuity notes.
                 </p>
               </div>
-              <button
-                onClick={async () => {
-                  if (!activeSeries) return;
-                  const response = await fetch(
-                    `/api/series/memory?seriesId=${activeSeries.id}`
-                  );
-                  const data = await response.json();
-                  setSeriesMemory(data.entries ?? []);
-                  const warningsResponse = await fetch(
-                    `/api/series/memory/validate?seriesId=${activeSeries.id}`
-                  );
-                  const warningsData = await warningsResponse.json();
-                  setMemoryWarnings(warningsData.warnings ?? []);
-                }}
-                className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
-              >
-                Refresh Memory
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={async () => {
+                    if (!activeSeries) return;
+                    await refreshMemoryOnly();
+                    const warningsResponse = await fetch(
+                      `/api/series/memory/validate?seriesId=${activeSeries.id}`
+                    );
+                    const warningsData = await warningsResponse.json();
+                    setMemoryWarnings(warningsData.warnings ?? []);
+                  }}
+                  className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
+                >
+                  Refresh Memory
+                </button>
+                <button
+                  onClick={() =>
+                    runLlmFill(
+                      "memory-llm-fill",
+                      "/api/series/memory/llm-fill",
+                      refreshMemoryOnly,
+                      (data) => `Added ${Number(data.inserted ?? 0)} memory notes`
+                    )
+                  }
+                  disabled={!activeSeries || loadingStep === "memory-llm-fill"}
+                  className="rounded-full border border-violet-500/60 px-4 py-2.5 text-sm text-violet-200 disabled:opacity-50"
+                >
+                  {loadingStep === "memory-llm-fill" ? "Filling..." : "LLM Fill"}
+                </button>
+              </div>
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-4">
@@ -4283,7 +4542,7 @@ export default function SeriesPage() {
                               `/api/series/memory?seriesId=${activeSeries.id}`
                             );
                             const data = await refreshed.json();
-                            setSeriesMemory(data.entries ?? []);
+                            setSeriesMemoryEntries(data.entries ?? []);
                             const warningsResponse = await fetch(
                               `/api/series/memory/validate?seriesId=${activeSeries.id}`
                             );
@@ -4386,6 +4645,19 @@ export default function SeriesPage() {
                 />
               </label>
               <label className="text-xs text-zinc-300">
+                Chapter #
+                <input
+                  type="number"
+                  value={timelineChapter}
+                  onChange={(event) => {
+                    const raw = event.target.value;
+                    setTimelineChapter(raw === "" ? "" : Number(raw) || 1);
+                  }}
+                  placeholder="optional"
+                  className="mt-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                />
+              </label>
+              <label className="text-xs text-zinc-300">
                 Order
                 <input
                   type="number"
@@ -4421,10 +4693,12 @@ export default function SeriesPage() {
                       title: timelineTitle,
                       description: timelineDescription,
                       bookNumber: timelineBook,
+                      chapterNumber: timelineChapter === "" ? null : timelineChapter,
                     }),
                   });
                   setTimelineTitle("");
                   setTimelineDescription("");
+                  setTimelineChapter("");
                   const response = await fetch(
                     `/api/series/timeline?seriesId=${activeSeries.id}`
                   );
@@ -4438,15 +4712,25 @@ export default function SeriesPage() {
               <button
                 onClick={async () => {
                   if (!activeSeries) return;
-                  const response = await fetch(
-                    `/api/series/timeline?seriesId=${activeSeries.id}`
-                  );
-                  const data = await response.json();
-                  setSeriesTimeline(data.events ?? []);
+                  await refreshTimelineOnly();
                 }}
                 className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
                 Refresh Timeline
+              </button>
+              <button
+                onClick={() =>
+                  runLlmFill(
+                    "timeline-llm-fill",
+                    "/api/series/timeline/llm-fill",
+                    refreshTimelineOnly,
+                    (data) => `Added ${Number(data.inserted ?? 0)} timeline events`
+                  )
+                }
+                disabled={!activeSeries || loadingStep === "timeline-llm-fill"}
+                className="rounded-full border border-violet-500/60 px-4 py-2.5 text-sm text-violet-200 disabled:opacity-50"
+              >
+                {loadingStep === "timeline-llm-fill" ? "Filling..." : "LLM Fill"}
               </button>
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -4479,11 +4763,7 @@ export default function SeriesPage() {
               <button
                 onClick={async () => {
                   if (!activeSeries) return;
-                  const response = await fetch(
-                    `/api/series/timeline?seriesId=${activeSeries.id}`
-                  );
-                  const data = await response.json();
-                  setSeriesTimeline(data.events ?? []);
+                  await refreshTimelineOnly();
                 }}
                 className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
               >
@@ -4538,7 +4818,7 @@ export default function SeriesPage() {
                                 onChange={(eventInput) => setEditingTimelineDescription(eventInput.target.value)}
                                 className="min-h-[80px] w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
                               />
-                              <div className="grid gap-2 md:grid-cols-2">
+                              <div className="grid gap-2 md:grid-cols-3">
                                 <input
                                   type="number"
                                   value={editingTimelineBook}
@@ -4546,6 +4826,17 @@ export default function SeriesPage() {
                                     setEditingTimelineBook(Number(eventInput.target.value) || 1)
                                   }
                                   className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                                  placeholder="Book #"
+                                />
+                                <input
+                                  type="number"
+                                  value={editingTimelineChapter}
+                                  onChange={(eventInput) => {
+                                    const raw = eventInput.target.value;
+                                    setEditingTimelineChapter(raw === "" ? "" : Number(raw) || 1);
+                                  }}
+                                  className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                                  placeholder="Chapter #"
                                 />
                                 <input
                                   type="number"
@@ -4554,6 +4845,7 @@ export default function SeriesPage() {
                                     setEditingTimelineOrder(Number(eventInput.target.value) || 1)
                                   }
                                   className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-3 text-sm"
+                                  placeholder="Order"
                                 />
                               </div>
                             </div>
@@ -4570,6 +4862,11 @@ export default function SeriesPage() {
                                     return String(evtBookTitle ?? `Book ${event.book_number ?? "?"}`);
                                   })()}
                                 </span>
+                                {event.chapter_number != null && (
+                                  <span className="ml-2 rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
+                                    Ch {String(event.chapter_number)}
+                                  </span>
+                                )}
                                 <span className="ml-2 rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
                                   Order {String(event.event_order ?? "?")}
                                 </span>
@@ -4595,9 +4892,14 @@ export default function SeriesPage() {
                                     headers: { "Content-Type": "application/json" },
                                     body: JSON.stringify({
                                       id: String(event.id ?? ""),
-                                      eventName: editingTimelineTitle,
+                                      title: editingTimelineTitle,
                                       description: editingTimelineDescription,
-                                      eventType: "plot",
+                                      bookNumber: editingTimelineBook,
+                                      chapterNumber:
+                                        editingTimelineChapter === ""
+                                          ? null
+                                          : editingTimelineChapter,
+                                      eventOrder: editingTimelineOrder,
                                     }),
                                   });
                                   setEditingTimelineId(null);
@@ -4618,6 +4920,11 @@ export default function SeriesPage() {
                                   setEditingTimelineTitle(String(event.title ?? ""));
                                   setEditingTimelineDescription(String(event.description ?? ""));
                                   setEditingTimelineBook(Number(event.book_number ?? 1));
+                                  setEditingTimelineChapter(
+                                    event.chapter_number != null
+                                      ? Number(event.chapter_number)
+                                      : ""
+                                  );
                                   setEditingTimelineOrder(Number(event.event_order ?? 1));
                                 }}
                                 className="rounded-full border border-zinc-700 px-3 py-1 text-[10px]"
@@ -4673,6 +4980,11 @@ export default function SeriesPage() {
                     `/api/series/generation-log?seriesId=${activeSeries.id}`
                   );
                   const data = await response.json();
+                  if (!response.ok) {
+                    setFormError(String(data.error ?? "Failed to load logs"));
+                    return;
+                  }
+                  setFormError(null);
                   setSeriesLogs(data.logs ?? []);
                 }}
                 className="rounded-full border border-zinc-700 px-4 py-2.5 text-sm"
@@ -4708,27 +5020,62 @@ export default function SeriesPage() {
               {filteredLogs.length === 0 && (
                 <p className="text-xs text-zinc-500">No logs yet.</p>
               )}
-              {filteredLogs.slice(0, 10).map((log) => (
-                <div
-                  key={String(log.id)}
-                  className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs text-zinc-400">
-                      {String(log.type ?? "Unknown")}
+              {filteredLogs.slice(0, 25).map((log) => {
+                const resultText = String(log.result ?? "").trim();
+                const promptText = String(log.prompt ?? "").trim();
+                const errorText = String(log.error_message ?? "").trim();
+                return (
+                  <div
+                    key={String(log.id)}
+                    className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-medium text-zinc-200">
+                        {String(log.type ?? "Unknown")}
+                      </p>
+                      <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
+                        {String(log.status ?? "")}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-[10px] text-zinc-500">
+                      Started {String(log.started_at ?? "—")}
+                      {log.completed_at
+                        ? ` · Completed ${String(log.completed_at)}`
+                        : ""}
                     </p>
-                    <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px]">
-                      {String(log.status ?? "")}
-                    </span>
+                    {errorText ? (
+                      <p className="mt-2 text-xs text-rose-300">
+                        Error: {errorText.slice(0, 500)}
+                        {errorText.length > 500 ? "…" : ""}
+                      </p>
+                    ) : null}
+                    {promptText ? (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-[10px] uppercase tracking-wide text-zinc-500">
+                          Prompt
+                        </summary>
+                        <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded border border-zinc-800 bg-zinc-950 p-2 text-[11px] text-zinc-400">
+                          {promptText.slice(0, 4000)}
+                          {promptText.length > 4000 ? "…" : ""}
+                        </pre>
+                      </details>
+                    ) : null}
+                    {resultText ? (
+                      <details className="mt-2" open>
+                        <summary className="cursor-pointer text-[10px] uppercase tracking-wide text-zinc-500">
+                          Result
+                        </summary>
+                        <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded border border-zinc-800 bg-zinc-950 p-2 text-[11px] text-zinc-300">
+                          {resultText.slice(0, 6000)}
+                          {resultText.length > 6000 ? "…" : ""}
+                        </pre>
+                      </details>
+                    ) : !errorText ? (
+                      <p className="mt-2 text-xs text-zinc-500">No result yet.</p>
+                    ) : null}
                   </div>
-                  <p className="mt-2 text-xs text-zinc-300">
-                    {String(log.summary ?? log.message ?? "")}
-                  </p>
-                  <p className="mt-2 text-[10px] text-zinc-500">
-                    {String(log.started_at ?? "")}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}
