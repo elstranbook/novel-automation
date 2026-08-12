@@ -43,19 +43,20 @@ export async function POST(request: Request) {
       );
     }
 
+    const resolvedGenre = genre?.trim() || "Fiction";
     const prompt = `
-You are building a professional SERIES BIBLE for a ${numBooks ?? 3}-book YA series.
+You are building a professional SERIES BIBLE for a ${numBooks ?? 3}-book ${resolvedGenre} series.
 This Bible will become story law - all content must strictly follow it.
 
 **SERIES INPUT:**
 Title: ${title}
-Genre: ${genre ?? "Young Adult Fiction"}
-Target Age: ${targetAge ?? "13-18"}
+Genre: ${resolvedGenre}
+Target Age: ${targetAge ?? "general audience"}
 Tone/Vibe: ${tone ?? "Emotional, dramatic, hopeful"}
-Setting: ${setting ?? "Contemporary"}
+Setting: ${setting ?? "To be developed"}
 Main Characters: ${mainCharacters ?? "To be developed"}
 Core Conflict: ${coreConflict ?? "To be developed"}
-Themes: ${themes ?? "Coming of age, identity, relationships"}
+Themes: ${themes ?? "Identity, relationships, transformation"}
 Planned Books: ${numBooks ?? 3}
 
 **CREATE A COMPREHENSIVE SERIES BIBLE WITH THESE 10 COMPONENTS:**
@@ -139,9 +140,10 @@ Return as JSON with these exact keys:
 }
 `;
 
-    const system = `You are an expert YA series architect who creates comprehensive,
+    const system = `You are an expert series architect for ${resolvedGenre} who creates comprehensive,
 professional series bibles. You think in arcs, not scenes. You build worlds with
-depth and characters with complexity. Your bibles become law for the entire series.`;
+depth and characters with complexity. Your bibles become law for the entire series.
+Match the stated genre and audience; do not assume Young Adult unless the material calls for it.`;
 
     const response = await runChatCompletion({
       model: resolveModel(model, PipelineStep.SERIES_BIBLE),
@@ -149,6 +151,7 @@ depth and characters with complexity. Your bibles become law for the entire seri
       prompt,
       jsonResponse: true,
       maxTokens: 6000,
+      generationMeta: { seriesId, type: "series-bible" },
     });
 
     const { error } = await supabaseAdmin.from("series_bibles").upsert({

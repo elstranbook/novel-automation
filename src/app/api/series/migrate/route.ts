@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     if (canonFacts.length) {
       const { data: canonLog } = await supabaseAdmin
         .from("canon_log")
-        .upsert({ series_id: seriesId })
+        .upsert({ series_id: seriesId }, { onConflict: "series_id" })
         .select("id")
         .single();
 
@@ -42,10 +42,13 @@ export async function POST(request: Request) {
     if (relationshipFacts.length) {
       await supabaseAdmin
         .from("relationship_log")
-        .upsert({
-          series_id: seriesId,
-          relationships: relationshipFacts.map((entry) => entry.content),
-        });
+        .upsert(
+          {
+            series_id: seriesId,
+            relationships: relationshipFacts.map((entry) => entry.content),
+          },
+          { onConflict: "series_id" }
+        );
     }
 
     return NextResponse.json({ migrated: true });

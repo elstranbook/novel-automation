@@ -4,8 +4,22 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 type CharacterStatePayload = {
   characterId: string;
   bookId: string;
-  emotionalState?: string;
-  knowledge?: Record<string, unknown> | null;
+  age?: string | null;
+  location?: string | null;
+  emotionalState?: string | null;
+  knowledge?: Record<string, unknown> | unknown[] | null;
+  dontKnow?: Record<string, unknown> | unknown[] | null;
+  beliefs?: Record<string, unknown> | unknown[] | null;
+  relationships?: Record<string, unknown> | unknown[] | null;
+  skills?: Record<string, unknown> | unknown[] | null;
+  possessions?: Record<string, unknown> | unknown[] | null;
+  developments?: Record<string, unknown> | unknown[] | null;
+  trauma?: Record<string, unknown> | unknown[] | string | null;
+  growth?: Record<string, unknown> | unknown[] | string | null;
+  losses?: Record<string, unknown> | unknown[] | null;
+  gains?: Record<string, unknown> | unknown[] | null;
+  internalConflict?: string | null;
+  emotionalEvents?: Record<string, unknown> | unknown[] | null;
 };
 
 export async function GET(request: Request) {
@@ -41,12 +55,29 @@ export async function POST(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from("character_state")
-      .upsert({
-        character_id: payload.characterId,
-        book_id: payload.bookId,
-        emotional_state: payload.emotionalState ?? null,
-        knowledge: payload.knowledge ?? null,
-      })
+      .upsert(
+        {
+          character_id: payload.characterId,
+          book_id: payload.bookId,
+          age: payload.age ?? null,
+          location: payload.location ?? null,
+          emotional_state: payload.emotionalState ?? null,
+          knowledge: payload.knowledge ?? null,
+          dont_know: payload.dontKnow ?? null,
+          beliefs: payload.beliefs ?? null,
+          relationships: payload.relationships ?? null,
+          skills: payload.skills ?? null,
+          possessions: payload.possessions ?? null,
+          developments: payload.developments ?? null,
+          trauma: payload.trauma ?? null,
+          growth: payload.growth ?? null,
+          losses: payload.losses ?? null,
+          gains: payload.gains ?? null,
+          internal_conflict: payload.internalConflict ?? null,
+          emotional_events: payload.emotionalEvents ?? null,
+        },
+        { onConflict: "character_id,book_id" }
+      )
       .select("*")
       .single();
 

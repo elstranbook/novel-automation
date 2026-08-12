@@ -32,7 +32,7 @@ const FOOTER_DIST = 576;   // 0.40"
 const DEFAULT_AUTHOR = 'Elstran Books';
 const DEFAULT_PUBLISHER = 'Elstran Books';
 
-const DEFAULT_ABOUT_AUTHOR = `At Elstran Books, stories aren't just words on a page\u2014they're the sparks that light up young hearts and minds. We're a team of indie authors who know what it's like to get lost in a book and come out a little different on the other side. That's why we write Young Adult novels that dive deep into love, identity, courage, and the tough choices that shape who we become.
+const DEFAULT_ABOUT_AUTHOR = `At Elstran Books, stories aren't just words on a page\u2014they're the sparks that light up hearts and minds. We're a team of indie authors who know what it's like to get lost in a book and come out a little different on the other side. That's why we write novels that dive deep into love, identity, courage, and the tough choices that shape who we become.
 
 From messy first loves to twisty mysteries and wild adventures through new worlds, every story we create is built to leave a mark. We write for the dreamers who stay up too late turning pages, the rebels who believe in something bigger, and the quiet souls looking for a voice that gets it.
 

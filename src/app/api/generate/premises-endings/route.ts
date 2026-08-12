@@ -1,15 +1,25 @@
 import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
-import { formatCanonForPrompt } from "@/lib/canonPrompt";
-import { formatMysteryForPrompt } from "@/lib/mysteryPrompt";
+import {
+  getSeriesContext,
+  hydrateStoryDetailsWithLiveSeriesContext,
+  seriesGenerationMeta,
+} from "@/lib/seriesContext";
+import { formatSeriesContextForPrompt } from "@/lib/seriesPrompt";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function POST(request: Request) {
   try {
-    const { storyDetails, model } = await request.json();
+    const { storyDetails: rawDetails, model, seriesId, bookNumber: requestBookNumber } =
+      await request.json();
+    const storyDetails = await hydrateStoryDetailsWithLiveSeriesContext(
+      rawDetails,
+      seriesId,
+      requestBookNumber
+    );
 
     if (!storyDetails) {
       return NextResponse.json(
@@ -19,28 +29,20 @@ export async function POST(request: Request) {
     }
 
     const theme = storyDetails.story_theme ?? "Growth and self-discovery";
-    const genre = storyDetails.genre ?? "Young Adult Fiction";
-    const concept = storyDetails.central_concept ?? "A teenager discovering their hidden abilities";
+    const genre = storyDetails.genre ?? "Fiction";
+    const concept = storyDetails.central_concept ?? "A protagonist facing a life-changing conflict";
     const novelAbout = storyDetails.novel_about ?? "";
 
-    const seriesContext = storyDetails.series_context ?? null;
+    const seriesContext = getSeriesContext(storyDetails);
     let seriesGuidance = "";
     if (seriesContext) {
       const bookNumber = seriesContext.book_number ?? 1;
       const totalBooks = seriesContext.total_books ?? 1;
-      const trimContext = (value: unknown, max = 800) =>
-        JSON.stringify(value ?? "").slice(0, max);
 
       seriesGuidance = `
 This novel is Book ${bookNumber} of ${totalBooks} in a series.
 
-Series Title: ${seriesContext.series_title ?? "Untitled Series"}
-Series Arc: ${seriesContext.series_arc ?? "No series arc provided"}
-${formatCanonForPrompt(seriesContext.canon_entries, { maxLength: 1200 })}
-Relationships: ${trimContext(seriesContext.relationships, 800)}
-${formatMysteryForPrompt(seriesContext.secrets, seriesContext.clues, { maxLength: 1200 })}
-World Elements: ${trimContext(seriesContext.world_elements, 800)}
-Foreshadowing: ${trimContext(seriesContext.foreshadowing, 800)}
+${formatSeriesContextForPrompt(seriesContext)}
 
 Book's role in the series arc: `;
 
@@ -57,8 +59,8 @@ Book's role in the series arc: `;
         seriesGuidance += "\n\nThis book must maintain character continuity with previous books in the series.";
       }
 
-      if (seriesContext.themes) {
-        const themesList = seriesContext.themes.map((themeItem: string) => `- ${themeItem}`).join("\n");
+      if (Array.isArray(seriesContext.themes)) {
+        const themesList = seriesContext.themes.map((themeItem) => `- ${String(themeItem)}`).join("\n");
         seriesGuidance += `\n\nSeries Themes to incorporate:\n${themesList}`;
       }
     }
@@ -72,7 +74,7 @@ Concept: ${concept}
 ${novelAbout ? `Novel About: ${novelAbout}\n` : ""}
 ${seriesGuidance}
 
-Choose the best premise that will catch the attention of YA readers. Use it as "The Premise".
+Choose the best premise that will catch the attention of readers for this genre and audience. Use it as "The Premise".
 
 Then give me 10 ideas for how that novel could end (twists, resolutions, reveals, or character outcomes) for the chosen premise below:
 {The Premise}
@@ -88,15 +90,18 @@ Format your response as a JSON object with these keys:
 4. "chosen_ending": The best ending you selected (string)
 `;
 
-    const system = `You are a professional YA novelist skilled at creating compelling story premises and satisfying endings.
-Focus on themes, emotional arcs, and character growth that resonate with young adult readers.
-Provide a variety of premise ideas and ending possibilities that could engage teen readers.`;
+    const audience = String(storyDetails.target_age_range ?? "").trim();
+    const narrativeStyle = String(storyDetails.narrative_style ?? "").trim();
+    const system = `You are a professional novelist skilled at creating compelling story premises and satisfying endings for ${genre} fiction${audience ? ` aimed at readers aged ${audience}` : ""}.
+Focus on themes, emotional arcs, and character growth that fit the stated genre and audience.
+Do not assume Young Adult unless the material calls for it.${narrativeStyle ? ` Respect narrative style: ${narrativeStyle}.` : ""}`;
 
     const response = await runChatCompletion({
       model: resolveModel(model, PipelineStep.PREMISES_ENDINGS),
       system,
       prompt,
       jsonResponse: true,
+      generationMeta: seriesGenerationMeta(storyDetails, "premises", seriesId),
     });
 
     return NextResponse.json(response);

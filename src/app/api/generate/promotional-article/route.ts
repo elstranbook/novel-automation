@@ -76,7 +76,7 @@ export async function POST(request: Request) {
       "title",
       "Untitled"
     );
-    const genre = getStoryValue(storyDetails, "genre", "Young Adult Fiction");
+    const genre = getStoryValue(storyDetails, "genre", "Fiction");
     const theme = getStoryValue(storyDetails, "story_theme", "Coming of age");
     const mainCharacter = getStoryValue(
       storyDetails,
@@ -92,13 +92,19 @@ export async function POST(request: Request) {
     const plotSummary = getStoryValue(
       storyDetails,
       "plot_summary",
-      "A compelling young adult story"
+      "A compelling story"
     );
     const targetAge = getStoryValue(
       storyDetails,
       "target_age_range",
-      "13-18"
+      "General"
     );
+    const isYa = /young\s*adult|\bYA\b|teen/i.test(`${genre} ${targetAge}`);
+    const audienceLabel = isYa
+      ? `readers aged ${targetAge || "13-18"}`
+      : targetAge
+        ? `readers (${targetAge})`
+        : `${genre} readers`;
 
     const supportingCharacters = storyDetails.supporting_characters;
     let supportingCharactersText = "";
@@ -126,7 +132,7 @@ export async function POST(request: Request) {
       theme_analysis: {
         name: "Deep-Dive Theme Article",
         focus:
-          "Explore why the themes matter and create emotional connection with readers. Analyze how the themes resonate with teen experiences.",
+          "Explore why the themes matter and create emotional connection with readers. Analyze how the themes resonate with the intended audience.",
         structure:
           "Hook → Theme introduction → Theme exploration → Emotional resonance → Reader connection → CTA",
       },
@@ -159,16 +165,16 @@ export async function POST(request: Request) {
           "Introduction → Categorized quotes (hope, resilience, love, conflict) → Commentary → CTA",
       },
       lessons_learned: {
-        name: "Lessons Teens Can Learn",
+        name: "Lessons Readers Can Learn",
         focus:
-          "Highlight moral lessons and educational value that resonate with teen readers and appeal to parents/educators.",
+          "Highlight moral lessons and educational or emotional value that resonate with the intended audience.",
         structure:
-          "Hook about teen struggles → Lesson 1-5 with examples → How book addresses each → Parent/educator appeal → CTA",
+          "Hook about relevant struggles → Lesson 1-5 with examples → How book addresses each → Audience appeal → CTA",
       },
       comparison_article: {
         name: "Fans of X Will Love Y",
         focus:
-          "Compare to popular YA books, showing how readers who loved similar books will enjoy this one.",
+          "Compare to popular books in the same genre/audience, showing how readers who loved similar books will enjoy this one.",
         structure:
           "Hook → Similar book comparisons → Unique elements → Reader testimonial style → CTA",
       },
@@ -195,9 +201,9 @@ export async function POST(request: Request) {
       problem_solution: {
         name: "Problem-Solution Article",
         focus:
-          "Identify teen struggles and show how the book provides insight, comfort, or solutions.",
+          "Identify relevant reader struggles and show how the book provides insight, comfort, or solutions.",
         structure:
-          "Teen struggle identification → How the book addresses it → Character examples → Reader takeaways → CTA",
+          "Struggle identification → How the book addresses it → Character examples → Reader takeaways → CTA",
       },
       seo_review: {
         name: "SEO-Optimized Review-Style Article",
@@ -226,7 +232,7 @@ export async function POST(request: Request) {
     const ctaTemplates: Record<string, string> = {
       soft: `If "${title}" speaks to your heart, I invite you to experience the journey for yourself.`,
       medium: `Discover "${title}" today and step into a world of emotion, resilience, and unforgettable characters.`,
-      strong: `Get your copy of "${title}" now and start reading the YA novel readers can't stop talking about.`,
+      strong: `Get your copy of "${title}" now and start reading the ${genre} novel readers can't stop talking about.`,
     };
 
     const articleInfo = articleTypes[articleType] ?? articleTypes.theme_analysis;
@@ -234,8 +240,8 @@ export async function POST(request: Request) {
     const ctaText = ctaTemplates[ctaType] ?? ctaTemplates.medium;
 
     const prompt = `
-You are an expert YA fiction marketer, author brand strategist, and SEO-focused content writer.
-Write an engaging, emotionally appealing, and persuasive article designed to promote the YA novel described below.
+You are an expert fiction marketer, author brand strategist, and SEO-focused content writer.
+Write an engaging, emotionally appealing, and persuasive article designed to promote the ${genre} novel described below.
 
 **INPUT DETAILS:**
 
@@ -245,7 +251,7 @@ Genre: ${genre}
 
 Book Summary: ${plotSummary}
 
-Target Audience: YA readers aged ${targetAge}, fans of ${genre}
+Target Audience: ${audienceLabel}, fans of ${genre}
 
 Themes: ${theme}
 
@@ -313,15 +319,15 @@ ARTICLE:
 - Do NOT include <html>, <head>, <body>, or <style> tags
 - Do NOT include the TITLE: line inside the HTML — it goes on its own line above ARTICLE:
 
-Make the tone emotionally engaging, fast-paced, and tailored to teen readers.
+Make the tone emotionally engaging and tailored to ${audienceLabel}.
 Use hooks, curiosity, and relatable language. Avoid generic phrasing.
+Do not assume Young Adult or teen voice unless the genre/audience calls for it.
 `;
 
-    const system = `You are a bestselling YA book marketing expert and content strategist who creates viral, shareable content.
-Your articles have helped numerous YA novels become bestsellers.
-Write in a ${tone} tone that resonates with ${targetAge} year old readers and their parents/educators.
+    const system = `You are a bestselling book marketing expert and content strategist for ${genre} fiction.
+Write in a ${tone} tone that resonates with ${audienceLabel}.
 Create content that is both emotionally compelling and strategically effective for book marketing.
-Write with an emotionally engaging, fast-paced tone tailored to teen readers, using hooks, curiosity, and relatable language while avoiding generic phrasing.`;
+Match the stated genre and audience; do not assume Young Adult unless the material calls for it.`;
 
     const maxTokensMap: Record<string, number> = {
       short: 1200,

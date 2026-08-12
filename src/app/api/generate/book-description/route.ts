@@ -18,16 +18,18 @@ export async function POST(request: Request) {
     }
 
     const title = storyDetails.title ?? "Untitled";
-    const genre = storyDetails.genre ?? "Young Adult Fiction";
-    const theme = storyDetails.story_theme ?? "Coming of age";
+    const genre = storyDetails.genre ?? "Fiction";
+    const isYa = /young\s*adult|\bYA\b/i.test(String(genre));
+    const theme = storyDetails.story_theme ?? "Identity and transformation";
     const mainCharacter = storyDetails.main_character_name ?? "the protagonist";
     const centralConflict =
       storyDetails.central_conflict ?? "a life-changing challenge";
-    const setting = storyDetails.setting ?? "modern day";
+    const setting = storyDetails.setting ?? "a vivid world";
     const plotSummary =
-      storyDetails.plot_summary ?? "A compelling young adult story";
-    const targetAge = storyDetails.target_age_range ?? "13-18";
+      storyDetails.plot_summary ?? "A compelling story";
+    const targetAge = storyDetails.target_age_range ?? (isYa ? "13-18" : "adult");
     const novelAbout = storyDetails.novel_about ?? "";
+    const audienceLabel = isYa ? "Young Adult" : genre;
 
     const resolvePromptConfig = (
       descType: string,
@@ -64,7 +66,7 @@ export async function POST(request: Request) {
     );
 
     const prompt = `
-Create a compelling ${descriptionType} description for the Young Adult novel "${title}".
+Create a compelling ${descriptionType} description for the ${audienceLabel} novel "${title}".
 
 **Novel Details:**
 - Genre: ${genre}
@@ -79,33 +81,31 @@ ${novelAbout ? `- Author Intent: ${novelAbout}` : ""}
 **Description Requirements:**
 - Length: ${wordLimit}
 - Style: ${focus}
-- Must appeal to ${targetAge} year old readers and parents/educators
-- Include emotional hooks that resonate with teen experiences
+- Must appeal to the stated audience (${targetAge})
+- Include emotional hooks that resonate with that audience
 - Highlight stakes and consequences
 - Use active voice and vivid language
 - Create urgency and curiosity
 
-**YA Bestseller Elements to Include:**
+**Market Elements to Include:**
 - Relatable protagonist facing real challenges
-- Emotional stakes that matter to teens
+- Emotional stakes that matter to the audience
 - Promise of growth/transformation
-- Contemporary relevance
 - Strong voice and authenticity
 
 **Avoid:**
-- Adult literary fiction language
-- Overly complex plots explanations
+- Mismatched age-market language
+- Overly complex plot explanations
 - Spoilers beyond first act
-- Cliché YA tropes without fresh perspective
+- Cliché tropes without fresh perspective
 
 Write the description now:
 `;
 
-    const system = `You are a bestselling YA book marketing expert who understands what makes Young Adult novels successful.
-Create descriptions that would make teenagers pick up this book immediately.
+    const system = `You are a bestselling book marketing expert for ${audienceLabel} fiction.
+Create descriptions that make the target readers pick up this book immediately.
 Focus on emotional resonance, authentic voice, and compelling stakes.
-Study successful YA book descriptions to understand the tone and structure that works.
-The description should feel authentic to the ${genre} genre while appealing to ${targetAge} year olds.`;
+The description should feel authentic to the ${genre} genre while appealing to ${targetAge} readers.`;
 
     if (mode === "all") {
       const descriptionSets: Array<[string, string]> = [
@@ -123,7 +123,7 @@ The description should feel authentic to the ${genre} genre while appealing to $
         const { wordLimit: loopWordLimit, focus: loopFocus } =
           resolvePromptConfig(descType, lenType);
         const loopPrompt = `
-Create a compelling ${descType} description for the Young Adult novel "${title}".
+Create a compelling ${descType} description for the ${audienceLabel} novel "${title}".
 
 **Novel Details:**
 - Genre: ${genre}
@@ -138,24 +138,23 @@ ${novelAbout ? `- Author Intent: ${novelAbout}` : ""}
 **Description Requirements:**
 - Length: ${loopWordLimit}
 - Style: ${loopFocus}
-- Must appeal to ${targetAge} year old readers and parents/educators
-- Include emotional hooks that resonate with teen experiences
+- Must appeal to the stated audience (${targetAge})
+- Include emotional hooks that resonate with that audience
 - Highlight stakes and consequences
 - Use active voice and vivid language
 - Create urgency and curiosity
 
-**YA Bestseller Elements to Include:**
+**Market Elements to Include:**
 - Relatable protagonist facing real challenges
-- Emotional stakes that matter to teens
+- Emotional stakes that matter to the audience
 - Promise of growth/transformation
-- Contemporary relevance
 - Strong voice and authenticity
 
 **Avoid:**
-- Adult literary fiction language
-- Overly complex plots explanations
+- Mismatched age-market language
+- Overly complex plot explanations
 - Spoilers beyond first act
-- Cliché YA tropes without fresh perspective
+- Cliché tropes without fresh perspective
 
 Write the description now:
 `;

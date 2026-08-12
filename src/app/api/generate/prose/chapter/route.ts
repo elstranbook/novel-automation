@@ -2,9 +2,23 @@ import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
-import { formatCharactersForPrompt, formatPOVCharacterContext } from "@/lib/characterPrompt";
-import { formatCanonForPrompt } from "@/lib/canonPrompt";
-import { formatMysteryForPrompt } from "@/lib/mysteryPrompt";
+import { loadSeriesContext } from "@/lib/seriesContext";
+import {
+  buildProseSystemPrompt,
+  buildRevisePrompt,
+  buildSceneCardPrompt,
+  DRAFT_TEMPERATURE,
+  filterSeriesForScene,
+  inferPacing,
+  lastNWords,
+  parseScenePayload,
+  extractSceneCastNames,
+  proseMaxTokens,
+  REVISE_TEMPERATURE,
+  validateProseDraft,
+  type BeatLike,
+  type ScenePacing,
+} from "@/lib/prosePrompt";
 
 const logGeneration = async (payload: {
   step: string;
@@ -29,23 +43,39 @@ export const maxDuration = 300;
 
 export async function POST(request: Request) {
   try {
+    const body = await request.json();
     const {
       scene,
       chapterTitle,
       sceneNumber,
+      sceneCount,
       model,
       maxSceneLength,
       chapterSummary,
       chapterBeats,
+      beat: beatFromClient,
       previousScene,
+      previousSceneEnding,
+      previousChapterEnding,
       emotionalState,
       keyConflict,
-      voiceAnchor,
-      worldContext,
+      chapterGoal,
+      pacing: pacingFromClient,
+      narrativeStyle,
+      voiceSample,
       seriesId,
+      bookNumber,
+      chapterNumber,
       povCharacter,
       characterContext,
-    } = await request.json();
+      castNames: castNamesFromClient,
+      sensory,
+      keyDialogue,
+      chosenEnding,
+      isLateBook,
+      novelId,
+      totalChapters,
+    } = body;
 
     if (!scene) {
       return NextResponse.json(
@@ -54,184 +84,237 @@ export async function POST(request: Request) {
       );
     }
 
-    const baseModel = resolveModel(model, PipelineStep.PROSE);
-    const trimmedPrevious =
-      typeof previousScene === "string"
-        ? previousScene.slice(-800)
-        : "No previous scene available.";
-    const beatsText = Array.isArray(chapterBeats)
-      ? chapterBeats
-          .map(
-            (beat: Record<string, unknown>) =>
-              `Beat ${beat.beat_number ?? "?"}: ${beat.action ?? "No action"}`
-          )
-          .join("\n")
-      : "No chapter beats provided.";
-
-    const worldBlock = worldContext
-      ? `
-World Setting: ${String((worldContext as Record<string, unknown>).setting ?? "").slice(0, 600)}
-World Rules: ${String((worldContext as Record<string, unknown>).rules ?? "").slice(0, 600)}
-World Lore: ${String((worldContext as Record<string, unknown>).lore ?? "").slice(0, 600)}
-World Elements: ${Array.isArray((worldContext as Record<string, unknown>).elements) ? JSON.stringify((worldContext as Record<string, unknown>).elements).slice(0, 800) : ""}
-`
-      : "";
-
-    // ─── Build character context block ──────────────────────────────────────────
-    // Priority: 1) Pre-formatted string passed from client  2) Fetch from DB using seriesId
-    let characterBlock = "";
-    if (characterContext && typeof characterContext === "string" && characterContext.trim()) {
-      characterBlock = characterContext;
-    } else if (seriesId) {
-      try {
-        const { data: characters } = await supabaseAdmin
-          .from("series_characters")
-          .select("*")
-          .eq("series_id", seriesId);
-        if (characters && characters.length > 0) {
-          // Full cast overview (compact)
-          characterBlock = formatCharactersForPrompt(characters, { maxLength: 2500 });
-          // POV character deep dive if we can identify them
-          if (povCharacter) {
-            const povBlock = formatPOVCharacterContext(characters, povCharacter, { maxLength: 2500 });
-            if (povBlock) {
-              characterBlock = `${povBlock}\n\nOTHER CHARACTERS IN THIS SCENE:\n${characterBlock}`;
-            }
-          }
-        }
-      } catch (err) {
-        console.warn("[prose] Failed to load character context:", err);
-      }
+    const parsed = parseScenePayload(scene);
+    if (!parsed.summary.trim()) {
+      return NextResponse.json(
+        { error: "Scene summary is empty or unreadable" },
+        { status: 400 }
+      );
     }
 
-    // ─── Build canon + mystery context block ────────────────────────────────────
-    // The prose route previously had ZERO mystery context — the LLM was writing
-    // chapters with no idea what secrets were in play, what clues were available,
-    // or what had been revealed. Now we fetch canon + mystery_log + secrets + clues
-    // and format them through the same utilities other routes use.
-    let canonBlock = "";
-    let mysteryBlock = "";
+    const wordTarget = Number(maxSceneLength) || 1000;
+    const maxTokens = proseMaxTokens(wordTarget);
+    const draftModel = resolveModel(model, PipelineStep.PROSE);
+    const reviseModel = resolveModel(model, PipelineStep.PROSE_REVISE);
+
+    let matchingBeat: BeatLike | null =
+      beatFromClient && typeof beatFromClient === "object"
+        ? (beatFromClient as BeatLike)
+        : null;
+
+    if (!matchingBeat && Array.isArray(chapterBeats)) {
+      const idx =
+        Number(parsed.sceneNumber ?? sceneNumber ?? 1) - 1;
+      const byRef = parsed.beatReference
+        ? chapterBeats.find((b: BeatLike) =>
+            String(b.beat_number ?? "").includes(
+              String(parsed.beatReference).replace(/\D/g, "")
+            )
+          )
+        : null;
+      matchingBeat =
+        (byRef as BeatLike) ||
+        (chapterBeats[Math.max(0, idx)] as BeatLike) ||
+        null;
+    }
+
+    const continuityEnding =
+      lastNWords(
+        String(
+          previousSceneEnding ||
+            previousChapterEnding ||
+            previousScene ||
+            ""
+        ),
+        200
+      ) || "";
+
+    let characterBlock = "";
+    let seriesBlock = "";
+    let hasCanon = false;
+    let hasMystery = false;
+    let hasPlots = false;
+    let hasTimeline = false;
+    let blueprintPosition:
+      | "opening"
+      | "midpoint"
+      | "lowest"
+      | "climax"
+      | "ending"
+      | "normal" = "normal";
+
     if (seriesId) {
       try {
-        // Step 1: fetch the parent log rows (canon_log + mystery_log) in parallel.
-        const [
-          { data: canonLog },
-          { data: mysteryLog },
-        ] = await Promise.all([
-          supabaseAdmin
-            .from("canon_log")
-            .select("id")
-            .eq("series_id", seriesId)
-            .maybeSingle(),
-          supabaseAdmin
-            .from("mystery_log")
-            .select("id")
-            .eq("series_id", seriesId)
-            .maybeSingle(),
-        ]);
+        const live = await loadSeriesContext(
+          seriesId,
+          Number(bookNumber) || 1
+        );
+        const fromScene = extractSceneCastNames(scene);
+        const fromClient = Array.isArray(castNamesFromClient)
+          ? castNamesFromClient.map((n: unknown) => String(n).trim()).filter(Boolean)
+          : [];
+        const castNames = Array.from(new Set([...fromClient, ...fromScene]));
+        const chapterNum = Number(chapterNumber) || 0;
+        const filtered = filterSeriesForScene(live, {
+          bookNumber: Number(bookNumber) || live.book_number || 1,
+          chapterNumber: chapterNum,
+          totalChapters: Number(totalChapters) || 0,
+          povCharacter: povCharacter ?? null,
+          castNames,
+        });
+        seriesBlock = filtered.block;
+        characterBlock = filtered.characterBlock;
+        hasCanon = filtered.hasCanon;
+        hasMystery = filtered.hasMystery;
+        hasPlots = filtered.hasPlots;
+        hasTimeline = filtered.hasTimeline;
 
-        // Step 2: fetch the child rows (entries + secrets + clues) in parallel,
-        // now that we have the parent log ids.
-        const canonLogId = canonLog?.id ?? "";
-        const mysteryLogId = mysteryLog?.id ?? "";
-        const [
-          { data: canonEntries },
-          { data: secrets },
-          { data: clues },
-        ] = await Promise.all([
-          supabaseAdmin
-            .from("canon_log_entry")
-            .select("*")
-            .eq("canon_log_id", canonLogId),
-          supabaseAdmin
-            .from("secret")
-            .select("*")
-            .eq("mystery_log_id", mysteryLogId),
-          supabaseAdmin
-            .from("clue")
-            .select("*")
-            .eq("mystery_log_id", mysteryLogId),
-        ]);
-
-        if (canonEntries && canonEntries.length > 0) {
-          canonBlock = formatCanonForPrompt(canonEntries, { maxLength: 1500 });
-        }
-        if ((secrets && secrets.length > 0) || (clues && clues.length > 0)) {
-          mysteryBlock = formatMysteryForPrompt(secrets, clues, { maxLength: 1800 });
-        }
+        const ratio =
+          chapterNum > 0 && Number(totalChapters) > 0
+            ? chapterNum / Number(totalChapters)
+            : isLateBook
+              ? 0.9
+              : 0.4;
+        if (ratio <= 0.15) blueprintPosition = "opening";
+        else if (ratio >= 0.45 && ratio <= 0.58) blueprintPosition = "midpoint";
+        else if (ratio >= 0.65 && ratio <= 0.78) blueprintPosition = "lowest";
+        else if (ratio >= 0.82 && ratio < 0.93) blueprintPosition = "climax";
+        else if (ratio >= 0.93) blueprintPosition = "ending";
       } catch (err) {
-        console.warn("[prose] Failed to load canon/mystery context:", err);
+        console.warn("[prose] Failed to load live series context:", err);
       }
     }
 
-    const contextBlock = `
-Chapter Title: ${chapterTitle ?? "Untitled"}
-Chapter Summary: ${chapterSummary ?? "Not provided"}
-Chapter Beats:\n${beatsText}
-Previous Scene (last lines): ${trimmedPrevious}
-Character Emotional State: ${emotionalState ?? "Not provided"}
-Key Conflict: ${keyConflict ?? "Not provided"}
-Voice Anchor: ${voiceAnchor ?? "raw, emotional, slightly messy, introspective"}
-${worldBlock}${characterBlock ? `\n${characterBlock}\n` : ""}${canonBlock ? `\n${canonBlock}\n` : ""}${mysteryBlock ? `\n${mysteryBlock}\n` : ""}Scene Summary:\n${scene}
-`;
+    if (
+      characterContext &&
+      typeof characterContext === "string" &&
+      characterContext.trim()
+    ) {
+      const profiles = characterContext.trim();
+      if (!characterBlock) {
+        characterBlock = profiles;
+      } else if (characterBlock.length < 400) {
+        characterBlock = `${characterBlock}\n\nBOOK CHARACTER PROFILES (supplement):\n${profiles.slice(0, 2000)}`;
+      }
+    }
 
-    const longDirective = `
-Begin writing Chapter ${chapterTitle ?? "Untitled"}, Scene ${sceneNumber ?? "?"} using the detailed scene summary and context provided.
+    // Generate voice sample on the fly if missing and we can persist it
+    let resolvedVoiceSample =
+      typeof voiceSample === "string" && voiceSample.trim()
+        ? voiceSample.trim()
+        : "";
 
-Writing Guidelines:
-– Focus on a slow, deliberate buildup, allowing the emotional tone and character stakes to deepen gradually.
-– Use intimate, vivid moments to show the emotional toll of the scene and allow readers to connect with the characters.
-– Let dialogue reveal dynamics, tension, or internal struggles. Keep it natural, grounded, and full of subtext.
-– Emphasize "show, don't tell" storytelling. Let physical actions, choices, and setting carry emotional and thematic weight.
-– Use strong verbs, sensory-rich description, and a deep POV (if applicable) to fully immerse the reader.
-– Allow the scene to naturally lead toward its conclusion and, if appropriate, transition smoothly into the next.
-${worldBlock ? "– GROUND YOUR WRITING IN THE WORLD. Reference specific locations, rules, lore, and elements from the world context. Characters should interact with their environment authentically — mention place names, cultural details, magical rules, or artifacts where they naturally fit. The world should feel alive and specific, not generic.\n" : ""}${characterBlock ? "– WRITE IN CHARACTER. Use the character profiles above to inform dialogue style, vocabulary, personality, and emotional responses. Each character should speak and act consistently with their defined voice, desires, fears, and personality traits. The POV character's voice profile is especially important — match their speech patterns and vocabulary level.\n" : ""}${canonBlock ? "– RESPECT CANON FACTS. Do not contradict any locked canon facts listed above. They are series continuity anchors.\n" : ""}${mysteryBlock ? "– HONOR THE MYSTERY ARC. If a secret is still HIDDEN, do not reveal it in this scene. If clues have been planted, you may reference them subtly (do not call attention to them unless the clue is marked OBVIOUS). If a secret is PARTIAL, you may deepen the hint. If REVEALED, characters may discuss it openly. Match the reveal discipline described in the Mystery Log.\n" : ""}
+    if (!resolvedVoiceSample && povCharacter) {
+      try {
+        const styleHint = String(narrativeStyle ?? "").trim() || "the story's established POV and tense";
+        const sampleRaw = await runChatCompletion({
+          model: draftModel,
+          system:
+            "You write short voice samples for fiction protagonists. No plot. No analysis.",
+          prompt: `Write about 160 words in the voice of ${povCharacter}. Mundane moment only (waiting, washing a mug, walking home). Match narrative style: ${styleHint}. No plot stakes.`,
+          jsonResponse: false,
+          maxTokens: 500,
+          temperature: 0.7,
+        });
+        resolvedVoiceSample = String(sampleRaw ?? "").trim();
+        if (resolvedVoiceSample && novelId) {
+          try {
+            const { data: novelRow } = await supabaseAdmin
+              .from("novels")
+              .select("story_details")
+              .eq("id", novelId)
+              .maybeSingle();
+            const details =
+              (novelRow?.story_details as Record<string, unknown>) ?? {};
+            await supabaseAdmin
+              .from("novels")
+              .update({
+                story_details: {
+                  ...details,
+                  voice_sample: resolvedVoiceSample,
+                },
+              })
+              .eq("id", novelId);
+          } catch (persistErr) {
+            console.warn("[prose] Failed to persist voice_sample:", persistErr);
+          }
+        }
+      } catch (voiceErr) {
+        console.warn("[prose] Failed to generate voice sample:", voiceErr);
+      }
+    }
 
-Narrative Style:
-* Point of View: First-person for the main character
-* Tense: Past
+    const pacing: ScenePacing =
+      pacingFromClient === "sprint" ||
+      pacingFromClient === "talky" ||
+      pacingFromClient === "linger" ||
+      pacingFromClient === "aftermath"
+        ? pacingFromClient
+        : inferPacing(matchingBeat, {
+            estimatedWordCount: wordTarget,
+            blueprintPosition,
+          });
 
-Write up to ${maxSceneLength ?? 1000} words of character-driven, emotionally layered prose.
-Write only the prose for the scene, without any formatting, headers, or scene numbers.
-`;
+    const system = buildProseSystemPrompt(
+      narrativeStyle,
+      povCharacter ?? null
+    );
 
-    const system = `You are an expert fiction writer specializing in deep, emotionally resonant first-person prose. Write immersive, character-driven scenes that follow "show, don't tell" principles. Focus on emotional depth, vivid sensory detail, and authentic dialogue.`;
+    const sceneCard = buildSceneCardPrompt({
+      chapterTitle: chapterTitle ?? "Untitled",
+      sceneNumber: sceneNumber ?? parsed.sceneNumber ?? "?",
+      sceneCount,
+      summary: parsed.summary,
+      beat: matchingBeat,
+      chapterSummary,
+      chapterGoal,
+      emotionalState,
+      keyConflict,
+      pacing,
+      maxSceneLength: wordTarget,
+      narrativeStyle,
+      voiceSample: resolvedVoiceSample,
+      povCharacter,
+      previousEnding: continuityEnding,
+      sensory,
+      keyDialogue,
+      chosenEnding,
+      isLateBook: Boolean(isLateBook),
+      characterBlock,
+      seriesBlock,
+      hasCanon,
+      hasMystery,
+      hasPlots,
+      hasTimeline,
+    });
 
-    const buildPrompt = (instruction: string) => `${contextBlock}\n${instruction}`;
-
-    const validateProse = (text: string) => {
-      if (!text.trim()) return false;
-      if (text.trim().length < 200) return false;
-      const hasDialogue = /"[^"]+"/.test(text);
-      const hasAction = /(walked|ran|turned|looked|grabbed|held|sat|stood)/i.test(text);
-      return hasDialogue || hasAction;
-    };
-
-    const runProse = async (instruction: string) =>
+    const runDraft = async () =>
       runChatCompletion({
-        model: baseModel,
+        model: draftModel,
         system,
-        prompt: buildPrompt(instruction),
+        prompt: sceneCard,
         jsonResponse: false,
-        maxTokens: 3000,
+        maxTokens,
+        temperature: DRAFT_TEMPERATURE,
+        generationMeta: seriesId
+          ? { seriesId, type: "prose" }
+          : undefined,
       });
 
-    const attempts = [
-      longDirective,
-      `${longDirective}\n\nStrict: Follow all instructions. Must be vivid and detailed.`,
-      `Write the scene in clear, straightforward prose. Keep first-person past tense and emotional truth.\n${scene}`,
-    ];
-
-    let prose = "";
-    let usedFallback = false;
-
-    for (let attempt = 0; attempt < attempts.length; attempt += 1) {
-      console.info("prose attempt", { sceneNumber, attempt: attempt + 1 });
-      const response = await runProse(attempts[attempt]);
-      console.info("prose raw output", { sceneNumber, attempt: attempt + 1, response });
-      prose = String(response ?? "");
-      console.info("prose parsed output", { sceneNumber, attempt: attempt + 1, prose });
-      if (validateProse(prose)) {
+    let draft = "";
+    let draftOk = false;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      console.info("prose draft attempt", {
+        sceneNumber,
+        attempt: attempt + 1,
+      });
+      const response = await runDraft();
+      draft = String(response ?? "").trim();
+      const validation = validateProseDraft(draft, parsed.summary, {
+        maxSceneLength: wordTarget,
+      });
+      if (validation.ok) {
+        draftOk = true;
         await logGeneration({
           step: "prose",
           attempt: attempt + 1,
@@ -240,44 +323,88 @@ Write only the prose for the scene, without any formatting, headers, or scene nu
         });
         break;
       }
+      console.warn("prose draft rejected", validation.reason);
     }
 
-    if (!validateProse(prose)) {
-      usedFallback = true;
-      const response = await runProse(
-        `Recovery mode: Write a simple but complete version of this scene. First-person past tense, 2-4 paragraphs.\n${scene}`
+    if (!draftOk) {
+      await logGeneration({
+        step: "prose",
+        attempt: 2,
+        success: false,
+        usedFallback: false,
+      });
+      return NextResponse.json(
+        {
+          error:
+            "Prose draft failed validation after retries. Regenerate this scene.",
+          proseRaw: { draft, summary: parsed.summary },
+        },
+        { status: 500 }
       );
-      console.info("prose raw output", { sceneNumber, attempt: attempts.length + 1, response });
-      prose = String(response ?? "");
     }
 
-    if (!validateProse(prose)) {
-      usedFallback = true;
-      prose = `I moved through the moment with a heavy heart, trying to make sense of what just happened. ${scene}`;
-    }
+    const buildRevise = (sourceDraft: string) =>
+      buildRevisePrompt({
+        draft: sourceDraft,
+        voiceSample: resolvedVoiceSample,
+        narrativeStyle,
+        povCharacter,
+        summary: parsed.summary,
+        beat: matchingBeat,
+        pacing,
+        maxSceneLength: wordTarget,
+        previousEnding: continuityEnding,
+        hasMystery,
+        hasCanon,
+        hasPlots,
+        hasTimeline,
+        seriesBlock,
+      });
 
-    await logGeneration({
-      step: "prose",
-      attempt: attempts.length + (usedFallback ? 1 : 0),
-      success: validateProse(prose),
-      usedFallback,
-    });
-
-    if (typeof previousScene === "string" && previousScene.trim()) {
-      const lastParagraph = previousScene.trim().split(/\n\n+/).slice(-1)[0];
-      if (!prose.includes(lastParagraph.trim())) {
-        prose = `${lastParagraph}\n\n${prose}`;
+    let prose = draft;
+    for (let reviseAttempt = 0; reviseAttempt < 2; reviseAttempt += 1) {
+      try {
+        const revised = await runChatCompletion({
+          model: reviseModel,
+          system:
+            "You are a line editor. Rewrite the scene. Keep plot, POV, and facts. Improve the sentences. Return only the rewritten prose.",
+          prompt: buildRevise(prose),
+          jsonResponse: false,
+          maxTokens,
+          temperature: REVISE_TEMPERATURE,
+          generationMeta: seriesId
+            ? { seriesId, type: "prose_revise" }
+            : undefined,
+        });
+        const revisedText = String(revised ?? "").trim();
+        const revisedOk = validateProseDraft(revisedText, parsed.summary, {
+          maxSceneLength: wordTarget,
+        });
+        if (revisedOk.ok) {
+          prose = revisedText;
+          break;
+        }
+        console.warn(
+          "[prose] revise rejected:",
+          revisedOk.reason,
+          "attempt",
+          reviseAttempt + 1
+        );
+      } catch (reviseErr) {
+        console.warn("[prose] revise failed, keeping draft:", reviseErr);
+        break;
       }
     }
 
     return NextResponse.json({
       prose,
+      voiceSample: resolvedVoiceSample || null,
       proseRaw: {
-        attempts: attempts.map((instruction, index) => ({
-          attempt: index + 1,
-          text: instruction,
-        })),
+        draft,
         final: prose,
+        pacing,
+        summary: parsed.summary,
+        beat: matchingBeat,
       },
     });
   } catch (error) {

@@ -410,6 +410,7 @@ create table if not exists public.series_timeline_events (
   id uuid primary key default gen_random_uuid(),
   series_id uuid references public.series(id) on delete cascade,
   book_number integer,
+  chapter_number integer,
   event_order integer not null,
   title text,
   description text,
@@ -484,7 +485,8 @@ create table if not exists public.canon_log (
   character_facts jsonb,
   event_facts jsonb,
   rules_facts jsonb,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  unique (series_id)
 );
 
 create table if not exists public.canon_log_entry (
@@ -501,7 +503,8 @@ create table if not exists public.relationship_log (
   id uuid primary key default gen_random_uuid(),
   series_id uuid references public.series(id) on delete cascade,
   relationships jsonb,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  unique (series_id)
 );
 
 create table if not exists public.relationship_entry (
@@ -527,7 +530,8 @@ create table if not exists public.mystery_log (
   series_id uuid references public.series(id) on delete cascade,
   active_mysteries jsonb,
   resolved_mysteries jsonb,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  unique (series_id)
 );
 
 create table if not exists public.secret (
@@ -641,7 +645,8 @@ create table if not exists public.book_memory (
   changed_relationships jsonb,
   new_clues jsonb,
   resolved_mysteries jsonb,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  unique (book_id)
 );
 
 create table if not exists public.tension_profile (
@@ -657,7 +662,8 @@ create table if not exists public.tension_profile (
   current_tension integer default 2,
   last_peak text,
   target_pacing jsonb,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  unique (book_id)
 );
 
 create table if not exists public.character_state (
@@ -680,7 +686,8 @@ create table if not exists public.character_state (
   gains jsonb,
   internal_conflict text,
   emotional_events jsonb,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  unique (character_id, book_id)
 );
 
 create table if not exists public.chapter (

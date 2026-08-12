@@ -3,8 +3,12 @@ import { runChatCompletion } from "@/lib/openaiClient";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 import { formatCharactersForPrompt } from "@/lib/characterPrompt";
-import { formatCanonForPrompt } from "@/lib/canonPrompt";
-import { formatMysteryForPrompt } from "@/lib/mysteryPrompt";
+import {
+  getSeriesContext,
+  hydrateStoryDetailsWithLiveSeriesContext,
+  seriesGenerationMeta,
+} from "@/lib/seriesContext";
+import { formatSeriesContextForPrompt } from "@/lib/seriesPrompt";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -49,19 +53,60 @@ const parseJsonArray = (raw: unknown) => {
 const validateBeats = (beatsList: Beat[], expected: number) => {
   if (!Array.isArray(beatsList)) return false;
   if (beatsList.length !== expected) return false;
-  return beatsList.every((beat) => beat.action && beat.emotional_impact);
+  return beatsList.every(
+    (beat) =>
+      beat.action &&
+      beat.emotional_impact &&
+      !/initial challenge related to the chapter's main conflict/i.test(
+        String(beat.action)
+      )
+  );
+};
+
+const desiredBeatCount = (
+  chapter: Record<string, unknown>,
+  chapterIndex: number,
+  totalChapters: number
+): number => {
+  const words = Number(
+    chapter.estimated_word_count ?? chapter.word_count ?? 900
+  );
+  const ratio = totalChapters > 0 ? (chapterIndex + 1) / totalChapters : 0.5;
+  const isClimaxRegion = ratio >= 0.85 && ratio <= 0.95;
+  const isLowestRegion = ratio >= 0.7 && ratio < 0.8;
+  if (words < 700) return 3;
+  if (words >= 1400 || isClimaxRegion || isLowestRegion) return 7;
+  return 5;
 };
 
 export async function POST(request: Request) {
   try {
-    const { chapterOutline, chapterGuide, synopsis, characterProfiles, novelPlan, storyDetails, model } =
-      await request.json();
+    const {
+      chapterOutline,
+      chapterGuide,
+      synopsis,
+      characterProfiles,
+      novelPlan,
+      storyDetails: rawDetails,
+      model,
+      seriesId,
+      bookNumber,
+    } = await request.json();
 
-    // Build formatted character section from series_characters if available
-    const seriesCharacters = storyDetails?.series_context?.characters;
-    const formattedCharacters = (Array.isArray(seriesCharacters) && seriesCharacters.length > 0)
-      ? formatCharactersForPrompt(seriesCharacters, { maxLength: 3000 })
-      : (typeof characterProfiles === 'string' ? characterProfiles.slice(0, 3000) : "");
+    const storyDetails = await hydrateStoryDetailsWithLiveSeriesContext(
+      rawDetails,
+      seriesId,
+      bookNumber
+    );
+
+    const seriesContext = getSeriesContext(storyDetails);
+    const seriesCharacters = seriesContext?.characters;
+    const formattedCharacters =
+      Array.isArray(seriesCharacters) && seriesCharacters.length > 0
+        ? formatCharactersForPrompt(seriesCharacters, { maxLength: 3000 })
+        : typeof characterProfiles === "string"
+          ? characterProfiles.slice(0, 3000)
+          : "";
 
     if (!chapterOutline || !chapterGuide) {
       return NextResponse.json(
@@ -75,25 +120,49 @@ export async function POST(request: Request) {
       : (chapterOutline?.chapters as Array<Record<string, unknown>>) ?? [];
 
     const beats: Record<string, Array<Record<string, unknown>>> = {};
-    const beatsRaw: { attempts: Array<{ attempt: number; output: unknown }>; final: Beat[] } = {
+    const beatsRaw: {
+      attempts: Array<{ attempt: number; output: unknown }>;
+      final: Beat[];
+    } = {
       attempts: [],
       final: [],
     };
 
-    for (const chapter of outlineArray) {
-      const chapterRecord = chapter as Record<string, unknown>;
-      const chapterNum = String(chapterRecord.number ?? outlineArray.indexOf(chapter) + 1);
+    const effectiveBlueprint =
+      seriesContext?.book_blueprint ?? storyDetails?.book_blueprint ?? null;
+    const seriesBlock = formatSeriesContextForPrompt(seriesContext, {
+      includeCharacters: false,
+      priority: true,
+      maxLength: 6500,
+    });
+    const generationMeta = seriesGenerationMeta(
+      storyDetails,
+      "chapter-beats",
+      seriesId
+    );
+    const resolvedModel = resolveModel(model, PipelineStep.CHAPTER_BEATS);
+
+    for (let i = 0; i < outlineArray.length; i += 1) {
+      const chapterRecord = outlineArray[i] as Record<string, unknown>;
+      const chapterNum = String(
+        chapterRecord.number ?? i + 1
+      );
       const chapterTitle = chapterRecord.title ?? "Untitled Chapter";
       const chapterSummary = chapterRecord.summary ?? "No summary available";
-      const guideDetails = (chapterGuide as Record<string, unknown>)[chapterNum] ?? {};
+      const guideDetails =
+        (chapterGuide as Record<string, unknown>)[chapterNum] ?? {};
+      const expected = desiredBeatCount(
+        chapterRecord,
+        i,
+        outlineArray.length
+      );
 
-      console.info(`Generating detailed action beats for Chapter ${chapterNum}: ${chapterTitle}...`);
-
-      // Use series blueprint if available, otherwise fall back to standalone book_blueprint
-      const effectiveBlueprint = storyDetails?.series_context?.book_blueprint ?? storyDetails?.book_blueprint ?? null;
+      console.info(
+        `Generating ${expected} action beats for Chapter ${chapterNum}: ${chapterTitle}...`
+      );
 
       const blueprintSection = effectiveBlueprint
-        ? `\n═══ BOOK BLUEPRINT — MANDATORY STRUCTURAL PLAN ═══\nYour action beats MUST align with this blueprint:\n${JSON.stringify(effectiveBlueprint, null, 2)}\n\nBlueprint Alignment Rules:\n- opening_shift: If this is an early chapter, the beats should ESTABLISH this starting situation — show the protagonist in this state.\n- midpoint_shock: If this is a mid-book chapter, the beats should BUILD TOWARD or DELIVER this pivotal reversal.\n- lowest_point: If this is a 70-75% chapter, the beats should PLUNGE the protagonist into this darkest hour.\n- climax: If this is an 85-90% chapter, the beats should ESCALATE to this decisive confrontation.\n- ending_change: If this is a late chapter, the beats should RESOLVE into this transformative change.\n- relationship_changes: Include beats that show the prescribed relationship shifts.\n- theme_pressure: Every beat's emotional_impact should echo or build upon this thematic pressure.\n═══ END BLUEPRINT ═══\n`
+        ? `\n═══ BOOK BLUEPRINT — MANDATORY STRUCTURAL PLAN ═══\nYour action beats MUST align with this blueprint:\n${JSON.stringify(effectiveBlueprint, null, 2)}\n═══ END BLUEPRINT ═══\n`
         : "";
 
       const baseContext = `
@@ -103,23 +172,15 @@ Chapter Summary: ${chapterSummary}
 Additional Story Information:
 - Synopsis: ${synopsis ?? ""}
 - Character Profiles: ${formattedCharacters || characterProfiles || ""}
-- Novel Plan: ${novelPlan ?? ""}
+- Novel Plan: ${(novelPlan ?? "").toString().slice(0, 1200)}
 - Author Intent: ${storyDetails?.novel_about ?? ""}
-- Series Context: ${storyDetails?.series_context ? JSON.stringify(storyDetails.series_context).slice(0, 1600) : ""}${blueprintSection}
-${formatCanonForPrompt(storyDetails?.series_context?.canon_entries, { maxLength: 800 })}
-${formatMysteryForPrompt(storyDetails?.series_context?.secrets, storyDetails?.series_context?.clues, { maxLength: 1500 })}
-- Relationships: ${storyDetails?.series_context?.relationships ? JSON.stringify(storyDetails.series_context.relationships).slice(0, 800) : ""}
-- Plot Threads: ${storyDetails?.series_context?.plot_threads ? JSON.stringify(storyDetails.series_context.plot_threads).slice(0, 800) : ""}
-- Callbacks: ${storyDetails?.series_context?.callbacks ? JSON.stringify(storyDetails.series_context.callbacks).slice(0, 800) : ""}
-- World Setting: ${storyDetails?.series_context?.world?.setting ? String(storyDetails.series_context.world.setting).slice(0, 600) : ""}
-- World Rules: ${storyDetails?.series_context?.world?.rules ? String(storyDetails.series_context.world.rules).slice(0, 600) : ""}
-- World Lore: ${storyDetails?.series_context?.world?.lore ? String(storyDetails.series_context.world.lore).slice(0, 600) : ""}
-- World Elements: ${storyDetails?.series_context?.world_elements ? JSON.stringify(storyDetails.series_context.world_elements).slice(0, 800) : ""}
+${blueprintSection}
+${seriesBlock ? `Series Context:\n${seriesBlock}\n` : ""}
 - Chapter Guide: ${JSON.stringify(guideDetails, null, 2)}
 `;
 
       const strictPrompt = `
-Take the chapter summary and produce exactly 5 action beats that progress the chapter from opening to closing.
+Take the chapter summary and produce exactly ${expected} action beats that progress the chapter from opening to closing.
 
 ${baseContext}
 
@@ -129,23 +190,18 @@ Rules:
 – Beats must be sequential and build momentum. No beat may be redundant.
 – Use specific, concrete events that can be written as scenes.
 
-Return ONLY a JSON array of exactly 5 objects with these fields:
-- "beat_number": integer (1-5)
+Return ONLY a JSON array of exactly ${expected} objects with these fields:
+- "beat_number": integer (1-${expected})
 - "action": string
 - "emotional_impact": string
 - "tension_hook": string
 `;
 
       const simplifiedPrompt = `
-Create 5 sequential chapter beats using the summary and outline below.
-Return a JSON array of 5 objects with beat_number, action, emotional_impact, tension_hook.
+Create ${expected} sequential chapter beats using the summary and outline below.
+Return a JSON array of ${expected} objects with beat_number, action, emotional_impact, tension_hook.
 
 ${baseContext}
-`;
-
-      const recoveryPrompt = `
-Write 5 simple beats (1-5) as JSON objects with action, emotional_impact, tension_hook.
-Chapter summary: ${chapterSummary}
 `;
 
       const system = `You are a professional novelist and writing coach creating detailed action beats for a chapter.
@@ -154,38 +210,40 @@ Return valid JSON only.`;
       const runAttempt = async (prompt: string, attempt: number) => {
         console.info("chapter_beats attempt", { chapterNum, attempt });
         const response = await runChatCompletion({
-          model: resolveModel(model, PipelineStep.CHAPTER_BEATS),
+          model: resolvedModel,
           system,
           prompt,
           jsonResponse: false,
           maxTokens: 4000,
+          generationMeta,
         });
-        console.info("chapter_beats raw output", { chapterNum, attempt, response });
-        const rawLog = { attempt: attempt + 1, output: response };
+        const rawLog = { attempt, output: response };
         try {
           const parsed = parseJsonArray(response);
-          console.info("chapter_beats parsed output", { chapterNum, attempt, parsed });
-          if (Array.isArray(parsed) && validateBeats(parsed as Beat[], 5)) {
+          if (Array.isArray(parsed) && validateBeats(parsed as Beat[], expected)) {
             return { parsed, success: true, raw: rawLog };
           }
           return { parsed, success: false, raw: rawLog };
         } catch (error) {
-          console.warn("chapter_beats parse error", { chapterNum, attempt, error });
+          console.warn("chapter_beats parse error", {
+            chapterNum,
+            attempt,
+            error,
+          });
           return { parsed: null, success: false, raw: rawLog };
         }
       };
 
-      const attempts = [strictPrompt, simplifiedPrompt, recoveryPrompt];
+      const attempts = [strictPrompt, simplifiedPrompt];
       let finalParsed: Beat[] | null = null;
-      let usedFallback = false;
       const rawAttempts: Array<{ attempt: number; output: unknown }> = [];
-      beatsRaw.attempts = rawAttempts;
 
       for (let attempt = 0; attempt < attempts.length; attempt += 1) {
-        const { parsed, success, raw } = await runAttempt(attempts[attempt], attempt + 1);
-        if (raw) {
-          rawAttempts.push(raw);
-        }
+        const { parsed, success, raw } = await runAttempt(
+          attempts[attempt],
+          attempt + 1
+        );
+        rawAttempts.push(raw);
         if (success && Array.isArray(parsed)) {
           finalParsed = parsed as Beat[];
           await logGeneration({
@@ -199,49 +257,24 @@ Return valid JSON only.`;
       }
 
       if (!finalParsed) {
-        usedFallback = true;
-        finalParsed = [
-          {
-            beat_number: 1,
-            action: "Character faces an initial challenge related to the chapter's main conflict",
-            emotional_impact: "Starts with confidence but shifts to uncertainty as obstacles arise",
-            tension_hook: "Will they make the right choice when faced with unexpected resistance?",
-          },
-          {
-            beat_number: 2,
-            action: "A key conversation reveals important information or character dynamics",
-            emotional_impact: "Surprise or concern as new information changes their understanding",
-            tension_hook: "How will they adapt their approach with this new knowledge?",
-          },
-          {
-            beat_number: 3,
-            action: "An unexpected complication makes the character's goal more difficult",
-            emotional_impact: "Frustration turns to determination as they commit to overcoming the obstacle",
-            tension_hook: "Can they find a creative solution before time runs out?",
-          },
-          {
-            beat_number: 4,
-            action: "Character makes progress but at a cost or sacrifice",
-            emotional_impact: "Relief mixed with concern about the consequences of their actions",
-            tension_hook: "Will the sacrifice they made come back to haunt them?",
-          },
-          {
-            beat_number: 5,
-            action: "Resolution of immediate problem creates a new question or direction",
-            emotional_impact: "Satisfaction with current progress but anxiety about what comes next",
-            tension_hook: "How will this apparent victory affect their overall journey?",
-          },
-        ];
         await logGeneration({
           step: "beats",
           attempt: attempts.length,
           success: false,
-          usedFallback: true,
+          usedFallback: false,
         });
+        return NextResponse.json(
+          {
+            error: `Failed to generate beats for chapter ${chapterNum}. Regenerate chapter beats.`,
+            beats,
+            beatsRaw: { attempts: rawAttempts, final: [] },
+          },
+          { status: 422 }
+        );
       }
 
       beats[chapterNum] = finalParsed;
-
+      beatsRaw.attempts = rawAttempts;
       beatsRaw.final = finalParsed;
     }
 

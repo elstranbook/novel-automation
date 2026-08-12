@@ -3,12 +3,16 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type BookMemoryPayload = {
   bookId: string;
-  canonState?: Record<string, unknown> | null;
-  relationshipState?: Record<string, unknown> | null;
-  mysteryState?: Record<string, unknown> | null;
-  characterKnowledge?: Record<string, unknown> | null;
-  emotionalMemories?: Record<string, unknown> | null;
-  compressedSummary?: Record<string, unknown> | null;
+  canonState?: Record<string, unknown> | unknown[] | null;
+  relationshipState?: Record<string, unknown> | unknown[] | null;
+  mysteryState?: Record<string, unknown> | unknown[] | null;
+  characterKnowledge?: Record<string, unknown> | unknown[] | null;
+  emotionalMemories?: Record<string, unknown> | unknown[] | null;
+  compressedSummary?: Record<string, unknown> | string | null;
+  newFacts?: Record<string, unknown> | unknown[] | null;
+  changedRelationships?: Record<string, unknown> | unknown[] | null;
+  newClues?: Record<string, unknown> | unknown[] | null;
+  resolvedMysteries?: Record<string, unknown> | unknown[] | null;
 };
 
 export async function GET(request: Request) {
@@ -36,15 +40,22 @@ export async function POST(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from("book_memory")
-      .upsert({
-        book_id: payload.bookId,
-        canon_state: payload.canonState ?? null,
-        relationship_state: payload.relationshipState ?? null,
-        mystery_state: payload.mysteryState ?? null,
-        character_knowledge: payload.characterKnowledge ?? null,
-        emotional_memories: payload.emotionalMemories ?? null,
-        compressed_summary: payload.compressedSummary ?? null,
-      })
+      .upsert(
+        {
+          book_id: payload.bookId,
+          canon_state: payload.canonState ?? null,
+          relationship_state: payload.relationshipState ?? null,
+          mystery_state: payload.mysteryState ?? null,
+          character_knowledge: payload.characterKnowledge ?? null,
+          emotional_memories: payload.emotionalMemories ?? null,
+          compressed_summary: payload.compressedSummary ?? null,
+          new_facts: payload.newFacts ?? null,
+          changed_relationships: payload.changedRelationships ?? null,
+          new_clues: payload.newClues ?? null,
+          resolved_mysteries: payload.resolvedMysteries ?? null,
+        },
+        { onConflict: "book_id" }
+      )
       .select("*")
       .single();
 

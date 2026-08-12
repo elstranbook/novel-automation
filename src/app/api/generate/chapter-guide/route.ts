@@ -2,157 +2,114 @@ import { NextResponse } from "next/server";
 import { runChatCompletion } from "@/lib/openaiClient";
 import { resolveModel, PipelineStep } from "@/lib/modelDefaults";
 import { formatCharactersForPrompt } from "@/lib/characterPrompt";
-import { formatCanonForPrompt } from "@/lib/canonPrompt";
-import { formatMysteryForPrompt } from "@/lib/mysteryPrompt";
+import {
+  getSeriesContext,
+  hydrateStoryDetailsWithLiveSeriesContext,
+  seriesGenerationMeta,
+} from "@/lib/seriesContext";
+import { formatSeriesContextForPrompt } from "@/lib/seriesPrompt";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-const createDefaultChapterEntry = () => ({
-  key_dialogue: [
-    "This is where a revealing line of dialogue would appear.",
-    "Here's where a character would express their emotions.",
-    "This dialogue would advance the plot or reveal character.",
-  ],
-  symbolism: [
-    "A symbolic element that represents the character's journey",
-    "An object or image that reinforces the chapter's theme",
-  ],
-  emotional_pacing:
-    "The chapter would start with tension, build through conflict, and end with a moment of realization.",
-  sensory_details: [
-    "A visual detail that grounds the reader in the setting",
-    "A sound that creates atmosphere in a key scene",
-    "A tactile sensation that makes the scene feel real",
-  ],
-  foreshadowing: [
-    "A subtle hint about a future plot development",
-    "An unexplained detail that will become significant later",
-  ],
-  scene_goal: "The protagonist needs to overcome an obstacle related to their overall character arc.",
-});
+const REQUIRED_FIELDS = [
+  "key_dialogue",
+  "symbolism",
+  "emotional_pacing",
+  "sensory_details",
+  "foreshadowing",
+  "scene_goal",
+] as const;
 
-const parseGuideResponse = (response: unknown) => {
-  if (!response) return null;
-  if (typeof response === "object") {
-    return response as Record<string, Record<string, unknown>>;
+const isPlaceholderGuide = (entry: Record<string, unknown>): boolean => {
+  const dialogue = entry.key_dialogue;
+  if (Array.isArray(dialogue)) {
+    return dialogue.some((line) =>
+      /this is where a revealing line|here's where a character would/i.test(
+        String(line)
+      )
+    );
   }
+  return false;
+};
+
+const isValidGuideEntry = (entry: unknown): entry is Record<string, unknown> => {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
+  const record = entry as Record<string, unknown>;
+  if (isPlaceholderGuide(record)) return false;
+  return REQUIRED_FIELDS.every((key) => {
+    const value = record[key];
+    if (value == null) return false;
+    if (Array.isArray(value)) return value.length > 0;
+    return String(value).trim().length > 0;
+  });
+};
+
+const parseGuideResponse = (
+  response: unknown
+): Record<string, Record<string, unknown>> | null => {
+  if (!response) return null;
+  let parsed: unknown = response;
   if (typeof response === "string") {
     try {
       const match = response.match(/\{[\s\S]*\}/);
-      const parsed = match ? JSON.parse(match[0]) : JSON.parse(response);
-      return parsed as Record<string, Record<string, unknown>>;
+      parsed = match ? JSON.parse(match[0]) : JSON.parse(response);
     } catch {
-      try {
-        const match = response.match(/\{[\s\S]*\}/);
-        if (!match) return null;
-        let cleanText = match[0].replace(/\n|\r/g, " ");
-        cleanText = cleanText.replace(/,\s*}/g, "}").replace(/,\s*]/g, "]");
-        return JSON.parse(cleanText) as Record<string, Record<string, unknown>>;
-      } catch {
-        return null;
-      }
+      return null;
     }
   }
-  return null;
-};
+  if (!parsed || typeof parsed !== "object") return null;
 
-const completeChapterGuide = (
-  chapterGuide: Record<string, Record<string, unknown>>,
-  outlineArray: Array<Record<string, unknown>>
-) => {
-  const result: Record<string, Record<string, unknown>> = {};
-  outlineArray.forEach((chapter, index) => {
-    const number = String(chapter.number ?? index + 1);
-    const entry = chapterGuide[number] ?? {};
-    const defaults = createDefaultChapterEntry();
-    const completed: Record<string, unknown> = {};
-
-    Object.entries(defaults).forEach(([key, value]) => {
-      const current = (entry as Record<string, unknown>)[key];
-      if (current) {
-        completed[key] = current;
-      } else {
-        completed[key] = value;
-      }
-    });
-
-    result[number] = completed;
-  });
-
-  return result;
-};
-
-const generateMissingChapters = async (
-  chapterGuide: Record<string, Record<string, unknown>>,
-  outlineArray: Array<Record<string, unknown>>,
-  model: string
-) => {
-  const updated = { ...chapterGuide };
-
-  for (const [index, chapter] of outlineArray.entries()) {
-    const number = String(chapter.number ?? index + 1);
-    if (updated[number]) continue;
-
-    const prompt = `Create a detailed guide for Chapter ${number}: ${
-      chapter.title ?? `Chapter ${number}`
-    }.
-
-Chapter Summary: ${chapter.summary ?? "No summary available"}
-
-Include these exact fields:
-1. key_dialogue: 3-4 specific lines or exchanges
-2. symbolism: 2-3 symbolic elements
-3. emotional_pacing: A description of the emotional arc
-4. sensory_details: 3-4 vivid sensory descriptions
-5. foreshadowing: 2-3 subtle hints about future developments
-6. scene_goal: What the viewpoint character wants to achieve
-
-Format as valid JSON for a SINGLE chapter with the exact structure shown.`;
-
-    try {
-      const response = await runChatCompletion({
-        model,
-        system: "You are creating a detailed guide for a single chapter in a novel. Format your response as valid JSON.",
-        prompt,
-        jsonResponse: true,
-        maxTokens: 1000,
-      });
-
-      const parsed = parseGuideResponse(response);
-      if (parsed) {
-        if (parsed[number]) {
-          updated[number] = parsed[number];
-        } else if (
-          (parsed as Record<string, unknown>).key_dialogue ||
-          (parsed as Record<string, unknown>).symbolism ||
-          (parsed as Record<string, unknown>).emotional_pacing
-        ) {
-          updated[number] = parsed as unknown as Record<string, unknown>;
-        }
-      }
-    } catch {
-      updated[number] = createDefaultChapterEntry();
-    }
-
-    if (!updated[number]) {
-      updated[number] = createDefaultChapterEntry();
-    }
+  const record = parsed as Record<string, unknown>;
+  // Single chapter shaped like fields at top level
+  if (REQUIRED_FIELDS.some((k) => k in record) && !("1" in record)) {
+    return { pending: record as Record<string, unknown> };
   }
 
-  return updated;
+  const out: Record<string, Record<string, unknown>> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      out[String(key)] = value as Record<string, unknown>;
+    }
+  }
+  return Object.keys(out).length ? out : null;
+};
+
+const chunk = <T,>(arr: T[], size: number): T[][] => {
+  const batches: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    batches.push(arr.slice(i, i + size));
+  }
+  return batches;
 };
 
 export async function POST(request: Request) {
   try {
-    const { chapterOutline, novelSynopsis, characterProfiles, novelPlan, storyDetails, model } =
-      await request.json();
+    const {
+      chapterOutline,
+      novelSynopsis,
+      characterProfiles,
+      novelPlan,
+      storyDetails: rawDetails,
+      model,
+      seriesId,
+      bookNumber,
+    } = await request.json();
 
-    // Build formatted character section from series_characters if available
-    const seriesCharacters = storyDetails?.series_context?.characters;
-    const formattedCharacters = (Array.isArray(seriesCharacters) && seriesCharacters.length > 0)
-      ? formatCharactersForPrompt(seriesCharacters, { maxLength: 3000 })
-      : (typeof characterProfiles === 'string' ? characterProfiles.slice(0, 3000) : "Not provided");
+    const storyDetails = await hydrateStoryDetailsWithLiveSeriesContext(
+      rawDetails,
+      seriesId,
+      bookNumber
+    );
+
+    const seriesContext = getSeriesContext(storyDetails);
+    const seriesCharacters = seriesContext?.characters;
+    const formattedCharacters =
+      Array.isArray(seriesCharacters) && seriesCharacters.length > 0
+        ? formatCharactersForPrompt(seriesCharacters, { maxLength: 3000 })
+        : typeof characterProfiles === "string"
+          ? characterProfiles.slice(0, 3000)
+          : "Not provided";
 
     if (!chapterOutline) {
       return NextResponse.json(
@@ -165,158 +122,144 @@ export async function POST(request: Request) {
       ? chapterOutline
       : (chapterOutline?.chapters as Array<Record<string, unknown>>) ?? [];
 
-    const simplifiedOutline = outlineArray.map((chapter, index) => {
-      const record = chapter as Record<string, unknown>;
-      return {
-        number: record.number ?? index + 1,
-        title: record.title ?? `Chapter ${index + 1}`,
-        summary: record.summary ?? "No summary available",
-      };
-    });
+    if (outlineArray.length === 0) {
+      return NextResponse.json(
+        { error: "Chapter outline is empty" },
+        { status: 400 }
+      );
+    }
 
-    const chapterOutlineJson = JSON.stringify(simplifiedOutline, null, 2);
-
-    // Use series blueprint if available, otherwise fall back to standalone book_blueprint
-    const effectiveBlueprint = storyDetails?.series_context?.book_blueprint ?? storyDetails?.book_blueprint ?? null;
+    const effectiveBlueprint =
+      seriesContext?.book_blueprint ?? storyDetails?.book_blueprint ?? null;
 
     const blueprintSection = effectiveBlueprint
-      ? `\n═══ BOOK BLUEPRINT — MANDATORY STRUCTURAL PLAN ═══\nYour chapter guide MUST align with this blueprint:\n${JSON.stringify(effectiveBlueprint, null, 2)}\n\nBlueprint Alignment Rules:\n- opening_shift: Early chapter guides should emphasize dialogue, symbolism, and emotions that ESTABLISH this opening situation.\n- midpoint_shock: The chapter at the 50% mark should have key_dialogue and foreshadowing that DELIVER this reversal.\n- lowest_point: The 70-75% mark chapter should have emotional_pacing and sensory_details that PLUNGE into this dark moment.\n- climax: The 85-90% mark chapter should have scene_goal and tension that BUILD to this decisive confrontation.\n- ending_change: Final chapters should have symbolism and emotional_pacing that RESOLVE into this transformation.\n- relationship_changes: Weave these into key_dialogue and emotional_pacing across relevant chapters.\n- theme_pressure: Every chapter's symbolism and foreshadowing should echo or build upon this thematic pressure.\n═══ END BLUEPRINT ═══\n`
+      ? `\n═══ BOOK BLUEPRINT — MANDATORY STRUCTURAL PLAN ═══\nYour chapter guide MUST align with this blueprint:\n${JSON.stringify(effectiveBlueprint, null, 2)}\n═══ END BLUEPRINT ═══\n`
       : "";
 
-    const prompt = `
-Create a detailed chapter guide for the young adult novel (approximately 120000 words).
+    const seriesBlock = formatSeriesContextForPrompt(seriesContext, {
+      includeCharacters: false,
+      priority: true,
+      maxLength: 6500,
+    });
+
+    const baseModel = resolveModel(model, PipelineStep.CHAPTER_GUIDE);
+    const generationMeta = seriesGenerationMeta(
+      storyDetails,
+      "chapter-guide",
+      seriesId
+    );
+
+    const system = `You are an expert novelist creating a detailed chapter guide.
+Format your ENTIRE response as VALID JSON.
+Each chapter key must be the chapter number as a string.
+Each chapter must include concrete, novel-specific content for:
+key_dialogue (array), symbolism (array), emotional_pacing (string), sensory_details (array), foreshadowing (array), scene_goal (string).
+No placeholder text. No commentary outside JSON.`;
+
+    const guide: Record<string, Record<string, unknown>> = {};
+    const batches = chunk(outlineArray, 5);
+
+    for (const batch of batches) {
+      const simplified = batch.map((chapter, index) => {
+        const record = chapter as Record<string, unknown>;
+        return {
+          number: record.number ?? index + 1,
+          title: record.title ?? `Chapter ${index + 1}`,
+          summary: record.summary ?? "",
+        };
+      });
+      const numbers = simplified.map((c) => String(c.number));
+
+      const prompt = `
+Create a detailed chapter guide for these chapters only: ${numbers.join(", ")}.
 
 Novel Context:
 - Synopsis: ${(novelSynopsis ?? "").slice(0, 1000) || "Not provided"}
-- Main Characters: ${formattedCharacters.slice(0, 3000) || "Not provided"}
-- Novel Plan: ${(novelPlan ?? "").slice(0, 1000) || "Not provided"}
-- Author Intent: ${(storyDetails?.novel_about ?? "").slice(0, 500) || "Not provided"}
-- Series Context: ${storyDetails?.series_context ? JSON.stringify(storyDetails.series_context).slice(0, 1600) : "Not provided"}${blueprintSection}
-${formatCanonForPrompt(storyDetails?.series_context?.canon_entries, { maxLength: 800 }) || "- Canon Facts: Not provided"}
-- ${formatMysteryForPrompt(storyDetails?.series_context?.secrets, storyDetails?.series_context?.clues, { maxLength: 1500 }) || "Mysteries: Not provided"}
-- Relationships: ${storyDetails?.series_context?.relationships ? JSON.stringify(storyDetails.series_context.relationships).slice(0, 800) : "Not provided"}
-- Plot Threads: ${storyDetails?.series_context?.plot_threads ? JSON.stringify(storyDetails.series_context.plot_threads).slice(0, 800) : "Not provided"}
-- Callbacks: ${storyDetails?.series_context?.callbacks ? JSON.stringify(storyDetails.series_context.callbacks).slice(0, 800) : "Not provided"}
-- World Setting: ${storyDetails?.series_context?.world?.setting ? String(storyDetails.series_context.world.setting).slice(0, 600) : "Not provided"}
-- World Rules: ${storyDetails?.series_context?.world?.rules ? String(storyDetails.series_context.world.rules).slice(0, 600) : "Not provided"}
-- World Lore: ${storyDetails?.series_context?.world?.lore ? String(storyDetails.series_context.world.lore).slice(0, 600) : "Not provided"}
-- World Elements: ${storyDetails?.series_context?.world_elements ? JSON.stringify(storyDetails.series_context.world_elements).slice(0, 800) : "Not provided"}
+- Main Characters: ${formattedCharacters.slice(0, 2500) || "Not provided"}
+- Novel Plan: ${(novelPlan ?? "").slice(0, 800) || "Not provided"}
+- Author Intent: ${String(storyDetails?.novel_about ?? "").slice(0, 500) || "Not provided"}
+${blueprintSection}
+${seriesBlock ? `Series Context:\n${seriesBlock}\n` : ""}
 
-Chapter Outline: ${chapterOutlineJson}
+Chapters:
+${JSON.stringify(simplified, null, 2)}
 
-For EACH CHAPTER NUMBER in the outline, create a guide with these EXACT fields:
-1. key_dialogue: 3-4 specific lines or exchanges that reveal character or advance plot
-2. symbolism: 2-3 symbolic elements that reinforce themes
-3. emotional_pacing: A clear description of the emotional arc in the chapter
-4. sensory_details: 3-4 vivid sensory descriptions to include
-5. foreshadowing: 2-3 subtle hints about future developments
-6. scene_goal: A concise statement of what the viewpoint character wants to achieve
-
-Your response must be VALID JSON with this exact structure (example for ONE chapter):
+Return JSON shaped like:
 {
-  "1": {
-    "key_dialogue": [
-      "I can't go back there. Not after what happened.",
-      "Sometimes the thing we're most afraid of is exactly what we need to face.",
-      "Promise me you won't tell anyone what you saw."
-    ],
-    "symbolism": [
-      "The broken watch represents Emma's feelings of being stuck in time",
-      "The locked garden gate symbolizes opportunities just out of reach"
-    ],
-    "emotional_pacing": "The chapter begins with anxiety, shifts to cautious hope, then ends with determination.",
-    "sensory_details": [
-      "The scent of lemon polish mixing with dust in the old library",
-      "The feel of cool metal keys against sweaty palms",
-      "The distant echo of laughter from the school cafeteria"
-    ],
-    "foreshadowing": [
-      "The strange symbol on the library book will become significant later",
-      "Mr. Peterson's unexplained absence hints at the trouble to come"
-    ],
-    "scene_goal": "Emma needs to find the missing journal before anyone discovers it's gone."
+  "${numbers[0]}": {
+    "key_dialogue": ["...", "..."],
+    "symbolism": ["...", "..."],
+    "emotional_pacing": "...",
+    "sensory_details": ["...", "..."],
+    "foreshadowing": ["...", "..."],
+    "scene_goal": "..."
   }
 }
-
-Create entries for ALL chapters in the outline, following this exact format.
-Do not include any explanatory text outside the JSON structure.
-All fields are required for every chapter.
+Include every chapter number in this batch. Content must be specific to this novel.
 `;
 
-    const system = `You are an expert YA novelist creating a detailed chapter guide.
-
-IMPORTANT INSTRUCTIONS:
-1. Format your ENTIRE response as a VALID JSON object
-2. Each chapter must have ALL required fields (key_dialogue, symbolism, emotional_pacing, sensory_details, foreshadowing, scene_goal)
-3. Each array field must contain multiple concrete examples, not generic placeholders
-4. The content should be specific to the novel and avoid generic writing advice
-5. Do not include any text, explanations or comments outside the JSON structure
-6. Ensure your JSON is properly formatted with correct quotes, commas, and braces
-
-Your response will be parsed directly as JSON and any formatting errors will cause failure.`;
-
-    const baseModel = resolveModel(model, PipelineStep.CHAPTER_GUIDE);
-    const maxRetries = 3;
-    let retryDelay = 2000;
-    let guide: Record<string, Record<string, unknown>> | null = null;
-
-    for (let attempt = 0; attempt < maxRetries; attempt += 1) {
-      // Primary attempt: full prompt with JSON mode
-      const response = await runChatCompletion({
-        model: baseModel,
-        system,
-        prompt,
-        jsonResponse: true,
-        maxTokens: 4000,
-      });
-
-      guide = parseGuideResponse(response);
-
-      // Fallback: shortened prompt + raw text mode if JSON mode failed
-      if (!guide) {
-        const shortenedPrompt = prompt.replace(
-          /Novel Context:[\s\S]*?Chapter Outline:/,
-          "Novel Context: Young adult novel with character development and emotional journey.\n\nChapter Outline:"
-        );
-        const retryResponse = await runChatCompletion({
+      let batchGuide: Record<string, Record<string, unknown>> | null = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const response = await runChatCompletion({
           model: baseModel,
           system,
-          prompt: shortenedPrompt,
-          jsonResponse: false,
-          maxTokens: 4000,
+          prompt,
+          jsonResponse: true,
+          maxTokens: 5000,
+          generationMeta,
         });
-        guide = parseGuideResponse(retryResponse);
+        batchGuide = parseGuideResponse(response);
+        if (batchGuide && numbers.every((n) => isValidGuideEntry(batchGuide![n]))) {
+          break;
+        }
+        // If single pending entry for a one-chapter batch
+        if (
+          batchGuide?.pending &&
+          numbers.length === 1 &&
+          isValidGuideEntry(batchGuide.pending)
+        ) {
+          batchGuide = { [numbers[0]]: batchGuide.pending };
+          break;
+        }
+        batchGuide = null;
       }
 
-      if (guide && Object.keys(guide).length > 0) {
-        break;
+      if (!batchGuide) {
+        return NextResponse.json(
+          {
+            error: `Failed to generate chapter guide for chapters ${numbers.join(", ")}. Regenerate.`,
+          },
+          { status: 422 }
+        );
       }
 
-      if (attempt < maxRetries - 1) {
-        await new Promise((resolve) => setTimeout(resolve, retryDelay));
-        retryDelay *= 2;
+      for (const num of numbers) {
+        const entry = batchGuide[num];
+        if (!isValidGuideEntry(entry)) {
+          return NextResponse.json(
+            {
+              error: `Chapter guide for chapter ${num} was incomplete or placeholder. Regenerate.`,
+            },
+            { status: 422 }
+          );
+        }
+        guide[num] = entry;
       }
     }
 
-    if (!guide || Object.keys(guide).length === 0) {
-      const fallback = outlineArray.reduce(
-        (acc, chapter, index) => {
-          const number = String(chapter.number ?? index + 1);
-          acc[number] = createDefaultChapterEntry();
-          return acc;
+    const missing = outlineArray
+      .map((c, i) => String((c as Record<string, unknown>).number ?? i + 1))
+      .filter((n) => !guide[n]);
+    if (missing.length) {
+      return NextResponse.json(
+        {
+          error: `Chapter guide missing chapters: ${missing.join(", ")}`,
         },
-        {} as Record<string, Record<string, unknown>>
+        { status: 422 }
       );
-      return NextResponse.json({ guide: fallback, warning: "Default chapter guide used." });
     }
 
-    if (Object.keys(guide).length < outlineArray.length) {
-      guide = await generateMissingChapters(guide, outlineArray, baseModel);
-    }
-
-    const completedGuide = completeChapterGuide(guide, outlineArray);
-
-    return NextResponse.json({ guide: completedGuide });
+    return NextResponse.json({ guide });
   } catch (error) {
     console.error(error);
     return NextResponse.json(

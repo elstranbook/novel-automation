@@ -31,6 +31,14 @@ export async function POST(request: Request) {
       .eq("series_id", seriesId)
       .maybeSingle();
 
+    const { data: seriesRow } = await supabaseAdmin
+      .from("series")
+      .select("genre, target_audience")
+      .eq("id", seriesId)
+      .maybeSingle();
+    const genreLabel = String(seriesRow?.genre ?? "").trim() || "fiction";
+    const audience = String(seriesRow?.target_audience ?? "").trim();
+
     const charList = characters
       .map((char) => (typeof char === "string" ? char : char.name ?? ""))
       .filter(Boolean)
@@ -45,7 +53,8 @@ export async function POST(request: Request) {
       : "";
 
     const prompt = `
-Create a CHARACTER EVOLUTION ENGINE for the following characters in a ${numBooks}-book YA series:
+Create a CHARACTER EVOLUTION ENGINE for the following characters in a ${numBooks}-book ${genreLabel} series:
+${audience ? `Target audience: ${audience}` : ""}
 
 Characters: ${charList}
 
@@ -100,8 +109,9 @@ Return as JSON:
 `;
 
     const system = `You are a master character psychologist. You understand the deep
-psychology of YA characters - their wounds, fears, and growth potential. Create
-believable, emotionally resonant character arcs that never flatten or reset.`;
+psychology of characters in ${genreLabel} fiction - their wounds, fears, and growth potential. Create
+believable, emotionally resonant character arcs that never flatten or reset.
+Match the stated genre and audience; do not assume Young Adult unless the material calls for it.`;
 
     const response = await runChatCompletion({
       model: resolveModel(model, PipelineStep.SERIES_EVOLUTION),
@@ -109,6 +119,7 @@ believable, emotionally resonant character arcs that never flatten or reset.`;
       prompt,
       jsonResponse: true,
       maxTokens: 5000,
+      generationMeta: { seriesId, type: "series-evolution" },
     });
 
     const { error } = await supabaseAdmin

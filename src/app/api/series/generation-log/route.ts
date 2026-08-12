@@ -18,11 +18,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "seriesId required" }, { status: 400 });
   }
 
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("generation_log")
     .select("*")
     .eq("series_id", seriesId)
     .order("started_at", { ascending: false });
+
+  if (error) {
+    return NextResponse.json({ error: error.message, logs: [] }, { status: 500 });
+  }
 
   return NextResponse.json({ logs: data ?? [] });
 }

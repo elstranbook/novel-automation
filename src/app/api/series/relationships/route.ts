@@ -32,10 +32,13 @@ export async function POST(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from("relationship_log")
-      .upsert({
-        series_id: seriesId,
-        relationships: relationships ?? [],
-      })
+      .upsert(
+        {
+          series_id: seriesId,
+          relationships: relationships ?? [],
+        },
+        { onConflict: "series_id" }
+      )
       .select("*")
       .single();
 

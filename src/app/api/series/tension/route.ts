@@ -4,9 +4,15 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 type TensionPayload = {
   bookId: string;
   startTension?: number;
-  midpointTension?: number;
-  climaxTension?: number;
-  resolutionTension?: number;
+  incitingIncident?: number | null;
+  firstComplication?: number | null;
+  midpointTension?: number | null;
+  falseHope?: number | null;
+  climaxTension?: number | null;
+  resolutionTension?: number | null;
+  currentTension?: number | null;
+  lastPeak?: string | null;
+  targetPacing?: Record<string, unknown> | unknown[] | null;
 };
 
 export async function GET(request: Request) {
@@ -34,13 +40,22 @@ export async function POST(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from("tension_profile")
-      .upsert({
-        book_id: payload.bookId,
-        start_tension: payload.startTension ?? 2,
-        midpoint_tension: payload.midpointTension ?? null,
-        climax_tension: payload.climaxTension ?? null,
-        resolution_tension: payload.resolutionTension ?? null,
-      })
+      .upsert(
+        {
+          book_id: payload.bookId,
+          start_tension: payload.startTension ?? 2,
+          inciting_incident: payload.incitingIncident ?? null,
+          first_complication: payload.firstComplication ?? null,
+          midpoint_tension: payload.midpointTension ?? null,
+          false_hope: payload.falseHope ?? null,
+          climax_tension: payload.climaxTension ?? null,
+          resolution_tension: payload.resolutionTension ?? null,
+          current_tension: payload.currentTension ?? payload.startTension ?? 2,
+          last_peak: payload.lastPeak ?? null,
+          target_pacing: payload.targetPacing ?? null,
+        },
+        { onConflict: "book_id" }
+      )
       .select("*")
       .single();
 

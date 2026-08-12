@@ -72,7 +72,7 @@ export async function POST(request: Request) {
   const ensureLog = async (seriesId: string) => {
     const { data: log } = await supabaseAdmin
       .from("mystery_log")
-      .upsert({ series_id: seriesId })
+      .upsert({ series_id: seriesId }, { onConflict: "series_id" })
       .select("id")
       .single();
     return log?.id;

@@ -84,7 +84,7 @@ export async function POST(request: Request) {
     // Look up the series owner for server-side writes
     const { data: seriesRow } = await supabaseAdmin
       .from("series")
-      .select("user_id")
+      .select("user_id, genre, target_audience")
       .eq("id", seriesId)
       .maybeSingle();
 
@@ -97,6 +97,9 @@ export async function POST(request: Request) {
         { status: 404 }
       );
     }
+
+    const genreLabel = String(seriesRow?.genre ?? "").trim() || "fiction";
+    const audience = String(seriesRow?.target_audience ?? "").trim();
 
     let bibleContext = "";
     const bible = seriesBible
@@ -120,7 +123,8 @@ Series Arc Summary: ${bible.series_arc_summary ?? "N/A"}
     }
 
     const prompt = `
-Create a detailed BOOK-BY-BOOK MAP for a ${numBooks}-book YA series titled "${title}".
+Create a detailed BOOK-BY-BOOK MAP for a ${numBooks}-book ${genreLabel} series titled "${title}".
+${audience ? `Target audience: ${audience}` : ""}
 ${bibleContext}
 
 For EACH of the ${numBooks} books, provide:
@@ -182,9 +186,9 @@ Return as JSON object with a "books" key containing an array of book maps:
 }
 `;
 
-    const system = `You are an expert series planner. Each book must escalate stakes,
-    deepen characters, and build toward the finale. Never allow resets. Always think
-    in terms of the full series arc.`;
+    const system = `You are an expert series planner for ${genreLabel}. Each book must escalate stakes,
+deepen characters, and build toward the finale. Never allow resets. Always think
+in terms of the full series arc. Match the stated genre and audience; do not assume Young Adult unless the material calls for it.`;
 
     const rawResponse = await runChatCompletion({
       model: resolveModel(model, PipelineStep.SERIES_MAP),
@@ -192,6 +196,7 @@ Return as JSON object with a "books" key containing an array of book maps:
       prompt,
       jsonResponse: true,
       maxTokens: 5000,
+      generationMeta: { seriesId, type: "series-map" },
     });
 
     // ── Extract the book array from whatever the LLM returned ──
@@ -248,14 +253,63 @@ Return as JSON object with a "books" key containing an array of book maps:
       console.error("[map-route] Failed to delete old series_books:", deleteBooksError.message);
     }
 
-    // Insert new series_books
-    const bookRows = books.map((book) => ({
-      series_id: seriesId,
-      book_number: Number(book.book_number ?? 1),
-      title: String(book.title ?? `Book ${book.book_number ?? 1}`),
-      status: "planned",
-      summary: String(book.central_conflict ?? ""),
-    }));
+    // Insert new series_books with rich planning fields from map LLM output
+    const asText = (value: unknown): string => {
+      if (value == null) return "";
+      if (typeof value === "string") return value.trim();
+      if (typeof value === "number" || typeof value === "boolean") return String(value);
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    };
+
+    const bookRows = books.map((book, index) => {
+      const bookNumber = Number(book.book_number ?? index + 1);
+      const growth = book.character_growth ?? book.character_progression ?? null;
+      const reveals = book.twist_reveal ?? book.reveals ?? null;
+      const stakesEscalation = book.stakes_escalation ?? book.stakes ?? null;
+      const tensionCurve =
+        book.tension_curve ??
+        (stakesEscalation != null
+          ? { stakes_escalation: stakesEscalation }
+          : null);
+      const purpose =
+        asText(book.book_purpose) ||
+        asText(book.role) ||
+        asText(book.series_role) ||
+        "";
+      const seriesStage =
+        asText(book.series_stage) ||
+        (bookNumber === 1
+          ? "opening"
+          : bookNumber === Number(numBooks)
+            ? "finale"
+            : "escalation");
+
+      return {
+        series_id: seriesId,
+        book_number: bookNumber,
+        title: String(book.title ?? `Book ${bookNumber}`),
+        status: "planned",
+        summary: asText(book.central_conflict) || asText(book.summary) || "",
+        book_purpose: purpose || null,
+        series_stage: seriesStage,
+        core_theme: asText(book.core_theme) || asText(book.theme) || null,
+        external_conflict:
+          asText(book.external_conflict) || asText(book.central_conflict) || null,
+        internal_conflict:
+          asText(book.internal_conflict) || asText(book.emotional_journey) || null,
+        stakes: asText(stakesEscalation) || null,
+        stakes_level:
+          asText(book.stakes_level) ||
+          (bookNumber >= Number(numBooks) - 1 ? "high" : bookNumber === 1 ? "rising" : "escalating"),
+        character_progression: growth,
+        reveals,
+        tension_curve: tensionCurve,
+      };
+    });
 
     if (bookRows.length) {
       const { data: insertedBooks, error: insertBooksError } = await supabaseAdmin
@@ -267,6 +321,38 @@ Return as JSON object with a "books" key containing an array of book maps:
         console.error("[map-route] Failed to insert series_books:", insertBooksError.message);
       } else if (insertedBooks && insertedBooks.length > 0) {
         console.log(`[map-route] Inserted ${insertedBooks.length} series_books rows`);
+
+        // Seed tension profiles from map stakes position in the series
+        const tensionRows = insertedBooks.map((bookRow: Record<string, unknown>) => {
+          const bn = Number(bookRow.book_number ?? 1);
+          const total = Math.max(Number(numBooks) || insertedBooks.length, 1);
+          const ratio = bn / total;
+          const start = Math.max(1, Math.min(4, Math.round(1 + ratio * 2)));
+          const mid = Math.max(start + 1, Math.min(7, Math.round(3 + ratio * 3)));
+          const climax = Math.max(mid + 1, Math.min(10, Math.round(6 + ratio * 3)));
+          const resolution = Math.max(2, Math.min(climax - 1, Math.round(climax * 0.55)));
+          return {
+            book_id: bookRow.id,
+            start_tension: start,
+            midpoint_tension: mid,
+            climax_tension: climax,
+            resolution_tension: resolution,
+            current_tension: start,
+            last_peak: bn === total ? "climax" : "rising",
+            target_pacing: {
+              source: "series-map",
+              book_number: bn,
+              stakes_level: bookRow.stakes_level ?? null,
+            },
+          };
+        });
+
+        const { error: tensionError } = await supabaseAdmin
+          .from("tension_profile")
+          .upsert(tensionRows, { onConflict: "book_id" });
+        if (tensionError) {
+          console.error("[map-route] Failed to seed tension_profile:", tensionError.message);
+        }
 
         // Insert novels for each book
         const resolvedModel = model || "gpt-4.1-mini";

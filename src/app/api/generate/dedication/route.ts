@@ -22,16 +22,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const title =
-      storyDetails.title ?? "Untitled";
-    const genre =
-      storyDetails.genre ?? "Young Adult Fiction";
+    const title = storyDetails.title ?? "Untitled";
+    const genre = String(storyDetails.genre ?? "Fiction").trim() || "Fiction";
+    const targetAge = String(storyDetails.target_age_range ?? "").trim();
     const themes =
       storyDetails.story_theme ?? "Growth and self-discovery";
-    const premise =
-      premisesAndEndings?.chosen_premise ?? "";
-    const ending =
-      premisesAndEndings?.chosen_ending ?? "";
+    const premise = premisesAndEndings?.chosen_premise ?? "";
+    const ending = premisesAndEndings?.chosen_ending ?? "";
     const synopsis = novelSynopsis ?? "";
     const mainCharacter =
       storyDetails.main_character_name ?? "the protagonist";
@@ -45,21 +42,21 @@ export async function POST(request: Request) {
         ? characterProfiles.slice(0, 800)
         : "";
 
-    const prompt = `Write 1 original dedication page for a YA fictional novel using the information below.
+    const prompt = `Write 1 original dedication page for a ${genre} novel using the information below.
 
-The dedications should feel emotionally authentic, memorable, and aligned with the emotional core of the story. The tone should match the novel naturally without sounding overly poetic, forced, or generic.
+The dedication should feel emotionally authentic, memorable, and aligned with the emotional core of the story. The tone should match the novel naturally without sounding overly poetic, forced, or generic.
 
 Some dedications may be heartfelt, bittersweet, hopeful, melancholic, romantic, reflective, dark, or inspirational depending on the themes and ending of the novel.
 
-The dedications should feel like an emotional doorway into the story and subtly reflect the protagonist's journey, central conflict, or emotional resolution without revealing spoilers directly.
+The dedication should feel like an emotional doorway into the story and subtly reflect the protagonist's journey, central conflict, or emotional resolution without revealing spoilers directly.
 
-Keep each dedication concise and impactful (1–4 lines maximum). Vary the style and emotional tone between each option.
+Keep the dedication concise and impactful (1–4 lines maximum).
 
 Novel Information:
 
 * Novel Title: ${title}
 * Genre: ${genre}
-* Target Audience: Young Adult
+* Target Audience: ${targetAge || "match the genre"}
 * Themes: ${themes}
 * Premise: ${premise}
 * Ending: ${ending}
@@ -67,23 +64,15 @@ Novel Information:
 * Main Character Profile: ${mainCharacter} — ${centralConflict}. ${characterSummary}
 * Emotional Tone of the Story: ${emotionalTone}
 
-Some dedications can be directed toward:
-
-* readers
-* teenagers struggling to belong
-* people healing from heartbreak or loss
-* outsiders, survivors, dreamers, or broken families
-* a fictional character
-* someone the protagonist could never forget
-
-Avoid clichés and generic motivational lines. Make every dedication feel emotionally specific to this novel's story and themes.
+Avoid clichés and generic motivational lines. Make the dedication feel emotionally specific to this novel's story and themes.
 
 Return ONLY the dedication text itself — no labels, no numbering, no quotes around it, no preamble. Just the raw dedication that would appear on the dedication page of the book.`;
 
-    const system = `You are a professional YA novelist skilled at crafting emotionally resonant dedication pages.
+    const system = `You are a professional novelist skilled at crafting emotionally resonant dedication pages for ${genre} fiction.
 Write a single, original dedication that would appear on a book's dedication page.
 Keep it concise (1-4 lines), emotionally authentic, and specific to the novel's themes and emotional core.
-Avoid clichés and generic motivational lines. Make it feel like an emotional doorway into the story.`;
+Match the stated genre and audience; do not assume Young Adult unless the material calls for it.
+Avoid clichés and generic motivational lines.`;
 
     const response = await runChatCompletion({
       model: resolveModel(model, PipelineStep.DEDICATION),

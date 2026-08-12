@@ -17,10 +17,15 @@ export async function POST(request: Request) {
     }
 
     const title = storyDetails.title ?? studioTitle ?? "Untitled";
-    const genre = storyDetails.genre ?? "Young Adult";
+    const genre = storyDetails.genre ?? "Fiction";
     const theme = storyDetails.story_theme ?? "transformation and growth";
     const mood = storyDetails.mood ?? "reflective";
-    const setting = storyDetails.setting ?? "a contemporary high school";
+    const isYa = /young\s*adult|\bYA\b|teen|high\s*school/i.test(
+      `${genre} ${storyDetails.target_age_range ?? ""} ${storyDetails.setting ?? ""}`
+    );
+    const setting =
+      storyDetails.setting ??
+      (isYa ? "a contemporary high school" : "a vivid contemporary setting");
 
     const prompt = `
 Create a highly detailed AI image prompt for a professional front book cover.
