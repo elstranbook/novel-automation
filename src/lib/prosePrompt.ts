@@ -802,11 +802,26 @@ Rewrite in the same POV/tense. Checklist:
 Return only the rewritten scene.`;
 }
 
+export type ProseValidationResult = {
+  ok: boolean;
+  reason?: string;
+  /** True when the only failure is word-count band (quality otherwise fine). */
+  lengthOnly?: boolean;
+  wordCount?: number;
+  wordTarget?: number;
+};
+
+export function isLengthOnlyFailure(
+  result: ProseValidationResult | null | undefined
+): boolean {
+  return Boolean(result && !result.ok && result.lengthOnly);
+}
+
 export function validateProseDraft(
   text: string,
   summary?: string,
   options?: { maxSceneLength?: number }
-): { ok: boolean; reason?: string } {
+): ProseValidationResult {
   const trimmed = String(text ?? "").trim();
   if (!trimmed) return { ok: false, reason: "empty" };
   if (trimmed.length < 200) return { ok: false, reason: "too_short" };
@@ -837,10 +852,29 @@ export function validateProseDraft(
   const target = Number(options?.maxSceneLength) || 0;
   if (target > 0) {
     const words = trimmed.split(/\s+/).filter(Boolean).length;
-    const low = Math.floor(target * 0.65);
-    const high = Math.ceil(target * 1.35);
-    if (words < low) return { ok: false, reason: "too_short_words" };
-    if (words > high) return { ok: false, reason: "too_long_words" };
+    // Widened from 65–135% so near-misses (e.g. 599/1000) pass hard gate;
+    // soft path still handles anything outside 55–145%.
+    const low = Math.floor(target * 0.55);
+    const high = Math.ceil(target * 1.45);
+    if (words < low) {
+      return {
+        ok: false,
+        reason: "too_short_words",
+        lengthOnly: true,
+        wordCount: words,
+        wordTarget: target,
+      };
+    }
+    if (words > high) {
+      return {
+        ok: false,
+        reason: "too_long_words",
+        lengthOnly: true,
+        wordCount: words,
+        wordTarget: target,
+      };
+    }
+    return { ok: true, wordCount: words, wordTarget: target };
   }
 
   return { ok: true };

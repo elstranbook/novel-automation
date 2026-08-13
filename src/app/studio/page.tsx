@@ -3069,9 +3069,15 @@ function StudioContent() {
               String(s ?? "").trim()
             );
             setProseScenes({ ...prose });
+            const reason =
+              typeof errBody?.validationReason === "string" &&
+              errBody.validationReason
+                ? ` (${errBody.validationReason})`
+                : "";
             throw new Error(
-              errBody?.error ||
-                `Stopped at ${chapterTitle} scene ${sceneIndex + 1}. Click Resume Prose to continue.`
+              (errBody?.error ||
+                `Stopped at ${chapterTitle} scene ${sceneIndex + 1}. Click Resume Prose to continue.`) +
+                reason
             );
           }
 
@@ -3079,6 +3085,28 @@ function StudioContent() {
           const proseText = String(data.prose);
           chapterProse[sceneIndex] = proseText;
           generatedAny = true;
+
+          if (
+            Array.isArray(data.warnings) &&
+            data.warnings.length > 0
+          ) {
+            const lengthNotes = data.warnings
+              .filter(
+                (w: unknown) =>
+                  typeof w === "string" && w.startsWith("length_off_target:")
+              )
+              .map((w: string) => {
+                const [, counts] = w.split(":");
+                return counts
+                  ? `Scene ${sceneIndex + 1} word count off target (${counts}).`
+                  : `Scene ${sceneIndex + 1} word count off target.`;
+              });
+            if (lengthNotes.length) {
+              setMessage(
+                `${chapterTitle}: ${lengthNotes.join(" ")} Continuing.`
+              );
+            }
+          }
 
           if (
             typeof data.voiceSample === "string" &&
