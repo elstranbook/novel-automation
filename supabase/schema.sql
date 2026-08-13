@@ -273,6 +273,8 @@ create table if not exists public.series_characters (
   appearance jsonb,
   personality jsonb,
   backstory text,
+  motivation text,
+  conflict text,
   core_desire text,
   big_fear text,
   hidden_secret text,
@@ -285,6 +287,7 @@ create table if not exists public.series_characters (
   introduced_in_book integer,
   introduced_in_chapter integer,
   emotional_memory jsonb,
+  arc_stages jsonb,
   is_fully_developed boolean default false,
   created_at timestamptz default now()
 );

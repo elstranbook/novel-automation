@@ -4487,7 +4487,11 @@ export default function SeriesPage() {
               <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs">
                 <p className="text-xs text-zinc-400">Warnings</p>
                 <p className="mt-2 text-lg font-semibold text-amber-200">
-                  {memoryWarnings.length}
+                  {
+                    memoryWarnings.filter(
+                      (w) => String((w as { severity?: string }).severity ?? "warning") === "warning"
+                    ).length
+                  }
                 </p>
               </div>
             </div>
@@ -4570,15 +4574,30 @@ export default function SeriesPage() {
                   </div>
                 </div>
 
-                {memoryWarnings.length > 0 && (
+                {memoryWarnings.some(
+                  (w) =>
+                    String((w as { severity?: string }).severity ?? "warning") ===
+                    "warning"
+                ) && (
                   <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-xs text-amber-200">
                     <p className="font-semibold">Continuity Warnings</p>
                     <ul className="mt-2 list-disc space-y-1 pl-4">
-                      {memoryWarnings.map((warning, index) => (
-                        <li key={`${index}-${String((warning as { id?: string }).id ?? "warn")}`}>
-                          {String((warning as { message?: string }).message ?? warning)}
-                        </li>
-                      ))}
+                      {memoryWarnings
+                        .filter(
+                          (w) =>
+                            String(
+                              (w as { severity?: string }).severity ?? "warning"
+                            ) === "warning"
+                        )
+                        .map((warning, index) => (
+                          <li
+                            key={`${index}-${String((warning as { id?: string }).id ?? "warn")}`}
+                          >
+                            {String(
+                              (warning as { message?: string }).message ?? warning
+                            )}
+                          </li>
+                        ))}
                     </ul>
                   </div>
                 )}
