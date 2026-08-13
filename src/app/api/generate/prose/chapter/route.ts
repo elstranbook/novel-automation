@@ -16,6 +16,7 @@ import {
   proseMaxTokens,
   REVISE_TEMPERATURE,
   validateProseDraft,
+  isLengthOnlyFailure,
   type BeatLike,
   type ScenePacing,
 } from "@/lib/prosePrompt";
@@ -303,6 +304,9 @@ export async function POST(request: Request) {
 
     let draft = "";
     let draftOk = false;
+    let lastDraftValidation: ReturnType<typeof validateProseDraft> | null = null;
+    const warnings: string[] = [];
+
     for (let attempt = 0; attempt < 2; attempt += 1) {
       console.info("prose draft attempt", {
         sceneNumber,
@@ -313,6 +317,7 @@ export async function POST(request: Request) {
       const validation = validateProseDraft(draft, parsed.summary, {
         maxSceneLength: wordTarget,
       });
+      lastDraftValidation = validation;
       if (validation.ok) {
         draftOk = true;
         await logGeneration({
@@ -321,6 +326,26 @@ export async function POST(request: Request) {
           success: true,
           usedFallback: false,
         });
+        break;
+      }
+      // Length-only miss: keep draft and proceed to revise (do not burn retries).
+      if (isLengthOnlyFailure(validation)) {
+        draftOk = true;
+        warnings.push(
+          `length_off_target:${validation.wordCount ?? "?"}/${validation.wordTarget ?? wordTarget}`
+        );
+        await logGeneration({
+          step: "prose",
+          attempt: attempt + 1,
+          success: true,
+          usedFallback: true,
+        });
+        console.warn(
+          "prose draft length-only miss; proceeding to revise",
+          validation.reason,
+          validation.wordCount,
+          validation.wordTarget
+        );
         break;
       }
       console.warn("prose draft rejected", validation.reason);
@@ -337,6 +362,7 @@ export async function POST(request: Request) {
         {
           error:
             "Prose draft failed validation after retries. Regenerate this scene.",
+          validationReason: lastDraftValidation?.reason ?? "unknown",
           proseRaw: { draft, summary: parsed.summary },
         },
         { status: 500 }
@@ -382,6 +408,29 @@ export async function POST(request: Request) {
         });
         if (revisedOk.ok) {
           prose = revisedText;
+          // Length fixed by revise — drop prior length warning if present.
+          const cleaned = warnings.filter(
+            (w) => !w.startsWith("length_off_target:")
+          );
+          warnings.length = 0;
+          warnings.push(...cleaned);
+          break;
+        }
+        if (isLengthOnlyFailure(revisedOk)) {
+          // Prefer revised text even if still off-band; soft-accept.
+          prose = revisedText;
+          const marker = `length_off_target:${revisedOk.wordCount ?? "?"}/${revisedOk.wordTarget ?? wordTarget}`;
+          const withoutOld = warnings.filter(
+            (w) => !w.startsWith("length_off_target:")
+          );
+          warnings.length = 0;
+          warnings.push(...withoutOld, marker);
+          console.warn(
+            "[prose] revise length-only miss; soft-accepting",
+            revisedOk.reason,
+            "attempt",
+            reviseAttempt + 1
+          );
           break;
         }
         console.warn(
@@ -399,6 +448,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       prose,
       voiceSample: resolvedVoiceSample || null,
+      warnings: warnings.length ? warnings : undefined,
       proseRaw: {
         draft,
         final: prose,
