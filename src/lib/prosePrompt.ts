@@ -15,6 +15,10 @@ import {
   formatTensionForPrompt,
 } from "@/lib/seriesPrompt";
 import type { SeriesContext } from "@/lib/seriesContext";
+import {
+  detectEchoBanHits,
+  type SceneContract,
+} from "@/lib/sceneContract";
 
 export type ScenePacing = "sprint" | "talky" | "linger" | "aftermath";
 
@@ -22,7 +26,30 @@ export type ParsedScene = {
   summary: string;
   beatReference: string | null;
   sceneNumber: number | null;
+  goal?: string | null;
+  obstacle?: string | null;
+  turn?: string | null;
+  cost?: string | null;
+  hook?: string | null;
 };
+
+function contractFromRecord(record: Record<string, unknown>): Partial<SceneContract> {
+  const nested =
+    record.contract && typeof record.contract === "object" && !Array.isArray(record.contract)
+      ? (record.contract as Record<string, unknown>)
+      : record;
+  const pick = (key: keyof SceneContract) => {
+    const value = String(nested[key] ?? "").trim();
+    return value || null;
+  };
+  return {
+    goal: pick("goal"),
+    obstacle: pick("obstacle"),
+    turn: pick("turn"),
+    cost: pick("cost"),
+    hook: pick("hook"),
+  };
+}
 
 export type BeatLike = {
   beat_number?: number | string;
@@ -58,8 +85,13 @@ export function lastNWords(text: string, n = 200): string {
 }
 
 export function parseScenePayload(scene: unknown): ParsedScene {
+  const empty: ParsedScene = {
+    summary: "",
+    beatReference: null,
+    sceneNumber: null,
+  };
   if (scene == null) {
-    return { summary: "", beatReference: null, sceneNumber: null };
+    return empty;
   }
 
   if (typeof scene === "object" && !Array.isArray(scene)) {
@@ -76,12 +108,13 @@ export function parseScenePayload(scene: unknown): ParsedScene {
       summary: summary || JSON.stringify(record),
       beatReference,
       sceneNumber: Number.isFinite(sceneNumber) ? sceneNumber : null,
+      ...contractFromRecord(record),
     };
   }
 
   const asString = String(scene).trim();
   if (!asString) {
-    return { summary: "", beatReference: null, sceneNumber: null };
+    return empty;
   }
 
   // Try parse stringified JSON object/array element
@@ -107,16 +140,29 @@ export function parseScenePayload(scene: unknown): ParsedScene {
       /"beat_reference"\s*:\s*"((?:\\.|[^"\\])*)"/
     );
     const numMatch = asString.match(/"scene_number"\s*:\s*(\d+)/);
+    const field = (key: string) => {
+      const match = asString.match(
+        new RegExp(`"${key}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`)
+      );
+      return match?.[1]
+        ? match[1].replace(/\\"/g, '"').replace(/\\n/g, "\n")
+        : null;
+    };
     return {
       summary: summaryMatch[1].replace(/\\"/g, '"').replace(/\\n/g, "\n"),
       beatReference: beatMatch?.[1]
         ? beatMatch[1].replace(/\\"/g, '"')
         : null,
       sceneNumber: numMatch ? Number(numMatch[1]) : null,
+      goal: field("goal"),
+      obstacle: field("obstacle"),
+      turn: field("turn"),
+      cost: field("cost"),
+      hook: field("hook"),
     };
   }
 
-  return { summary: asString, beatReference: null, sceneNumber: null };
+  return { ...empty, summary: asString };
 }
 
 /** Extract character name hints from a scene payload when present. */
@@ -643,35 +689,50 @@ export type SceneCardInput = {
   hasMystery?: boolean;
   hasPlots?: boolean;
   hasTimeline?: boolean;
+  goal?: string | null;
+  obstacle?: string | null;
+  turn?: string | null;
+  cost?: string | null;
+  hook?: string | null;
+  echoBans?: string[];
+  styleCardBlock?: string;
 };
 
 export function buildProseSystemPrompt(
   narrativeStyle?: string | null,
-  povName?: string | null
+  povName?: string | null,
+  styleCardBlock?: string | null
 ): string {
   const { pov, tense } = parseNarrativeStyle(narrativeStyle);
   const who = povName ? ` Stay in ${povName}'s head.` : "";
-  return `You are a novelist, not a writing coach. Write the scene in ${pov} ${tense} tense.${who} No headers, no analysis, no beat labels, no scene numbers. Return only the prose.`;
+  const card = String(styleCardBlock ?? "").trim();
+  return `You are a novelist, not a writing coach. Write the scene in ${pov} ${tense} tense.${who} No headers, no analysis, no beat labels, no scene numbers. Return only the prose.${card ? `\n\n${card}` : ""}`;
 }
 
 export function buildSceneCardPrompt(input: SceneCardInput): string {
   const beat = input.beat;
   const goal =
+    input.goal ||
     input.chapterGoal ||
     beat?.action ||
     "Advance the chapter's conflict through this scene.";
   const conflict =
+    input.obstacle ||
     input.keyConflict ||
     beat?.tension_hook ||
     input.emotionalState ||
     "Rising pressure on the POV character.";
   const turn =
+    input.turn ||
     beat?.tension_hook ||
     beat?.emotional_impact ||
     "Something concrete must be different by the last paragraph.";
-  const mustHappen = beat?.action || input.summary.slice(0, 400);
+  const mustHappen =
+    [input.turn, input.goal, beat?.action].filter(Boolean).join(" — ") ||
+    input.summary.slice(0, 400);
   const wordTarget = input.maxSceneLength;
   const hardCap = Math.ceil(wordTarget * 1.15);
+  const echoBans = (input.echoBans ?? []).filter(Boolean).slice(0, 12);
 
   const sensory = Array.isArray(input.sensory)
     ? input.sensory.slice(0, 3).join("; ")
@@ -705,20 +766,27 @@ export function buildSceneCardPrompt(input: SceneCardInput): string {
       ? "Respect timeline order — do not jump ahead of events that have not happened."
       : "",
     endingGuard,
+    echoBans.length
+      ? `Do not reuse these image/thesis phrases: ${echoBans.join("; ")}`
+      : "",
+    "Do not restate a prior thesis without a new action.",
   ].filter(Boolean);
 
   return `${buildVoiceBlock(input.voiceSample, input.narrativeStyle, input.povCharacter)}
-
+${input.styleCardBlock ? `\n${input.styleCardBlock}\n` : ""}
 THIS SCENE
 - Chapter: ${input.chapterTitle}
 - Scene: ${input.sceneNumber}${input.sceneCount ? ` of ${input.sceneCount}` : ""}
 - Goal: ${goal}
+- Obstacle: ${input.obstacle || conflict}
 - Conflict: ${conflict}
 - Turn (what is different at the end): ${turn}
+${input.cost ? `- Cost: ${input.cost}` : ""}
+${input.hook ? `- Hook out: ${input.hook}` : ""}
 - Landing line job: leave a hook, breath, reveal, or decision
 - Pacing: ${input.pacing}
 - Must happen: ${mustHappen}
-- Must not happen: inventing future timeline events; summarizing instead of enacting; ${input.hasMystery ? "revealing HIDDEN secrets; " : ""}generic workshop filler
+- Must not happen: inventing future timeline events; summarizing instead of enacting; restating prior thesis; ${input.hasMystery ? "revealing HIDDEN secrets; " : ""}generic workshop filler; reusing echo-ban imagery
 - Word target: ${wordTarget} (hard cap ${hardCap})
 ${input.chapterSummary ? `- Chapter summary: ${clip(input.chapterSummary, 500)}` : ""}
 ${sensory ? `- Sensory cues (use, do not list): ${sensory}` : ""}
@@ -758,12 +826,19 @@ export function buildRevisePrompt(input: {
   hasPlots?: boolean;
   hasTimeline?: boolean;
   seriesBlock?: string;
+  goal?: string | null;
+  turn?: string | null;
+  hook?: string | null;
+  echoBans?: string[];
+  extraCut?: boolean;
 }): string {
   const turn =
+    input.turn ||
     input.beat?.tension_hook ||
     input.beat?.emotional_impact ||
     "Ensure a concrete change by the end.";
   const wordTarget = input.maxSceneLength;
+  const echoBans = (input.echoBans ?? []).filter(Boolean).slice(0, 12);
   const continuityBits = [
     input.hasCanon ? "Respect locked canon; do not contradict it." : "",
     input.hasMystery
@@ -780,27 +855,30 @@ export function buildRevisePrompt(input: {
   return `${buildVoiceBlock(input.voiceSample, input.narrativeStyle, input.povCharacter)}
 
 SCENE GOAL / TURN: ${turn}
-PACING: ${input.pacing}
+${input.hook ? `HOOK OUT: ${input.hook}\n` : ""}PACING: ${input.pacing}
 SCENE SUMMARY (plot facts to keep): ${clip(input.summary, 600)}
 ${input.previousEnding ? `PREVIOUS ENDING (do not repeat):\n"""\n${clip(input.previousEnding, 800)}\n"""\n` : ""}
 ${input.seriesBlock ? `SERIES CONSTRAINTS:\n${clip(input.seriesBlock, 2200)}\n` : ""}
+${echoBans.length ? `ECHO BANS (do not reuse): ${echoBans.join("; ")}\n` : ""}
 DRAFT:
 """
 ${input.draft}
 """
 
 Rewrite in the same POV/tense. Checklist:
-1. Cut any sentence that names an emotion instead of causing it.
+1. CUT: delete restated thesis, camera/sterile stacks, and sentences that only name feelings. Prefer action and dialogue.
 2. Make each speaker sound distinct; if two lines could swap speakers, rewrite them.
 3. Replace generic setting with a named location and one physical interaction with it.
 4. Kill banned phrases if they appear (${BAN_PHRASES.slice(0, 6).join("; ")}…).
-5. Ensure the turn happens; if the draft only mood-wanders, force the beat's action: ${clip(String(input.beat?.action ?? input.summary), 240)}
+5. Ensure the turn happens; if the draft only mood-wanders, force: ${clip(String(input.turn || input.beat?.action || input.summary), 240)}
 6. Continuity: do not contradict or repeat the previous ending.
 7. ${continuityBits.join(" ")}
 8. Length: stay within about 35% of ${wordTarget} words (not a sparse stub, not a runaway dump).
-
+${input.extraCut ? "9. Extra cut pass: this draft echoed prior imagery — strip repeated motifs and keep only the new turn.\n" : ""}
 Return only the rewritten scene.`;
 }
+
+export { detectEchoBanHits };
 
 export type ProseValidationResult = {
   ok: boolean;

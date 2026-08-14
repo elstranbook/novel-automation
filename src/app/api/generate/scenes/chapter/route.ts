@@ -10,13 +10,31 @@ import {
 } from "@/lib/seriesContext";
 import { formatSeriesContextForPrompt } from "@/lib/seriesPrompt";
 import { parseScenePayload } from "@/lib/prosePrompt";
+import {
+  formatPriorScenesForPrompt,
+  normalizeContract,
+  validateChapterScenes,
+} from "@/lib/sceneContract";
 
 type SceneSummary = {
   scene_number: number;
   summary: string;
   beat_reference: string;
   cast?: string[];
+  goal: string;
+  obstacle: string;
+  turn: string;
+  cost: string;
+  hook: string;
 };
+
+class SceneValidationError extends Error {
+  validationReason: string;
+  constructor(message: string, validationReason: string) {
+    super(message);
+    this.validationReason = validationReason;
+  }
+}
 
 const logGeneration = async (payload: {
   step: string;
@@ -93,6 +111,20 @@ const normalizeSceneList = (
         parseCast(rec.character_names) ||
         parseCast(rec.cast_names);
     }
+    const rec =
+      item && typeof item === "object" && !Array.isArray(item)
+        ? (item as Record<string, unknown>)
+        : {};
+    const contract =
+      normalizeContract(rec) ??
+      normalizeContract({
+        goal: fromPayload.goal,
+        obstacle: fromPayload.obstacle,
+        turn: fromPayload.turn,
+        cost: fromPayload.cost,
+        hook: fromPayload.hook,
+      });
+    if (!contract) return null;
     return {
       scene_number: fromPayload.sceneNumber ?? index + 1,
       summary,
@@ -100,6 +132,7 @@ const normalizeSceneList = (
         fromPayload.beatReference ??
         `Beat ${fromPayload.sceneNumber ?? index + 1}`,
       ...(cast ? { cast } : {}),
+      ...contract,
     };
   };
 
@@ -133,6 +166,7 @@ const generateScenesForChapter = async ({
   premisesAndEndings,
   characterProfiles,
   totalChapters,
+  priorScenes,
 }: {
   chapter: Record<string, unknown>;
   storyDetails: Record<string, unknown>;
@@ -141,6 +175,7 @@ const generateScenesForChapter = async ({
   premisesAndEndings?: Record<string, unknown>;
   characterProfiles?: string;
   totalChapters?: number;
+  priorScenes?: unknown[];
 }): Promise<{ scenes: SceneSummary[]; sceneRaw: Record<string, unknown> }> => {
   const chapterInfoRecord: Record<string, unknown> =
     typeof chapter === "object" && chapter ? chapter : {};
@@ -257,35 +292,56 @@ Additional Information:
 - POV: ${chapterInfoRecord.pov}
 `;
 
+  const chapterGoal = String(
+    (chapterInfoRecord.scene_goal as string | undefined) ??
+      (chapter.scene_goal as string | undefined) ??
+      ""
+  ).trim();
+  const priorBlock = formatPriorScenesForPrompt(priorScenes ?? []);
+  const contractRules = `
+CONTRACT (required on every scene — each field at least 8 characters):
+- goal: what the POV character tries to get or do in THIS scene (concrete).
+- obstacle: who or what blocks them.
+- turn: one NEW concrete change by the last beat (world or relationship). Must differ from every other scene in this chapter.
+- cost: what they lose, risk, or spend.
+- hook: the new question or pressure that pulls the next scene — not the same thesis restated.
+
+Rules:
+– Generate exactly ${expected} scenes${beatsList.length ? ", one scene per beat, in order" : ""}.
+– One new concrete change per scene (turn). No two scenes may share the same location+revelation pair or restate the same thesis.
+– Seed from beats when present: action → goal/turn, tension_hook → hook. ${chapterGoal ? `Chapter goal (make each scene more specific): ${chapterGoal}` : ""}
+– Include a beat reference (e.g., "Beat 1") and "cast" (character names).
+– Do NOT write full prose. Summaries only.
+${priorBlock ? `\n${priorBlock}\n` : ""}`;
+
+  const jsonExample = `[
+  {"scene_number": 1, "summary": "...", "beat_reference": "Beat 1", "cast": ["Name A"], "goal": "...", "obstacle": "...", "turn": "...", "cost": "...", "hook": "..."}
+]`;
+
   const strictPrompt = `
 Using the chapter summary and story beats, create structured SCENE SUMMARIES (not prose) for Chapter ${chapterNumber} of "${
     storyDetails.title ?? ""
   }".
-
-Rules:
-– Generate exactly ${expected} scenes${beatsList.length ? ", one scene per beat, in order" : ""}.
-– Each scene must be a concise, concrete summary that can be expanded into prose later.
-– Include a beat reference (e.g., "Beat 1").
-– Include "cast": an array of character names present in that scene (from the profiles when possible).
-– Do NOT write full prose. Summaries only.
+${contractRules}
 
 Return ONLY valid JSON in this format:
-[
-  {"scene_number": 1, "summary": "...", "beat_reference": "Beat 1", "cast": ["Name A", "Name B"]}
-]
+${jsonExample}
 
 ${baseContext}
 `;
 
   const simplifiedPrompt = `
 Write ${expected} short scene summaries from the beats/events below.
-Return JSON array with scene_number, summary, beat_reference, and cast (array of names). Summaries only, not prose.
+Each object MUST include scene_number, summary, beat_reference, cast, goal, obstacle, turn, cost, hook.
+Turns must all be different. Do not repeat prior setups.
+${priorBlock ? `\n${priorBlock}\n` : ""}
+Return JSON array only. Summaries only, not prose.
 
 ${baseContext}
 `;
 
-  const system = `You are a professional story planner creating structured scene summaries.
-Return valid JSON only. Never write full scene prose.`;
+  const system = `You are a professional story planner creating structured scene summaries with pressure contracts.
+Return valid JSON only. Never write full scene prose. Every scene needs a unique turn.`;
 
   const runAttempt = async (prompt: string, attempt: number) => {
     console.info("chapter_scenes attempt", { chapterNumber, attempt });
@@ -314,19 +370,41 @@ Return valid JSON only. Never write full scene prose.`;
     }
 
     const scenes = normalizeSceneList(parsed, beatsList as Beat[]);
-    const success =
+    const countOk =
       !!scenes &&
       scenes.length === expected &&
       scenes.every((s) => s.summary.trim().length > 20);
-    return { parsed: scenes, success, raw: response };
+    const contractCheck = scenes
+      ? validateChapterScenes(scenes)
+      : { ok: false, reason: "no_scenes" };
+    const success = Boolean(countOk && contractCheck.ok);
+    return {
+      parsed: scenes,
+      success,
+      raw: response,
+      validationReason: countOk
+        ? contractCheck.reason
+        : scenes
+          ? "count_or_summary"
+          : "parse_failed",
+    };
   };
 
   const attempts = [strictPrompt, simplifiedPrompt];
+  let lastReason = "unknown";
   for (let attempt = 0; attempt < attempts.length; attempt += 1) {
-    const { parsed, success, raw } = await runAttempt(
+    const { parsed, success, raw, validationReason } = await runAttempt(
       attempts[attempt],
       attempt + 1
     );
+    if (!success) {
+      lastReason = validationReason ?? "unknown";
+      console.warn("chapter_scenes rejected", {
+        chapterNumber,
+        attempt: attempt + 1,
+        reason: lastReason,
+      });
+    }
     if (success && parsed) {
       await logGeneration({
         step: "scenes",
@@ -357,8 +435,9 @@ Return valid JSON only. Never write full scene prose.`;
     usedFallback: false,
   });
 
-  throw new Error(
-    `Failed to generate scene summaries for Chapter ${chapterNumber}. Regenerate scenes.`
+  throw new SceneValidationError(
+    `Failed to generate scene summaries for Chapter ${chapterNumber}. ${lastReason}`,
+    lastReason
   );
 };
 
@@ -374,6 +453,7 @@ export async function POST(request: Request) {
       seriesId,
       bookNumber,
       totalChapters,
+      priorScenes,
     } = await request.json();
 
     if (!rawDetails || !chapter) {
@@ -426,6 +506,7 @@ export async function POST(request: Request) {
       premisesAndEndings,
       characterProfiles,
       totalChapters: Number(totalChapters) || undefined,
+      priorScenes: Array.isArray(priorScenes) ? priorScenes : undefined,
     });
 
     const chapterTitle = `Chapter ${chapterNumber ?? "?"}: ${chapterTitleValue}`;
@@ -441,6 +522,11 @@ export async function POST(request: Request) {
     console.error(error);
     const message =
       error instanceof Error ? error.message : "Failed to generate scenes";
-    return NextResponse.json({ error: message }, { status: 500 });
+    const validationReason =
+      error instanceof SceneValidationError ? error.validationReason : undefined;
+    return NextResponse.json(
+      { error: message, validationReason },
+      { status: error instanceof SceneValidationError ? 422 : 500 }
+    );
   }
 }

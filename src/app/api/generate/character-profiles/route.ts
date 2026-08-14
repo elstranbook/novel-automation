@@ -140,6 +140,10 @@ Return JSON ONLY as an array of character objects. Each object MUST use these ke
 - end_state (string)
 - relationships (object or short notes)
 - voice_profile (object with dialogue/style notes)
+- public_mask (what they show others)
+- private_want (what they actually pursue this book)
+- contradiction (how mask and want collide in behavior)
+- speech_tells (short distinctive speech habit)
 - introduced_in_book (number, default ${bookNumber})
 - introduced_in_chapter (number, optional)
 

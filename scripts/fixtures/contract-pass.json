@@ -1,0 +1,40 @@
+{
+  "thesis": "The gala is a ritual of inherited power.",
+  "scenes": [
+    {
+      "summary": "Alex forges a guest token at a riverside print shop and pays with a stolen credit chip.",
+      "goal": "Leave with a working gala credential.",
+      "obstacle": "The printer demands a live genome scan he cannot pass.",
+      "turn": "He swaps the scan for a dead Pureblood's cached signature.",
+      "cost": "The shopkeep now owns a copy of that signature.",
+      "hook": "Who else bought that same dead name tonight?"
+    },
+    {
+      "summary": "At the gala, Alex projects Voss experiment files during the bloodline speech.",
+      "goal": "Force the room to see the Rot schedule.",
+      "obstacle": "Isabella can cut power from the dais.",
+      "turn": "The files stay up long enough for three houses to film them.",
+      "cost": "Security locks the exits; Alex is a named fugitive.",
+      "hook": "Which house will sell him out before dawn?"
+    }
+  ],
+  "characters": [
+    {
+      "name": "Alex Mercer",
+      "role": "Protagonist",
+      "public_mask": "Quiet Raw clerk",
+      "private_want": "A name that cannot be deleted",
+      "contradiction": "He hunts truth while hiding his own file",
+      "speech_tells": "Asks questions instead of answering"
+    },
+    {
+      "name": "Isabella Voss",
+      "role": "Antagonist",
+      "public_mask": "Order is mercy",
+      "private_want": "Finish genomic acceleration before the Rot clock hits her line",
+      "contradiction": "She preaches purity while rewriting her family's blood",
+      "speech_tells": "Short sentences; never uses first names"
+    }
+  ],
+  "prose": "\"Cut the feed,\" Isabella said, not looking at him.\nAlex kept the projector in his palm. \"Three houses already copied it.\"\nThe dais lights died. Phones still glowed. He took the service stair, credential burning a hole in his coat, and did not wait to hear her next order."
+}

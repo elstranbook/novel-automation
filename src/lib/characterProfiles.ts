@@ -23,6 +23,10 @@ export type StructuredCharacter = {
   end_state?: string | null;
   relationships?: Record<string, unknown> | string | null;
   voice_profile?: Record<string, unknown> | string | null;
+  public_mask?: string | null;
+  private_want?: string | null;
+  contradiction?: string | null;
+  speech_tells?: string | null;
   introduced_in_book?: number | null;
   introduced_in_chapter?: number | null;
 };
@@ -88,6 +92,32 @@ export function normalizeStructuredCharacter(
       rec.voice_profile ?? rec.voice ?? rec.dialogue_style,
       "style"
     ),
+    public_mask:
+      rec.public_mask != null
+        ? String(rec.public_mask)
+        : rec.mask != null
+          ? String(rec.mask)
+          : null,
+    private_want:
+      rec.private_want != null
+        ? String(rec.private_want)
+        : rec.core_desire != null
+          ? String(rec.core_desire)
+          : rec.desires != null
+            ? String(rec.desires)
+            : null,
+    contradiction:
+      rec.contradiction != null
+        ? String(rec.contradiction)
+        : rec.conflict != null
+          ? String(rec.conflict)
+          : null,
+    speech_tells:
+      rec.speech_tells != null
+        ? String(rec.speech_tells)
+        : rec.voice_tells != null
+          ? String(rec.voice_tells)
+          : null,
     introduced_in_book:
       rec.introduced_in_book != null
         ? Number(rec.introduced_in_book)
@@ -171,6 +201,56 @@ export function formatCharacterProfilesForDisplay(
   return String(profiles ?? "");
 }
 
+export function formatAgencyPack(
+  profiles: string | StructuredCharacter[] | null | undefined,
+  options?: {
+    castNames?: string[];
+    povName?: string | null;
+    max?: number;
+  }
+): string {
+  const chars = Array.isArray(profiles)
+    ? profiles
+    : parseCharacterProfilesPayload(profiles);
+  if (!chars.length) return "";
+  const pov = String(options?.povName ?? "").toLowerCase().trim();
+  const cast = (options?.castNames ?? []).map((n) => n.toLowerCase().trim());
+  const max = options?.max ?? 4;
+
+  const matches = (name: string) => {
+    const n = name.toLowerCase().trim();
+    if (pov && (n === pov || n.includes(pov) || pov.includes(n))) return true;
+    if (!cast.length) return true;
+    return cast.some((c) => n.includes(c) || c.includes(n));
+  };
+
+  const picked = [
+    ...chars.filter((c) => pov && c.name.toLowerCase().includes(pov)),
+    ...chars.filter((c) => matches(c.name)),
+  ]
+    .filter((c, i, arr) => arr.findIndex((x) => x.name === c.name) === i)
+    .slice(0, max);
+
+  if (!picked.length) return "";
+
+  const lines = picked.map((c) => {
+    const bits = [
+      c.public_mask ? `Mask: ${c.public_mask}` : "",
+      c.private_want || c.core_desire
+        ? `Want: ${c.private_want || c.core_desire}`
+        : "",
+      c.contradiction || c.conflict
+        ? `Contradiction: ${c.contradiction || c.conflict}`
+        : "",
+      c.speech_tells ? `Speech: ${c.speech_tells}` : "",
+      c.big_fear ? `Fear: ${c.big_fear}` : "",
+    ].filter(Boolean);
+    return `- ${c.name}${c.role ? ` (${c.role})` : ""}${bits.length ? `\n  ${bits.join(" | ")}` : ""}`;
+  });
+
+  return `CAST AGENCY (act from these; do not lecture them):\n${lines.join("\n")}`;
+}
+
 export function toSeriesCharacterPayload(
   seriesId: string,
   character: StructuredCharacter,
@@ -196,6 +276,10 @@ export function toSeriesCharacterPayload(
     end_state: character.end_state ?? null,
     relationships: character.relationships ?? null,
     voice_profile: character.voice_profile ?? null,
+    public_mask: character.public_mask ?? null,
+    private_want: character.private_want ?? character.core_desire ?? null,
+    contradiction: character.contradiction ?? character.conflict ?? null,
+    speech_tells: character.speech_tells ?? null,
     introduced_in_book:
       character.introduced_in_book ?? bookNumber ?? null,
     introduced_in_chapter: character.introduced_in_chapter ?? null,

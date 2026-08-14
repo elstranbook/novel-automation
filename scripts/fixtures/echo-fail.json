@@ -1,0 +1,23 @@
+{
+  "thesis": "Bloodline purity is a cage built on erasure and cameras watch every lie.",
+  "echoBans": ["sterile air", "red cameras", "purity cage"],
+  "scenes": [
+    {
+      "summary": "Alex opens the genetic envelope in the sterile lab under red cameras and learns his blood is pure, erased from the registry.",
+      "goal": "Read the sealed genetic results without being seen.",
+      "obstacle": "Surveillance cameras and the lab's sealed registry.",
+      "turn": "Alex learns his blood is pure and was erased.",
+      "cost": "He is now a marked anomaly if anyone logs the file.",
+      "hook": "Why did they erase a pure bloodline?"
+    },
+    {
+      "summary": "Alex sits again in the sterile lab under red cameras, rereading that his blood is pure and the registry erased him.",
+      "goal": "Confirm the sealed genetic results a second time.",
+      "obstacle": "The same surveillance cameras and sealed registry.",
+      "turn": "Alex learns his blood is pure and was erased.",
+      "cost": "He remains a marked anomaly if anyone logs the file.",
+      "hook": "Why did they erase a pure bloodline?"
+    }
+  ],
+  "prose": "The sterile air stung. Red cameras tracked him. Bloodline purity is a cage built on erasure and cameras watch every lie. He stood in the sterile air while red cameras watched the purity cage close."
+}

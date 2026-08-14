@@ -17,9 +17,14 @@ import {
   REVISE_TEMPERATURE,
   validateProseDraft,
   isLengthOnlyFailure,
+  detectEchoBanHits,
   type BeatLike,
   type ScenePacing,
 } from "@/lib/prosePrompt";
+import { buildEchoBanList } from "@/lib/sceneContract";
+import { formatAgencyPack } from "@/lib/characterProfiles";
+import { styleCardPromptBlock } from "@/lib/styleCards";
+import { scoreProseDraft } from "@/lib/proseEditorRubric";
 
 const logGeneration = async (payload: {
   step: string;
@@ -76,6 +81,8 @@ export async function POST(request: Request) {
       isLateBook,
       novelId,
       totalChapters,
+      priorSceneSummaries,
+      styleCardId,
     } = body;
 
     if (!scene) {
@@ -144,17 +151,18 @@ export async function POST(request: Request) {
       | "ending"
       | "normal" = "normal";
 
+    const fromScene = extractSceneCastNames(scene);
+    const fromClient = Array.isArray(castNamesFromClient)
+      ? castNamesFromClient.map((n: unknown) => String(n).trim()).filter(Boolean)
+      : [];
+    const castNames = Array.from(new Set([...fromClient, ...fromScene]));
+
     if (seriesId) {
       try {
         const live = await loadSeriesContext(
           seriesId,
           Number(bookNumber) || 1
         );
-        const fromScene = extractSceneCastNames(scene);
-        const fromClient = Array.isArray(castNamesFromClient)
-          ? castNamesFromClient.map((n: unknown) => String(n).trim()).filter(Boolean)
-          : [];
-        const castNames = Array.from(new Set([...fromClient, ...fromScene]));
         const chapterNum = Number(chapterNumber) || 0;
         const filtered = filterSeriesForScene(live, {
           bookNumber: Number(bookNumber) || live.book_number || 1,
@@ -197,6 +205,17 @@ export async function POST(request: Request) {
       } else if (characterBlock.length < 400) {
         characterBlock = `${characterBlock}\n\nBOOK CHARACTER PROFILES (supplement):\n${profiles.slice(0, 2000)}`;
       }
+    }
+
+    const agencyPack = formatAgencyPack(characterContext, {
+      castNames,
+      povName: povCharacter ?? null,
+      max: 4,
+    });
+    if (agencyPack) {
+      characterBlock = characterBlock
+        ? `${agencyPack}\n\n${characterBlock}`
+        : agencyPack;
     }
 
     // Generate voice sample on the fly if missing and we can persist it
@@ -256,9 +275,22 @@ export async function POST(request: Request) {
             blueprintPosition,
           });
 
+    const styleCardBlock = styleCardPromptBlock(
+      typeof styleCardId === "string" ? styleCardId : null
+    );
+
+    const priorTexts = [
+      String(previousSceneEnding || previousChapterEnding || previousScene || ""),
+      ...(Array.isArray(priorSceneSummaries)
+        ? priorSceneSummaries.map((s: unknown) => String(s ?? ""))
+        : []),
+    ].filter((t) => t.trim());
+    const echoBans = buildEchoBanList(priorTexts, 12);
+
     const system = buildProseSystemPrompt(
       narrativeStyle,
-      povCharacter ?? null
+      povCharacter ?? null,
+      styleCardBlock
     );
 
     const sceneCard = buildSceneCardPrompt({
@@ -287,6 +319,13 @@ export async function POST(request: Request) {
       hasMystery,
       hasPlots,
       hasTimeline,
+      goal: parsed.goal,
+      obstacle: parsed.obstacle,
+      turn: parsed.turn,
+      cost: parsed.cost,
+      hook: parsed.hook,
+      echoBans,
+      styleCardBlock,
     });
 
     const runDraft = async () =>
@@ -369,7 +408,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const buildRevise = (sourceDraft: string) =>
+    const draftEchoHits = detectEchoBanHits(draft, echoBans);
+    if (draftEchoHits.length) {
+      warnings.push(`echo_ban:${draftEchoHits.slice(0, 3).join("|")}`);
+    }
+
+    const buildRevise = (sourceDraft: string, extraCut = false) =>
       buildRevisePrompt({
         draft: sourceDraft,
         voiceSample: resolvedVoiceSample,
@@ -385,16 +429,22 @@ export async function POST(request: Request) {
         hasPlots,
         hasTimeline,
         seriesBlock,
+        goal: parsed.goal,
+        turn: parsed.turn,
+        hook: parsed.hook,
+        echoBans,
+        extraCut,
       });
 
     let prose = draft;
+    const echoCut = draftEchoHits.length > 0;
     for (let reviseAttempt = 0; reviseAttempt < 2; reviseAttempt += 1) {
       try {
         const revised = await runChatCompletion({
           model: reviseModel,
           system:
-            "You are a line editor. Rewrite the scene. Keep plot, POV, and facts. Improve the sentences. Return only the rewritten prose.",
-          prompt: buildRevise(prose),
+            "You are a line editor. Rewrite the scene. Keep plot, POV, and facts. Cut restated thesis. Return only the rewritten prose.",
+          prompt: buildRevise(prose, echoCut && reviseAttempt === 0),
           jsonResponse: false,
           maxTokens,
           temperature: REVISE_TEMPERATURE,
@@ -442,6 +492,41 @@ export async function POST(request: Request) {
       } catch (reviseErr) {
         console.warn("[prose] revise failed, keeping draft:", reviseErr);
         break;
+      }
+    }
+
+    const rubric = scoreProseDraft(prose, {
+      turn: parsed.turn,
+      thesis: String(chapterSummary ?? parsed.hook ?? ""),
+      echoBans,
+      talkyBeat: pacing === "talky",
+    });
+    if (rubric.warnings.length) {
+      warnings.push(...rubric.warnings);
+      if (!rubric.turnPresent || rubric.thesisEcho || rubric.echoBanHits.length) {
+        try {
+          const repaired = await runChatCompletion({
+            model: reviseModel,
+            system:
+              "You are a line editor. Enforce the scene turn. Cut thesis restatement and banned imagery. Return only prose.",
+            prompt: buildRevise(prose, true),
+            jsonResponse: false,
+            maxTokens,
+            temperature: REVISE_TEMPERATURE,
+            generationMeta: seriesId
+              ? { seriesId, type: "prose_rubric_revise" }
+              : undefined,
+          });
+          const repairedText = String(repaired ?? "").trim();
+          const repairedOk = validateProseDraft(repairedText, parsed.summary, {
+            maxSceneLength: wordTarget,
+          });
+          if (repairedOk.ok || isLengthOnlyFailure(repairedOk)) {
+            prose = repairedText;
+          }
+        } catch (rubricErr) {
+          console.warn("[prose] rubric revise skipped:", rubricErr);
+        }
       }
     }
 
