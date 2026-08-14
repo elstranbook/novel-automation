@@ -29,6 +29,10 @@ interface CharacterRow {
   emotional_memory?: unknown;
   knowledge_timeline?: unknown;
   relationships?: unknown;
+  public_mask?: string | null;
+  private_want?: string | null;
+  contradiction?: string | null;
+  speech_tells?: string | null;
   introduced_in_book?: number | null;
   introduced_in_chapter?: number | null;
   is_fully_developed?: boolean | null;
@@ -204,6 +208,9 @@ function formatSingleCharacter(char: CharacterRow, maxLength?: number): string {
   if (char.big_fear) psycheParts.push(`Fear: ${char.big_fear}`);
   if (char.conflict) psycheParts.push(`Conflict: ${char.conflict}`);
   if (char.hidden_secret) psycheParts.push(`Secret: ${char.hidden_secret}`);
+  if (char.public_mask) psycheParts.push(`Mask: ${char.public_mask}`);
+  if (char.private_want) psycheParts.push(`Private want: ${char.private_want}`);
+  if (char.contradiction) psycheParts.push(`Contradiction: ${char.contradiction}`);
   if (psycheParts.length) lines.push(`  Psychology: ${psycheParts.join(' | ')}`);
 
   // Personality
@@ -239,6 +246,7 @@ function formatSingleCharacter(char: CharacterRow, maxLength?: number): string {
     if (vText) voiceParts.push(`${k}: ${vText}`);
   }
   if (voiceParts.length) lines.push(`  Voice: ${voiceParts.join(' | ')}`);
+  if (char.speech_tells) lines.push(`  Speech tells: ${char.speech_tells}`);
 
   // Character arc (compact) — start/end states PLUS growth_arc description
   const arcParts: string[] = [];

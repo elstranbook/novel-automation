@@ -17,6 +17,9 @@ import {
   parseCharacterProfilesPayload,
   toSeriesCharacterPayload,
 } from "@/lib/characterProfiles";
+import { parseScenePayload } from "@/lib/prosePrompt";
+import { detectSpineScenes, unapprovedSpineScenes } from "@/lib/spineScenes";
+import { STYLE_CARDS } from "@/lib/styleCards";
 
 // Mockup App Imports
 import { MockupEditor } from "@/components/editor/MockupEditor";
@@ -437,6 +440,7 @@ function StudioContent() {
     narrative_style: "",
     novel_about: "",
     voice_sample: "",
+    style_card_id: "",
   });
   const [premisesAndEndings, setPremisesAndEndings] =
     useState<PremisesAndEndings | null>(null);
@@ -709,6 +713,7 @@ function StudioContent() {
             ).trim();
             if (summary) {
               const beat = (rec as Record<string, unknown>).beat_reference;
+              const turn = (rec as Record<string, unknown>).turn;
               const cast = (rec as Record<string, unknown>).cast;
               const castLine = Array.isArray(cast)
                 ? `Cast: ${cast.map(String).join(", ")}`
@@ -717,6 +722,7 @@ function StudioContent() {
                   : "";
               return [
                 beat ? `Beat: ${String(beat)}` : "",
+                turn ? `Turn: ${String(turn)}` : "",
                 castLine,
                 summary,
               ]
@@ -2624,6 +2630,18 @@ function StudioContent() {
         );
         const displayTitle = getChapterDisplayTitle(String(index + 1), index);
         setMessage(`Generating scenes for ${displayTitle}`);
+        const priorScenes = Object.entries(normalizedScenes)
+          .flatMap(([, scenes]) =>
+            scenes.map((s) => {
+              const parsed = parseScenePayload(s);
+              return {
+                summary: parsed.summary,
+                turn: parsed.turn,
+                hook: parsed.hook,
+              };
+            })
+          )
+          .slice(-16);
         const response = await fetch("/api/generate/scenes/chapter", {
           signal: AbortSignal.timeout(240000),
           method: "POST",
@@ -2638,16 +2656,21 @@ function StudioContent() {
             premisesAndEndings,
             characterProfiles,
             totalChapters: chapters.length,
+            priorScenes,
             ...seriesRequestFields,
           }),
         });
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => null);
+          const reason =
+            errorData && typeof errorData.validationReason === "string"
+              ? ` (${errorData.validationReason})`
+              : "";
           throw new Error(
-            (errorData && typeof errorData.error === "string"
+            ((errorData && typeof errorData.error === "string"
               ? errorData.error
-              : null) || "Failed to generate scenes"
+              : null) || "Failed to generate scenes") + reason
           );
         }
 
@@ -2814,6 +2837,20 @@ function StudioContent() {
     }
   };
 
+  const approveSpineScene = async (key: string, approved: boolean) => {
+    const next = {
+      ...((storyDetails?.spine_approvals as Record<string, boolean>) ?? {}),
+      [key]: approved,
+    };
+    const updated = { ...(storyDetails ?? {}), spine_approvals: next };
+    setStoryDetails(updated);
+    try {
+      await saveStoryDetailsToDb(updated);
+    } catch (err) {
+      console.warn("[studio] spine approval persist failed", err);
+    }
+  };
+
   const generateProse = async (options?: { force?: boolean }) => {
     if (!allScenes) {
       setError("Generate scenes first.");
@@ -2829,6 +2866,23 @@ function StudioContent() {
     }
 
     const force = Boolean(options?.force);
+    const spineList = detectSpineScenes(allScenes);
+    const approvals =
+      (storyDetails?.spine_approvals as Record<string, boolean> | undefined) ??
+      {};
+    const pendingSpine = unapprovedSpineScenes(spineList, approvals);
+    if (pendingSpine.length && !force) {
+      const ok = window.confirm(
+        `Approve spine scenes before bulk prose:\n${pendingSpine
+          .map((s) => `- ${s.label}`)
+          .join("\n")}\n\nContinue anyway? (Resume still skips finished scenes. Use the Spine list below to approve.)`
+      );
+      if (!ok) {
+        setMessage("Approve spine scenes, then generate prose.");
+        return;
+      }
+    }
+
     if (force) {
       const ok = window.confirm(
         "Regenerate all prose? This deletes existing prose scenes for this novel and starts over."
@@ -3035,6 +3089,15 @@ function StudioContent() {
                 sceneIndex > 0 ? previousSceneEnding : undefined,
               previousChapterEnding:
                 sceneIndex === 0 ? previousChapterEnding : undefined,
+              priorSceneSummaries: scenes
+                .slice(0, sceneIndex)
+                .map((s) => {
+                  const parsed = parseScenePayload(s);
+                  return [parsed.summary, parsed.turn, parsed.hook]
+                    .filter(Boolean)
+                    .join(" ");
+                }),
+              styleCardId: storyDetails?.style_card_id ?? null,
               emotionalState:
                 guideEmotional ||
                 String(outlineEntry.emotional_development ?? ""),
@@ -4617,6 +4680,7 @@ function StudioContent() {
                         narrative_style: String(storyDetails.narrative_style ?? ""),
                         novel_about: String(storyDetails.novel_about ?? ""),
                         voice_sample: String(storyDetails.voice_sample ?? ""),
+                        style_card_id: String(storyDetails.style_card_id ?? ""),
                       };
                       setDetailsForm(form);
                       setDetailsFreeText("");
@@ -4633,6 +4697,7 @@ function StudioContent() {
                         narrative_style: "",
                         novel_about: novelAbout || "",
                         voice_sample: "",
+                        style_card_id: "",
                       });
                       setDetailsFreeText("");
                     }
@@ -4758,6 +4823,26 @@ function StudioContent() {
                           className="bg-zinc-950 border-zinc-700 text-zinc-200 text-sm"
                         />
                       </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-zinc-400 mb-1">Prose style card</label>
+                      <select
+                        value={detailsForm.style_card_id ?? ""}
+                        onChange={(e) =>
+                          setDetailsForm((f) => ({
+                            ...f,
+                            style_card_id: e.target.value,
+                          }))
+                        }
+                        className="w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-200"
+                      >
+                        <option value="">None</option>
+                        {STYLE_CARDS.map((card) => (
+                          <option key={card.id} value={card.id}>
+                            {card.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-zinc-400 mb-1">Voice Sample</label>
@@ -5241,6 +5326,18 @@ function StudioContent() {
                   {formatCharacterProfilesForDisplay(characterProfiles)}
                 </pre>
               </Collapsible>
+              <ul className="space-y-1 text-xs text-zinc-400">
+                {parseCharacterProfilesPayload(characterProfiles)
+                  .filter((c) => c.contradiction || c.public_mask || c.private_want)
+                  .map((c) => (
+                    <li key={c.name}>
+                      <span className="text-zinc-200">{c.name}:</span>{" "}
+                      {[c.public_mask && `mask ${c.public_mask}`, c.private_want && `wants ${c.private_want}`, c.contradiction]
+                        .filter(Boolean)
+                        .join(" — ")}
+                    </li>
+                  ))}
+              </ul>
             </div>
           )}
         </section>
@@ -5688,6 +5785,43 @@ function StudioContent() {
               </p>
             )}
           </div>
+
+          {allScenes && detectSpineScenes(allScenes).length > 0 && (
+            <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+              <p className="text-sm font-semibold text-zinc-100">Spine scenes</p>
+              <p className="mt-1 text-xs text-zinc-400">
+                Approve opening, midpoint, and climax cards before bulk prose.
+              </p>
+              <ul className="mt-3 space-y-2 text-xs text-zinc-300">
+                {detectSpineScenes(allScenes).map((spine) => {
+                  const approved = Boolean(
+                    (storyDetails?.spine_approvals as Record<string, boolean> | undefined)?.[
+                      spine.key
+                    ]
+                  );
+                  return (
+                    <li
+                      key={spine.key}
+                      className="flex flex-wrap items-center justify-between gap-2"
+                    >
+                      <span>{spine.label}</span>
+                      <button
+                        type="button"
+                        onClick={() => approveSpineScene(spine.key, !approved)}
+                        className={`rounded-full border px-3 py-1 ${
+                          approved
+                            ? "border-emerald-500/50 text-emerald-200"
+                            : "border-zinc-700 text-zinc-300"
+                        }`}
+                      >
+                        {approved ? "Approved" : "Approve"}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
 
           {seriesId && (
             <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
