@@ -20,6 +20,14 @@ import {
 import { parseScenePayload } from "@/lib/prosePrompt";
 import { detectSpineScenes, unapprovedSpineScenes } from "@/lib/spineScenes";
 import { STYLE_CARDS } from "@/lib/styleCards";
+import {
+  assertChapterContracts,
+  clearAllSpineApprovals,
+  clearSpineApprovalsForChapter,
+  hasClosedEnding,
+  parseChapterScenes,
+  proseBlockedReason as computeProseBlockedReason,
+} from "@/lib/studioWritingGates";
 
 // Mockup App Imports
 import { MockupEditor } from "@/components/editor/MockupEditor";
@@ -972,6 +980,28 @@ function StudioContent() {
   );
 
   const writingStepsTotal = writingSteps.length;
+
+  const proseBlockedReason = useMemo(() => {
+    const endingOk = hasClosedEnding(premisesAndEndings);
+    const ch1Scenes = allScenes
+      ? (sortScenesEntries(allScenes)[0]?.[1] ?? [])
+      : [];
+    const chapterOneGate = allScenes
+      ? assertChapterContracts(parseChapterScenes(ch1Scenes))
+      : { ok: true, message: "" };
+    const pending = allScenes
+      ? unapprovedSpineScenes(
+          detectSpineScenes(allScenes),
+          (storyDetails?.spine_approvals as Record<string, boolean> | undefined) ??
+            {}
+        )
+      : [];
+    return computeProseBlockedReason({
+      hasClosedEnding: endingOk,
+      chapterOneGate,
+      pendingSpineLabels: pending.map((s) => s.label),
+    });
+  }, [allScenes, premisesAndEndings, storyDetails?.spine_approvals]);
 
   const renderStepBadge = (stepName: string) => {
     const step = pipelineSteps.find((row) => row.step === stepName);
@@ -2597,9 +2627,15 @@ function StudioContent() {
     }
   };
 
-  const generateScenes = async () => {
+  const generateScenes = async (options?: { chapterIndexes?: number[] }) => {
     if (!chapterOutline) {
       setError("Generate chapter outline first.");
+      return;
+    }
+    if (!hasClosedEnding(premisesAndEndings)) {
+      setError(
+        "Lock a chosen ending in Premises & Endings before generating scenes. It must be a closed outcome (at least a sentence), not a placeholder."
+      );
       return;
     }
 
@@ -2612,7 +2648,6 @@ function StudioContent() {
       const user = await requireUser();
       const novelIdValue = await ensureNovel(user.id);
 
-      const normalizedScenes: ScenesMap = {};
       const chapters = Array.isArray(chapterOutline)
         ? chapterOutline
         : Array.isArray((chapterOutline as Record<string, unknown>)?.chapters)
@@ -2623,14 +2658,22 @@ function StudioContent() {
         throw new Error("Chapter outline is empty. Regenerate the chapter outline first.");
       }
 
-      for (let index = 0; index < chapters.length; index += 1) {
+      const requested = options?.chapterIndexes;
+      const indexes =
+        requested && requested.length
+          ? requested.filter((i) => i >= 0 && i < chapters.length)
+          : chapters.map((_, i) => i);
+      const regeneratingAll = indexes.length === chapters.length;
+      const normalizedScenes: ScenesMap = regeneratingAll
+        ? {}
+        : { ...(allScenes ?? {}) };
+
+      for (const index of indexes) {
         const chapter = chapters[index] as Record<string, unknown>;
-        const chapterTitle = String(
-          chapter.title ?? chapter.chapter_title ?? chapter.name ?? "Untitled"
-        );
         const displayTitle = getChapterDisplayTitle(String(index + 1), index);
         setMessage(`Generating scenes for ${displayTitle}`);
-        const priorScenes = Object.entries(normalizedScenes)
+        const priorFromMap = sortScenesEntries(normalizedScenes)
+          .filter((_, chapterIndex) => chapterIndex < index)
           .flatMap(([, scenes]) =>
             scenes.map((s) => {
               const parsed = parseScenePayload(s);
@@ -2656,7 +2699,7 @@ function StudioContent() {
             premisesAndEndings,
             characterProfiles,
             totalChapters: chapters.length,
-            priorScenes,
+            priorScenes: priorFromMap,
             ...seriesRequestFields,
           }),
         });
@@ -2676,39 +2719,76 @@ function StudioContent() {
 
         const data = await response.json();
         const scenesList = normalizeScenesResponse(data.scenes);
-        const sceneRaw = data.sceneRaw ?? null;
         if (scenesList.length === 0) {
           throw new Error("Scenes generation returned no output.");
         }
 
         normalizedScenes[displayTitle] = scenesList;
-        await saveSingleRow(
-          "scenes",
-          {
-            chapter_title: displayTitle,
-            scene_content: JSON.stringify(scenesList),
-            scene_order: index + 1,
-            scene_raw: sceneRaw,
-          },
-          novelIdValue,
-          user.id
-        );
+      }
+
+      const currentApprovals =
+        (storyDetails?.spine_approvals as Record<string, boolean> | undefined) ??
+        {};
+      const nextApprovals = regeneratingAll
+        ? clearAllSpineApprovals()
+        : indexes.reduce(
+            (acc, chapterIndex) =>
+              clearSpineApprovalsForChapter(acc, chapterIndex),
+            currentApprovals
+          );
+      if (storyDetails) {
+        const updated = { ...storyDetails, spine_approvals: nextApprovals };
+        setStoryDetails(updated);
+        await saveStoryDetailsToDb(updated);
       }
 
       setMessage(null);
       setAllScenes(normalizedScenes);
-      setProseScenes(null);
 
-      await supabase.from("scenes").delete().eq("novel_id", novelIdValue);
+      if (regeneratingAll) {
+        setProseScenes(null);
+        await supabase.from("scenes").delete().eq("novel_id", novelIdValue);
+        await supabase.from("prose_scenes").delete().eq("novel_id", novelIdValue);
+      } else {
+        for (const index of indexes) {
+          await supabase
+            .from("scenes")
+            .delete()
+            .eq("novel_id", novelIdValue)
+            .eq("chapter_order", index);
+          await supabase
+            .from("prose_scenes")
+            .delete()
+            .eq("novel_id", novelIdValue)
+            .eq("chapter_order", index);
+        }
+        if (proseScenes) {
+          const nextProse = { ...proseScenes };
+          for (const index of indexes) {
+            const title = getChapterDisplayTitle(String(index + 1), index);
+            delete nextProse[title];
+          }
+          setProseScenes(nextProse);
+        }
+      }
+
       const rows: Array<Record<string, unknown>> = [];
-      sortScenesEntries(normalizedScenes).forEach(([chapterTitle, scenes], chapterIndex) => {
-        scenes.forEach((scene, index) => {
+      const persistIndexes = regeneratingAll
+        ? sortScenesEntries(normalizedScenes).map((_, i) => i)
+        : indexes;
+      persistIndexes.forEach((chapterIndex) => {
+        const displayTitle = getChapterDisplayTitle(
+          String(chapterIndex + 1),
+          chapterIndex
+        );
+        const scenes = normalizedScenes[displayTitle] ?? [];
+        scenes.forEach((scene, sceneIndex) => {
           rows.push({
             novel_id: novelIdValue,
             user_id: user.id,
-            chapter_title: chapterTitle,
+            chapter_title: displayTitle,
             scene_content: scene,
-            scene_order: index,
+            scene_order: sceneIndex,
             chapter_order: chapterIndex,
           });
         });
@@ -2866,21 +2946,30 @@ function StudioContent() {
     }
 
     const force = Boolean(options?.force);
+    if (!hasClosedEnding(premisesAndEndings)) {
+      setError(
+        "Lock a chosen ending in Premises & Endings before generating prose. It must be a closed outcome (at least a sentence), not a placeholder."
+      );
+      return;
+    }
+    const ch1Scenes = sortScenesEntries(allScenes)[0]?.[1] ?? [];
+    const chapterOneGate = assertChapterContracts(parseChapterScenes(ch1Scenes));
+    if (!chapterOneGate.ok) {
+      setError(`Chapter 1 scenes invalid: ${chapterOneGate.message}`);
+      return;
+    }
     const spineList = detectSpineScenes(allScenes);
     const approvals =
       (storyDetails?.spine_approvals as Record<string, boolean> | undefined) ??
       {};
     const pendingSpine = unapprovedSpineScenes(spineList, approvals);
-    if (pendingSpine.length && !force) {
-      const ok = window.confirm(
-        `Approve spine scenes before bulk prose:\n${pendingSpine
+    if (pendingSpine.length) {
+      setError(
+        `Approve spine scenes first:\n${pendingSpine
           .map((s) => `- ${s.label}`)
-          .join("\n")}\n\nContinue anyway? (Resume still skips finished scenes. Use the Spine list below to approve.)`
+          .join("\n")}`
       );
-      if (!ok) {
-        setMessage("Approve spine scenes, then generate prose.");
-        return;
-      }
+      return;
     }
 
     if (force) {
@@ -5698,20 +5787,25 @@ function StudioContent() {
           <SectionHeading title="9. Scenes" step="Scenes" />
           <div className="mt-4 flex flex-wrap gap-3">
             <button
-              onClick={generateScenes}
+              onClick={() => generateScenes()}
               disabled={!chapterBeats || !storyDetails?.novel_about || loadingStep === "scenes"}
               className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loadingStep === "scenes" ? "Generating..." : "Generate Scenes"}
             </button>
             <button
-              onClick={generateScenes}
+              onClick={() => generateScenes()}
               disabled={!chapterBeats}
               className="rounded-full border border-zinc-700 px-5 py-2 text-sm"
             >
               ♻️ Regenerate All Scenes
             </button>
           </div>
+          {!hasClosedEnding(premisesAndEndings) && (
+            <p className="mt-3 text-xs text-amber-200">
+              Lock a chosen ending in Premises & Endings before generating scenes.
+            </p>
+          )}
           {allScenes && (
             <div className="mt-4 space-y-4">
               <button
@@ -5726,14 +5820,26 @@ function StudioContent() {
                 Download TXT
               </button>
               <Collapsible label="Scenes">
-                {sortScenesEntries(allScenes).map(([chapter, scenes]) => (
+                {sortScenesEntries(allScenes).map(([chapter, scenes], chapterIndex) => (
                   <div
                     key={chapter}
                     className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-4 text-xs text-zinc-200"
                   >
-                    <p className="text-sm font-semibold text-zinc-100">
-                      {chapter}
-                    </p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-zinc-100">
+                        {chapter}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          generateScenes({ chapterIndexes: [chapterIndex] })
+                        }
+                        disabled={loadingStep === "scenes" || !chapterBeats}
+                        className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-200 disabled:opacity-50"
+                      >
+                        Regenerate this chapter
+                      </button>
+                    </div>
                     {scenes.map((scene, index) => (
                       <pre key={index} className="mt-2 whitespace-pre-wrap">
                         {formatSceneForDisplay(scene)}
@@ -5782,6 +5888,11 @@ function StudioContent() {
                 {seriesId
                   ? "Add series characters or book character profiles before prose."
                   : "Generate character profiles before prose."}
+              </p>
+            )}
+            {proseBlockedReason && (
+              <p className="w-full whitespace-pre-wrap text-xs text-amber-200">
+                {proseBlockedReason}
               </p>
             )}
           </div>
