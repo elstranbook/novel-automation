@@ -38,9 +38,9 @@ function contractFromRecord(record: Record<string, unknown>): Partial<SceneContr
     record.contract && typeof record.contract === "object" && !Array.isArray(record.contract)
       ? (record.contract as Record<string, unknown>)
       : record;
-  const pick = (key: keyof SceneContract) => {
+  const pick = (key: keyof SceneContract): string | undefined => {
     const value = String(nested[key] ?? "").trim();
-    return value || null;
+    return value || undefined;
   };
   return {
     goal: pick("goal"),
