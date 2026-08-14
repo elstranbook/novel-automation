@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "seed:templates": "npx tsx prisma/seed-templates.ts",
-    "eval:prose": "npx tsx scripts/eval-prose-quality.ts"
+    "eval:prose": "npx tsx scripts/eval-prose-quality.ts",
+    "smoke:gates": "npx tsx scripts/smoke-studio-writing-gates.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1024.0",
