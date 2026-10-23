@@ -1689,6 +1689,7 @@ create table if not exists public.seo_articles (
   excerpt text,
   article_html text,
   article_markdown text,
+  cover_image_url text,
   faq jsonb,
   promoted_books jsonb,
   promotion_reason text,

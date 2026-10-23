@@ -475,6 +475,7 @@ export type ShowroomSeoArticle = {
   metaTitle: string | null;
   metaDescription: string | null;
   excerpt: string | null;
+  coverImageUrl: string | null;
   articleHtml: string | null;
   articleMarkdown: string | null;
   faq: Array<{ question: string; answer: string }> | null;
@@ -503,6 +504,7 @@ export type ShowroomSeoArticleListItem = {
   question: string;
   slug: string | null;
   metaTitle: string | null;
+  coverImageUrl: string | null;
   status: string | null;
   createdAt: string | null;
   publishedAt: string | null;
@@ -514,6 +516,7 @@ type SeoArticleListRow = {
   question: string;
   slug: string | null;
   meta_title: string | null;
+  cover_image_url: string | null;
   status: string | null;
   created_at: string | null;
   published_at: string | null;
@@ -529,6 +532,7 @@ type SeoArticleDetailRow = {
   excerpt: string | null;
   article_html: string | null;
   article_markdown: string | null;
+  cover_image_url: string | null;
   faq: unknown;
   promoted_books: unknown;
   promotion_reason: string | null;
@@ -557,7 +561,7 @@ export async function buildShowroomSeoArticlesList(
 ): Promise<ShowroomSeoArticleListItem[]> {
   const { data, error } = await supabaseAdmin
     .from("seo_articles")
-    .select("id,question,slug,meta_title,status,created_at,published_at")
+    .select("id,question,slug,meta_title,cover_image_url,status,created_at,published_at")
     .eq("user_id", userId)
     .eq("status", "published")
     .order("published_at", { ascending: false })
@@ -570,6 +574,7 @@ export async function buildShowroomSeoArticlesList(
     question: row.question,
     slug: row.slug,
     metaTitle: row.meta_title,
+    coverImageUrl: row.cover_image_url,
     status: row.status,
     createdAt: row.created_at,
     publishedAt: row.published_at,
@@ -587,7 +592,7 @@ export async function buildShowroomSeoArticlePayload(
   const { data, error } = await supabaseAdmin
     .from("seo_articles")
     .select(
-      "id,question,slug,meta_title,meta_description,excerpt,article_html,article_markdown,faq,promoted_books,promotion_reason,selected_books,search_intent,relevance_scores,tone,word_count,promotion_intensity,target_audience,primary_keyword,secondary_keywords,internal_links,reading_grade,generation_time_ms,status,created_at,published_at"
+      "id,question,slug,meta_title,meta_description,excerpt,article_html,article_markdown,cover_image_url,faq,promoted_books,promotion_reason,selected_books,search_intent,relevance_scores,tone,word_count,promotion_intensity,target_audience,primary_keyword,secondary_keywords,internal_links,reading_grade,generation_time_ms,status,created_at,published_at"
     )
     .eq("id", articleId)
     .eq("user_id", userId)
@@ -633,6 +638,7 @@ export async function buildShowroomSeoArticlePayload(
     metaTitle: data.meta_title,
     metaDescription: data.meta_description,
     excerpt: data.excerpt,
+    coverImageUrl: data.cover_image_url,
     articleHtml: data.article_html,
     articleMarkdown: data.article_markdown,
     faq,

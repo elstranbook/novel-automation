@@ -38,7 +38,7 @@ import { PSDUploadDialog } from "@/components/editor/PSDUploadDialog";
 import { useMockupState } from "@/hooks/useMockupState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, BookOpen, ClipboardPaste, Eye, EyeOff, Menu, Plus, RefreshCw, Search, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, BookOpen, ClipboardPaste, Eye, EyeOff, Loader2, Menu, Plus, RefreshCw, Search, Sparkles, Trash2, Upload, X } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
@@ -515,6 +515,8 @@ function StudioContent() {
   const [generatedCovers, setGeneratedCovers] = useState<Array<{ id: string; url: string; createdAt: string }>>([]);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [isDraggingCover, setIsDraggingCover] = useState(false);
+  // Article id currently uploading/removing a cover for (SEO articles).
+  const [uploadingSeoCoverId, setUploadingSeoCoverId] = useState<string | null>(null);
   const [reimaginedPrompt, setReimaginedPrompt] = useState<string | null>(null);
   const [isReimagining, setIsReimagining] = useState(false);
   const [facebookImageUrl, setFacebookImageUrl] = useState<string | null>(null);
@@ -3882,6 +3884,73 @@ function StudioContent() {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setIsUploadingCover(false);
+    }
+  };
+  // ── SEO (blog) article cover image ────────────────────────────────
+  // Uploads a per-article cover to Supabase Storage and persists the
+  // resulting public URL on the article's cover_image_url column via
+  // /api/seo-articles/[id]/cover. This is what the public showroom/blog
+  // reads to render the cover on the blog post.
+  const uploadSeoArticleCover = async (articleId: string, file: File) => {
+    if (!userId) {
+      setError("Please sign in to upload a cover.");
+      return;
+    }
+    setUploadingSeoCoverId(articleId);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("userId", userId);
+
+      const res = await fetch(`/api/seo-articles/${articleId}/cover`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to upload cover");
+      }
+
+      const data = await res.json();
+      const url: string | undefined = data.imageUrl;
+      if (!url) throw new Error("Upload succeeded but no image URL was returned.");
+
+      setSeoArticles((prev) =>
+        prev.map((a) => (a.id === articleId ? { ...a, cover_image_url: url } : a))
+      );
+      setMessage("Cover image uploaded and saved successfully!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setUploadingSeoCoverId(null);
+    }
+  };
+
+  const removeSeoArticleCover = async (articleId: string) => {
+    if (!userId) return;
+    if (!confirm("Remove the cover image from this blog post?")) return;
+    setUploadingSeoCoverId(articleId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/seo-articles/${articleId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, cover_image_url: null }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to remove cover");
+      }
+      setSeoArticles((prev) =>
+        prev.map((a) => (a.id === articleId ? { ...a, cover_image_url: null } : a))
+      );
+      setMessage("Cover image removed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setUploadingSeoCoverId(null);
     }
   };
 
@@ -8042,16 +8111,62 @@ function StudioContent() {
                       </Collapsible>
                     </div>
                   )}
-                  {/* Cover Image */}
+                  {/* Cover Image (per-article) */}
                   <div className="md:col-span-2">
                     <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Cover Image</p>
-                    {hasPromotedBooks && generatedCoverUrl ? (
-                      <img src={generatedCoverUrl} alt="SEO article cover" className="max-w-48 rounded-lg border border-zinc-800 shadow-lg" />
-                    ) : (
-                      <div className="w-48 h-32 rounded-lg border border-zinc-800 bg-zinc-950/50 flex items-center justify-center">
-                        <p className="text-xs text-zinc-600 italic">No cover image</p>
+                    <div className="flex flex-wrap items-start gap-4">
+                      {article.cover_image_url ? (
+                        <img
+                          src={article.cover_image_url}
+                          alt="SEO article cover"
+                          className="w-48 h-32 object-cover rounded-lg border border-zinc-800 shadow-lg"
+                        />
+                      ) : (
+                        <div className="w-48 h-32 rounded-lg border border-dashed border-zinc-700 bg-zinc-950/50 flex items-center justify-center">
+                          <p className="text-xs text-zinc-600 italic">No cover image</p>
+                        </div>
+                      )}
+                      <div className="flex flex-col gap-2">
+                        <label
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                            uploadingSeoCoverId === article.id
+                              ? "border-zinc-600 text-zinc-400 cursor-wait"
+                              : "border-sky-500/40 text-sky-300 hover:bg-sky-500/10 cursor-pointer"
+                          }`}
+                        >
+                          {uploadingSeoCoverId === article.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Upload className="h-3.5 w-3.5" />
+                          )}
+                          {uploadingSeoCoverId === article.id ? "Uploading..." : "Upload Cover"}
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            className="hidden"
+                            disabled={uploadingSeoCoverId === article.id}
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) uploadSeoArticleCover(article.id, f);
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                        {article.cover_image_url && (
+                          <button
+                            type="button"
+                            disabled={uploadingSeoCoverId === article.id}
+                            onClick={() => removeSeoArticleCover(article.id)}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-red-500/40 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-wait"
+                          >
+                            <X className="h-3.5 w-3.5" /> Remove
+                          </button>
+                        )}
+                        <p className="text-[10px] text-zinc-600 max-w-[14rem] leading-relaxed">
+                          This image is shown as the cover on the published blog post. PNG, JPEG or WebP up to 10MB.
+                        </p>
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
                 {/* Action Buttons */}
