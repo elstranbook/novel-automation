@@ -501,7 +501,7 @@ function StudioContent() {
     Record<string, boolean>
   >({});
   const [copiedSnippetKey, setCopiedSnippetKey] = useState<string | null>(null);
-  const [view, setView] = useState<"write" | "cover" | "mockups" | "promotional" | "publish">("write");
+  const [view, setView] = useState<"write" | "cover" | "mockups" | "promotional" | "publish" | "articles">("write");
   const [activeStudioTab, setActiveStudioTab] = useState<
     "pipeline" | "promotional"
   >("pipeline");
