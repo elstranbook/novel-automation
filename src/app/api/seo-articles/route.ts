@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
     let query = supabaseAdmin
       .from("seo_articles")
-      .select("id, question, title, slug, meta_title, meta_description, excerpt, article_html, cover_image_url, faq, promoted_books, promotion_intensity, tone, word_count, generation_time_ms, status, created_at, updated_at, published_at")
+      .select("id, question, title, slug, meta_title, meta_description, excerpt, article_html, cover_image_url, faq, promoted_books, promotion_intensity, tone, word_count, generation_time_ms, status, created_at, updated_at, published_at, selected_books")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
 

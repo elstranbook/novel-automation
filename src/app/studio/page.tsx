@@ -409,6 +409,8 @@ function StudioContent() {
   const [seriesLookup, setSeriesLookup] = useState<SeriesLookup>({});
   const [showSavedNovels, setShowSavedNovels] = useState(false);
   const [selectedNovelId, setSelectedNovelId] = useState<string | null>(null);
+  // Sidebar-highlighted article (Articles tab) — also drives the article→book sync.
+  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
   const [novelId, setNovelId] = useState<string | null>(null);
 
   const [title, setTitle] = useState("");
@@ -4003,6 +4005,15 @@ function StudioContent() {
       setNewArticleExcerpt("");
       setNewArticleHtml("");
       setShowCreateArticleForm(false);
+      // Auto-select the newest article (the API returns newest-first)
+      // so the detail panel opens on the just-created draft.
+      // We read from the fresh loadSeoArticles result via a microtask.
+      setTimeout(() => {
+        setSeoArticles((prev) => {
+          if (prev.length > 0) setSelectedArticleId(prev[0].id);
+          return prev;
+        });
+      }, 0);
       setMessage("Article created! It's saved as a draft — upload a cover & publish when ready.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
@@ -4328,6 +4339,24 @@ function StudioContent() {
     setSidebarOpen(false);
   };
 
+  // Select an article from the Articles sidebar:
+  //  - highlights the row
+  //  - if the article belongs to a book (via selected_books[0] or promoted_books[].id),
+  //    also selects that book so the Write/Cover/Publish tabs sync to it. The existing
+  //    useEffect([selectedNovelId]) → loadNovelData(...) handles the actual data load.
+  const handleSelectArticle = (article: any) => {
+    setSelectedArticleId(article.id);
+    setSidebarOpen(false);
+    const selectedBooks = Array.isArray(article.selected_books) ? article.selected_books : [];
+    const promotedBooks = Array.isArray(article.promoted_books) ? article.promoted_books : [];
+    const bookId: string | null =
+      (selectedBooks.length > 0 ? selectedBooks[0] : null) ||
+      (promotedBooks.find((p: any) => p?.id)?.id ?? null);
+    if (bookId && bookId !== selectedNovelId) {
+      setSelectedNovelId(bookId);
+    }
+  };
+
   const sidebarContent = (
     <>
       <button
@@ -4337,51 +4366,107 @@ function StudioContent() {
         <Plus className="h-4 w-4" />
         Write New Novel
       </button>
-      <div className="flex flex-col gap-2">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-          Saved novels
-        </h2>
-        <p className="text-xs text-zinc-500">
-          Pick a stored novel to reload all generation steps.
-        </p>
-      </div>
-      <div className="flex flex-col gap-2">
-        {novels.length === 0 && (
-          <span className="text-xs text-zinc-500">No novels saved yet.</span>
-        )}
-        {novels.map((novel) => {
-          const isSeriesBook = novel.series_id && novel.book_number;
-          const seriesTitle = isSeriesBook ? seriesLookup[novel.series_id!] : null;
-          const displayName = isSeriesBook && seriesTitle
-            ? `${seriesTitle} — ${novel.title}`
-            : novel.title;
-          return (
-            <button
-              key={novel.id}
-              onClick={() => handleSelectNovel(novel.id)}
-              className={`group flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs transition ${
-                novel.id === selectedNovelId
-                  ? "border-emerald-400/60 bg-emerald-500/10 text-emerald-200"
-                  : "border-zinc-800 text-zinc-300 hover:border-zinc-600"
-              }`}
-            >
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="truncate" title={displayName}>
-                  {displayName}
-                </span>
-                {isSeriesBook && seriesTitle && (
-                  <span className="text-[10px] text-zinc-500">
-                    Book {novel.book_number}
-                  </span>
-                )}
+      {view === "articles" ? (
+        <>
+          <div className="flex flex-col gap-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+              Articles
+            </h2>
+            <p className="text-xs text-zinc-500">
+              Pick an article to edit it. If it belongs to a book, that book is loaded into Write/Cover/Publish.
+            </p>
+            {!seoArticlesLoaded ? (
+              <span className="text-xs text-zinc-500">Loading articles…</span>
+            ) : seoArticles.length === 0 ? (
+              <span className="text-xs text-zinc-500">No articles yet. Use “Write from scratch”.</span>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {seoArticles.map((article: any) => {
+                  const title = String(article.meta_title ?? article.title ?? article.question ?? "Untitled");
+                  const status = String(article.status ?? "draft");
+                  const isSelected = article.id === selectedArticleId;
+                  const promotedBooks = Array.isArray(article.promoted_books) ? article.promoted_books : [];
+                  const linkedBookTitle = promotedBooks.find((p: any) => p?.title)?.title;
+                  return (
+                    <button
+                      key={article.id}
+                      onClick={() => handleSelectArticle(article)}
+                      className={`group flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs transition ${
+                        isSelected
+                          ? "border-emerald-400/60 bg-emerald-500/10 text-emerald-200"
+                          : "border-zinc-800 text-zinc-300 hover:border-zinc-600"
+                      }`}
+                    >
+                      <div className="flex flex-col gap-0.5 min-w-0">
+                        <span className="truncate" title={title}>{title}</span>
+                        <span className="flex items-center gap-1 text-[10px] text-zinc-500">
+                          <span className={isSelected ? "text-emerald-400" : status === "published" ? "text-emerald-500" : "text-amber-500"}>
+                            {status === "published" ? "● Published" : "○ Draft"}
+                          </span>
+                          {linkedBookTitle && <span className="truncate">· {linkedBookTitle}</span>}
+                        </span>
+                      </div>
+                      {article.created_at && (
+                        <span className="text-[10px] text-zinc-500 shrink-0">
+                          {new Date(article.created_at).toLocaleDateString()}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
-              <span className="text-xs text-zinc-500 shrink-0">
-                {new Date(novel.created_at).toLocaleDateString()}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="flex flex-col gap-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+              Saved novels
+            </h2>
+            <p className="text-xs text-zinc-500">
+              Pick a stored novel to reload all generation steps.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2">
+            {novels.length === 0 && (
+              <span className="text-xs text-zinc-500">No novels saved yet.</span>
+            )}
+            {novels.map((novel) => {
+              const isSeriesBook = novel.series_id && novel.book_number;
+              const seriesTitle = isSeriesBook ? seriesLookup[novel.series_id!] : null;
+              const displayName = isSeriesBook && seriesTitle
+                ? `${seriesTitle} — ${novel.title}`
+                : novel.title;
+              return (
+                <button
+                  key={novel.id}
+                  onClick={() => handleSelectNovel(novel.id)}
+                  className={`group flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs transition ${
+                    novel.id === selectedNovelId
+                      ? "border-emerald-400/60 bg-emerald-500/10 text-emerald-200"
+                      : "border-zinc-800 text-zinc-300 hover:border-zinc-600"
+                  }`}
+                >
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="truncate" title={displayName}>
+                      {displayName}
+                    </span>
+                    {isSeriesBook && seriesTitle && (
+                      <span className="text-[10px] text-zinc-500">
+                        Book {novel.book_number}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs text-zinc-500 shrink-0">
+                    {new Date(novel.created_at).toLocaleDateString()}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
     </>
   );
 
@@ -7516,276 +7601,277 @@ function StudioContent() {
       )}
     </section>
 
-    {/* Section - SEO Articles */}
+    {/* Article Detail Panel (driven by sidebar selection) */}
     <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6">
-      <h3 className="text-lg font-bold text-zinc-100 mb-6 flex items-center gap-2">
-        <span className="text-xl"><Search className="inline h-5 w-5" /></span> SEO Articles
-        {seoArticles.length > 0 && (
-          <span className="inline-flex rounded-full border border-emerald-400/40 px-2 py-0.5 text-xs text-emerald-200">
-            {seoArticles.length} article{seoArticles.length !== 1 ? "s" : ""}
-          </span>
-        )}
+      <div className="flex items-center justify-between gap-2 mb-6">
+        <h3 className="text-lg font-bold text-zinc-100 flex items-center gap-2">
+          <span className="text-xl"><Search className="inline h-5 w-5" /></span> Article Detail
+          {(() => {
+            const sel = seoArticles.find((a: any) => a.id === selectedArticleId);
+            if (!sel) return null;
+            const st = String(sel.status ?? "draft");
+            return (
+              <span className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] ${st === "published" ? "border-emerald-400/40 text-emerald-300" : "border-amber-400/40 text-amber-300"}`}>
+                {st}
+              </span>
+            );
+          })()}
+        </h3>
         <button
           type="button"
           onClick={() => { if (userId) loadSeoArticles(userId); }}
           className="ml-auto inline-flex items-center gap-1 rounded-full border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors"
-          title="Refresh SEO articles"
+          title="Refresh articles"
         >
           <RefreshCw className="h-3.5 w-3.5" /> Refresh
         </button>
-      </h3>
-      {!seoArticlesLoaded ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 sm:p-8 text-center">
-          <p className="text-zinc-500 text-sm">Loading SEO articles...</p>
-        </div>
-      ) : seoArticles.length === 0 ? (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 sm:p-8 text-center">
-          <p className="text-zinc-500 text-sm">No SEO articles generated yet.</p>
-          <p className="text-zinc-600 text-xs mt-1">Use the Search Question → Article tool to create articles that answer search questions while promoting your books.</p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {seoArticles.map((article: any, articleIndex: number) => {
-            const articleQuestion = String(article.question ?? "Untitled Question");
-            const articleMetaTitle = String(article.meta_title ?? article.title ?? "");
-            const articleSlug = articleMetaTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-            const articleMetaDesc = String(article.meta_description ?? article.excerpt ?? "");
-            const articleHtml = String(article.article_html ?? "");
-            const articleFaq = Array.isArray(article.faq) ? article.faq : [];
-            const articleStatus = String(article.status ?? "draft");
-            const promotedBooks = Array.isArray(article.promoted_books) ? article.promoted_books : [];
-            const hasPromotedBooks = promotedBooks.length > 0;
+      </div>
 
-            return (
-              <div key={`seo-${article.id ?? articleIndex}`} className="rounded-xl border border-zinc-700/60 bg-zinc-950/40 p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-zinc-800 text-xs font-bold text-zinc-300">{articleIndex + 1}</span>
-                  <Search className="h-4 w-4 text-zinc-500" />
-                  <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider truncate max-w-md">{articleQuestion.length > 80 ? articleQuestion.substring(0, 80) + "..." : articleQuestion}</span>
-                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] ml-auto ${articleStatus === "published" ? "border-emerald-400/40 text-emerald-300" : "border-amber-400/40 text-amber-300"}`}>
-                    {articleStatus}
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
-                  {/* Question */}
-                  <div className="md:col-span-2">
-                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Search Question</label>
-                    <p className="mt-1 text-sm text-zinc-200">{articleQuestion}</p>
+      {(() => {
+        const article = seoArticles.find((a: any) => a.id === selectedArticleId) ?? null;
+        if (!article) {
+          return (
+            <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-950/40 p-8 text-center">
+              <p className="text-zinc-400 text-sm">Select an article from the sidebar to view or edit it.</p>
+              <p className="text-zinc-600 text-xs mt-1">Or use “Write from scratch” above to create a new one.</p>
+            </div>
+          );
+        }
+        const articleQuestion = String(article.question ?? "Untitled Question");
+        const articleMetaTitle = String(article.meta_title ?? article.title ?? "");
+        const articleSlug = articleMetaTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        const articleMetaDesc = String(article.meta_description ?? article.excerpt ?? "");
+        const articleHtml = String(article.article_html ?? "");
+        const articleFaq = Array.isArray(article.faq) ? article.faq : [];
+        const promotedBooks = Array.isArray(article.promoted_books) ? article.promoted_books : [];
+        const hasPromotedBooks = promotedBooks.length > 0;
+
+        return (
+          <div className="rounded-xl border border-zinc-700/60 bg-zinc-950/40 p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Search className="h-4 w-4 text-zinc-500" />
+              <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider truncate">{articleQuestion}</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+              {/* Question */}
+              <div className="md:col-span-2">
+                <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Search Question</label>
+                <p className="mt-1 text-sm text-zinc-200">{articleQuestion}</p>
+              </div>
+              {/* Meta Title */}
+              <div>
+                <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Meta Title</label>
+                <Input
+                  value={articleMetaTitle}
+                  onChange={(e) => {
+                    setSeoArticles((prev) =>
+                      prev.map((a: any) =>
+                        a.id === selectedArticleId ? { ...a, meta_title: e.target.value } : a
+                      )
+                    );
+                  }}
+                  className="mt-1 bg-zinc-800/50 border-zinc-700 text-zinc-100"
+                  placeholder="Meta title"
+                />
+              </div>
+              {/* Slug */}
+              <div>
+                <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Slug</label>
+                <p className="mt-1 text-sm text-zinc-300 font-mono bg-zinc-800/50 rounded-md border border-zinc-700 px-3 py-2 truncate">{articleSlug || "auto-generated"}</p>
+              </div>
+              {/* Meta Description */}
+              <div className="md:col-span-2">
+                <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Meta Description</label>
+                <textarea
+                  value={articleMetaDesc}
+                  onChange={(e) => {
+                    setSeoArticles((prev) =>
+                      prev.map((a: any) =>
+                        a.id === selectedArticleId ? { ...a, meta_description: e.target.value } : a
+                      )
+                    );
+                  }}
+                  rows={3}
+                  className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y"
+                  placeholder="Meta description"
+                />
+              </div>
+              {/* Promoted Books */}
+              <div className="md:col-span-2">
+                <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> Promoted Books</label>
+                {hasPromotedBooks ? (
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    {promotedBooks.map((book: any, bookIdx: number) => (
+                      <span key={bookIdx} className="inline-flex items-center gap-1 rounded-full border border-sky-400/30 px-2.5 py-1 text-xs text-sky-300">
+                        <BookOpen className="h-3 w-3" />
+                        {typeof book === "string" ? book : book.title ?? book.name ?? "Book"}
+                      </span>
+                    ))}
                   </div>
-                  {/* Meta Title */}
-                  <div>
-                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Meta Title</label>
-                    <Input
-                      value={articleMetaTitle}
-                      onChange={(e) => {
-                        setSeoArticles((prev) =>
-                          prev.map((a: any, i: number) =>
-                            i === articleIndex ? { ...a, meta_title: e.target.value } : a
-                          )
-                        );
-                      }}
-                      className="mt-1 bg-zinc-800/50 border-zinc-700 text-zinc-100"
-                      placeholder="Meta title"
-                    />
-                  </div>
-                  {/* Slug */}
-                  <div>
-                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Slug</label>
-                    <p className="mt-1 text-sm text-zinc-300 font-mono bg-zinc-800/50 rounded-md border border-zinc-700 px-3 py-2 truncate">{articleSlug || "auto-generated"}</p>
-                  </div>
-                  {/* Meta Description */}
-                  <div className="md:col-span-2">
-                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Meta Description</label>
-                    <textarea
-                      value={articleMetaDesc}
-                      onChange={(e) => {
-                        setSeoArticles((prev) =>
-                          prev.map((a: any, i: number) =>
-                            i === articleIndex ? { ...a, meta_description: e.target.value } : a
-                          )
-                        );
-                      }}
-                      rows={3}
-                      className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y"
-                      placeholder="Meta description"
-                    />
-                  </div>
-                  {/* Promoted Books */}
-                  <div className="md:col-span-2">
-                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> Promoted Books</label>
-                    {hasPromotedBooks ? (
-                      <div className="mt-1 flex flex-wrap gap-2">
-                        {promotedBooks.map((book: any, bookIdx: number) => (
-                          <span key={bookIdx} className="inline-flex items-center gap-1 rounded-full border border-sky-400/30 px-2.5 py-1 text-xs text-sky-300">
-                            <BookOpen className="h-3 w-3" />
-                            {typeof book === "string" ? book : book.title ?? book.name ?? "Book"}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="mt-1 text-xs text-zinc-500 italic">Informational only</p>
-                    )}
-                  </div>
-                  {/* Article HTML */}
-                  <div className="md:col-span-2">
-                    <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Article HTML</label>
-                    <textarea
-                      value={articleHtml}
-                      readOnly
-                      rows={8}
-                      className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y font-mono cursor-text"
-                      placeholder="Article HTML content"
-                    />
-                  </div>
-                  {/* FAQ */}
-                  {articleFaq.length > 0 && (
-                    <div className="md:col-span-2">
-                      <Collapsible label={`FAQ (${articleFaq.length} question${articleFaq.length !== 1 ? "s" : ""})`}>
-                        <div className="space-y-3">
-                          {articleFaq.map((faqItem: any, faqIdx: number) => (
-                            <div key={faqIdx} className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
-                              <p className="text-xs font-semibold text-zinc-300">Q: {typeof faqItem === "object" ? faqItem.question ?? faqItem.q : String(faqItem)}</p>
-                              <p className="text-xs text-zinc-500 mt-1">{typeof faqItem === "object" ? faqItem.answer ?? faqItem.a ?? "" : ""}</p>
-                            </div>
-                          ))}
+                ) : (
+                  <p className="mt-1 text-xs text-zinc-500 italic">Informational only</p>
+                )}
+              </div>
+              {/* Article HTML */}
+              <div className="md:col-span-2">
+                <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Article HTML</label>
+                <textarea
+                  value={articleHtml}
+                  readOnly
+                  rows={8}
+                  className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 resize-y font-mono cursor-text"
+                  placeholder="Article HTML content"
+                />
+              </div>
+              {/* FAQ */}
+              {articleFaq.length > 0 && (
+                <div className="md:col-span-2">
+                  <Collapsible label={`FAQ (${articleFaq.length} question${articleFaq.length !== 1 ? "s" : ""})`}>
+                    <div className="space-y-3">
+                      {articleFaq.map((faqItem: any, faqIdx: number) => (
+                        <div key={faqIdx} className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
+                          <p className="text-xs font-semibold text-zinc-300">Q: {typeof faqItem === "object" ? faqItem.question ?? faqItem.q : String(faqItem)}</p>
+                          <p className="text-xs text-zinc-500 mt-1">{typeof faqItem === "object" ? faqItem.answer ?? faqItem.a ?? "" : ""}</p>
                         </div>
-                      </Collapsible>
+                      ))}
                     </div>
-                  )}
-                  {/* Cover Image (per-article) */}
-                  <div className="md:col-span-2">
-                    <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Cover Image</p>
-                    <div className="flex flex-wrap items-start gap-4">
-                      {article.cover_image_url ? (
-                        <img
-                          src={article.cover_image_url}
-                          alt="SEO article cover"
-                          className="w-48 h-32 object-cover rounded-lg border border-zinc-800 shadow-lg"
-                        />
-                      ) : (
-                        <div className="w-48 h-32 rounded-lg border border-dashed border-zinc-700 bg-zinc-950/50 flex items-center justify-center">
-                          <p className="text-xs text-zinc-600 italic">No cover image</p>
-                        </div>
-                      )}
-                      <div className="flex flex-col gap-2">
-                        <label
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                            uploadingSeoCoverId === article.id
-                              ? "border-zinc-600 text-zinc-400 cursor-wait"
-                              : "border-sky-500/40 text-sky-300 hover:bg-sky-500/10 cursor-pointer"
-                          }`}
-                        >
-                          {uploadingSeoCoverId === article.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Upload className="h-3.5 w-3.5" />
-                          )}
-                          {uploadingSeoCoverId === article.id ? "Uploading..." : "Upload Cover"}
-                          <input
-                            type="file"
-                            accept="image/png,image/jpeg,image/webp"
-                            className="hidden"
-                            disabled={uploadingSeoCoverId === article.id}
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              if (f) uploadSeoArticleCover(article.id, f);
-                              e.target.value = "";
-                            }}
-                          />
-                        </label>
-                        {article.cover_image_url && (
-                          <button
-                            type="button"
-                            disabled={uploadingSeoCoverId === article.id}
-                            onClick={() => removeSeoArticleCover(article.id)}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-red-500/40 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-wait"
-                          >
-                            <X className="h-3.5 w-3.5" /> Remove
-                          </button>
-                        )}
-                        <p className="text-[10px] text-zinc-600 max-w-[14rem] leading-relaxed">
-                          This image is shown as the cover on the published blog post. PNG, JPEG or WebP up to 10MB.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  </Collapsible>
                 </div>
-                {/* Action Buttons */}
-                <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-zinc-800">
-                  {articleStatus === "draft" ? (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          const res = await fetch(`/api/seo-articles/${article.id}`, {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ userId, status: "published" }),
-                          });
-                          if (res.ok) {
-                            setSeoArticles((prev) =>
-                              prev.map((a: any, i: number) =>
-                                i === articleIndex ? { ...a, status: "published", published_at: new Date().toISOString() } : a
-                              )
-                            );
-                          }
-                        } catch (err) {
-                          console.error("Failed to publish SEO article:", err);
-                        }
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/10 transition-colors"
-                    >
-                      <Eye className="h-3.5 w-3.5" /> Publish
-                    </button>
+              )}
+              {/* Cover Image (per-article) */}
+              <div className="md:col-span-2">
+                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-1">Cover Image</p>
+                <div className="flex flex-wrap items-start gap-4">
+                  {article.cover_image_url ? (
+                    <img
+                      src={article.cover_image_url}
+                      alt="SEO article cover"
+                      className="w-48 h-32 object-cover rounded-lg border border-zinc-800 shadow-lg"
+                    />
                   ) : (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          const res = await fetch(`/api/seo-articles/${article.id}`, {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ userId, status: "draft" }),
-                          });
-                          if (res.ok) {
-                            setSeoArticles((prev) =>
-                              prev.map((a: any, i: number) =>
-                                i === articleIndex ? { ...a, status: "draft", published_at: null } : a
-                              )
-                            );
-                          }
-                        } catch (err) {
-                          console.error("Failed to unpublish SEO article:", err);
-                        }
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/10 transition-colors"
-                    >
-                      <EyeOff className="h-3.5 w-3.5" /> Unpublish
-                    </button>
+                    <div className="w-48 h-32 rounded-lg border border-dashed border-zinc-700 bg-zinc-950/50 flex items-center justify-center">
+                      <p className="text-xs text-zinc-600 italic">No cover image</p>
+                    </div>
                   )}
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!confirm("Delete this SEO article? This cannot be undone.")) return;
-                      try {
-                        const res = await fetch(`/api/seo-articles/${article.id}?userId=${userId}`, { method: "DELETE" });
-                        if (res.ok) {
-                          setSeoArticles((prev) => prev.filter((_: any, i: number) => i !== articleIndex));
-                        }
-                      } catch (err) {
-                        console.error("Failed to delete SEO article:", err);
-                      }
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-red-500/40 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/10 transition-colors"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" /> Delete
-                  </button>
+                  <div className="flex flex-col gap-2">
+                    <label
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        uploadingSeoCoverId === article.id
+                          ? "border-zinc-600 text-zinc-400 cursor-wait"
+                          : "border-sky-500/40 text-sky-300 hover:bg-sky-500/10 cursor-pointer"
+                      }`}
+                    >
+                      {uploadingSeoCoverId === article.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="h-3.5 w-3.5" />
+                      )}
+                      {uploadingSeoCoverId === article.id ? "Uploading..." : "Upload Cover"}
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        disabled={uploadingSeoCoverId === article.id}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) uploadSeoArticleCover(article.id, f);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                    {article.cover_image_url && (
+                      <button
+                        type="button"
+                        disabled={uploadingSeoCoverId === article.id}
+                        onClick={() => removeSeoArticleCover(article.id)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-red-500/40 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-wait"
+                      >
+                        <X className="h-3.5 w-3.5" /> Remove
+                      </button>
+                    )}
+                    <p className="text-[10px] text-zinc-600 max-w-[14rem] leading-relaxed">
+                      This image is shown as the cover on the published blog post. PNG, JPEG or WebP up to 10MB.
+                    </p>
+                  </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      )}
+            </div>
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-zinc-800">
+              {String(article.status ?? "draft") === "draft" ? (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`/api/seo-articles/${article.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ userId, status: "published" }),
+                      });
+                      if (res.ok) {
+                        setSeoArticles((prev) =>
+                          prev.map((a: any) =>
+                            a.id === selectedArticleId ? { ...a, status: "published", published_at: new Date().toISOString() } : a
+                          )
+                        );
+                      }
+                    } catch (err) {
+                      console.error("Failed to publish SEO article:", err);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+                >
+                  <Eye className="h-3.5 w-3.5" /> Publish
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`/api/seo-articles/${article.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ userId, status: "draft" }),
+                      });
+                      if (res.ok) {
+                        setSeoArticles((prev) =>
+                          prev.map((a: any) =>
+                            a.id === selectedArticleId ? { ...a, status: "draft", published_at: null } : a
+                          )
+                        );
+                      }
+                    } catch (err) {
+                      console.error("Failed to unpublish SEO article:", err);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/10 transition-colors"
+                >
+                  <EyeOff className="h-3.5 w-3.5" /> Unpublish
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!confirm("Delete this SEO article? This cannot be undone.")) return;
+                  try {
+                    const res = await fetch(`/api/seo-articles/${article.id}?userId=${userId}`, { method: "DELETE" });
+                    if (res.ok) {
+                      const deletedId = article.id;
+                      setSeoArticles((prev) => prev.filter((a: any) => a.id !== deletedId));
+                      setSelectedArticleId(null);
+                    }
+                  } catch (err) {
+                    console.error("Failed to delete SEO article:", err);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-full border border-red-500/40 px-3 py-1.5 text-xs font-semibold text-red-300 hover:bg-red-500/10 transition-colors"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Delete
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </section>
   </div>
 )}
